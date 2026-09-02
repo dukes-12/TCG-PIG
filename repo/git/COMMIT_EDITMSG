@@ -1,0 +1,14 @@
+Add pack picker to Ouvrir, remove auto-flip on reveal
+
+Pack picker: three pills at the top of the idle Ouvrir screen (one per
+pack, in-stock count, dimmed when empty) to switch which pack you're
+about to open without detouring through the Boutique.
+
+Auto-flip removed: every card in a pull used to flip itself face-up 360ms
+after landing, whether you tapped or not. On request, that's gone — a
+card now stays face-down until explicitly tapped or swiped, for the first
+card and every one after it. Simplified nextReveal/beginTear accordingly
+(flipSoon and its timer are gone, dead code with no remaining callers).
+
+Co-Authored-By: Claude Sonnet 5 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01TTYwRETRQnnyxJ9Vi9BoyQ

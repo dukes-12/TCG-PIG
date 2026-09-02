@@ -1,0 +1,50 @@
+/* Grouin animation keyframes — ported verbatim from the design handoff
+   (Grouin - TCG Cochons.dc.html + PigCard.dc.html). Names kept as-is. */
+
+@keyframes pigHolo {
+  0% { background-position: 0% 50%; }
+  100% { background-position: 300% 50%; }
+}
+@keyframes pigShine {
+  0% { transform: translateX(-130%) rotate(10deg); }
+  45%, 100% { transform: translateX(150%) rotate(10deg); }
+}
+@keyframes pigFloat {
+  0%, 100% { transform: translateY(0); opacity: .2; }
+  50% { transform: translateY(-10px); opacity: .9; }
+}
+@keyframes pigPop {
+  0% { transform: scale(.86); opacity: 0; }
+  60% { transform: scale(1.03); opacity: 1; }
+  100% { transform: scale(1); opacity: 1; }
+}
+@keyframes pigRise {
+  0% { transform: translateY(16px); opacity: 0; }
+  100% { transform: translateY(0); opacity: 1; }
+}
+@keyframes pigBreathe {
+  0% { transform: translateY(0) rotate(-1.6deg); }
+  50% { transform: translateY(-12px) rotate(1.6deg); }
+  100% { transform: translateY(0) rotate(-1.6deg); }
+}
+@keyframes pigGlow {
+  0%, 100% { opacity: .4; transform: scale(.9); }
+  50% { opacity: .95; transform: scale(1.08); }
+}
+@keyframes pigTear {
+  0% { transform: scale(1) rotate(0); }
+  35% { transform: scale(1.06) rotate(-3deg); }
+  100% { transform: scale(1.5) rotate(6deg); opacity: 0; }
+}
+@keyframes pigBurst {
+  0% { transform: scale(.2); opacity: .9; }
+  100% { transform: scale(2.6); opacity: 0; }
+}
+
+/* Respect reduced-motion: freeze decorative loops, keep functional transitions. */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: .001ms !important;
+    animation-iteration-count: 1 !important;
+  }
+}

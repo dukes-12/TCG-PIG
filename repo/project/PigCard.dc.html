@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="_ds/organic-e959b7bb-ed0e-4722-85ab-2cde5c154feb/styles.css">
+<script src="_ds/organic-e959b7bb-ed0e-4722-85ab-2cde5c154feb/_ds_bundle.js"></script>
+<script src="image-slot.js"></script>
+<style>
+image-slot[data-mini]::part(empty){opacity:0}
+@keyframes pigHolo{0%{background-position:0% 50%}100%{background-position:300% 50%}}
+@keyframes pigShine{0%{transform:translateX(-130%) rotate(10deg)}45%{transform:translateX(150%) rotate(10deg)}100%{transform:translateX(150%) rotate(10deg)}}
+@keyframes pigFloat{0%{transform:translateY(0);opacity:.2}50%{transform:translateY(-10px);opacity:.9}100%{transform:translateY(0);opacity:.2}}
+</style>
+</helmet>
+<div style="{{ d.shell }}">
+  <div style="{{ d.inner }}">
+    <div style="{{ d.artWrap }}">
+      <sc-if value="{{ d.owned }}" hint-placeholder-val="{{ true }}">
+        <image-slot id="{{ d.slotId }}" data-mini="{{ d.mini }}" shape="rect" placeholder="Image"></image-slot>
+      </sc-if>
+      <sc-if value="{{ d.locked }}">
+        <div style="{{ d.lockStyle }}">?</div>
+      </sc-if>
+      <sc-for list="{{ d.dots }}" as="p" hint-placeholder-count="0">
+        <i style="{{ p.s }}"></i>
+      </sc-for>
+    </div>
+    <div style="{{ d.namePlate }}">{{ d.name }}</div>
+    <div style="{{ d.metaRow }}">
+      <span style="{{ d.typeStyle }}">{{ d.type }}</span>
+      <span style="{{ d.pipWrap }}">
+        <sc-for list="{{ d.pips }}" as="p" hint-placeholder-count="5">
+          <i style="{{ p.s }}"></i>
+        </sc-for>
+      </span>
+    </div>
+    <sc-for list="{{ d.corners }}" as="c" hint-placeholder-count="0">
+      <i style="{{ c.s }}"></i>
+    </sc-for>
+    <sc-if value="{{ d.hasNum }}">
+      <span style="{{ d.numStyle }}">{{ d.num }}</span>
+    </sc-if>
+    <sc-if value="{{ d.hasTexture }}">
+      <div style="{{ d.textureStyle }}"></div>
+    </sc-if>
+    <sc-if value="{{ d.sheen }}">
+      <div style="{{ d.sheenStyle }}"></div>
+    </sc-if>
+  </div>
+</div>
+
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:150,&quot;height&quot;:205},&quot;d&quot;:{&quot;editor&quot;:null,&quot;tsType&quot;:&quot;object&quot;}}"></script>
+</body>
+</html>

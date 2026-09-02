@@ -1,0 +1,149 @@
+html, body, #root {
+  height: 100%;
+}
+
+html {
+  background: #e3d6c0;
+}
+
+body {
+  margin: 0;
+  background: #e3d6c0;
+  -webkit-tap-highlight-color: transparent;
+  overscroll-behavior: none;
+}
+
+#root {
+  display: flex;
+  justify-content: center;
+}
+
+/* ── App shell — mobile-first, framed like a device on wider viewports ── */
+.app-shell {
+  position: relative;
+  width: 100%;
+  max-width: 460px;
+  min-height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  background: var(--color-bg);
+  color: var(--color-text);
+  overflow: hidden;
+}
+
+@media (min-width: 560px) {
+  .app-shell {
+    margin: 28px auto;
+    min-height: calc(100dvh - 56px);
+    max-height: 900px;
+    border-radius: 36px;
+    box-shadow: var(--shadow-lg);
+  }
+}
+
+/* Scrollable screen body: safe-area aware top padding, tab-bar clearance at bottom. */
+.screen {
+  flex: 1;
+  overflow-y: auto;
+  overflow-x: hidden;
+  -webkit-overflow-scrolling: touch;
+  padding: calc(env(safe-area-inset-top, 0px) + 20px) 0 104px;
+}
+
+.screen-inner {
+  padding: 0 18px;
+}
+
+.section-label {
+  font-size: 8.5px;
+  letter-spacing: .14em;
+  text-transform: uppercase;
+  opacity: .42;
+  font-weight: 700;
+}
+
+/* Cheap tactile feedback for anything clickable that uses inline styles. */
+.pressable {
+  transition: transform .12s ease, opacity .12s ease;
+}
+.pressable:hover { opacity: .92; }
+.pressable:active { transform: scale(.97); }
+
+/* Tab bar */
+.tab-bar {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  z-index: 40;
+  background: var(--color-surface);
+  border-top-left-radius: 32px;
+  border-top-right-radius: 32px;
+  box-shadow: 0 -8px 24px rgba(46, 43, 37, .12);
+  padding: 11px 12px calc(env(safe-area-inset-bottom, 0px) + 14px);
+  display: flex;
+  gap: 2px;
+}
+
+.tab-btn {
+  flex: 1;
+  min-width: 0;
+  cursor: pointer;
+  border: 0;
+  background: transparent;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 2px;
+  font-family: var(--font-body);
+}
+
+.tab-btn span {
+  font-size: 8.5px;
+  font-weight: 700;
+  letter-spacing: .02em;
+}
+
+/* Detail / summary overlay */
+.overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 80;
+  background: rgba(32, 30, 29, .6);
+  backdrop-filter: blur(7px);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 30px 24px;
+}
+
+.toast-layer {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: calc(104px + env(safe-area-inset-bottom, 0px));
+  z-index: 70;
+  display: flex;
+  justify-content: center;
+  pointer-events: none;
+}
+
+.toast-pill {
+  background: var(--color-neutral-900);
+  color: var(--color-bg);
+  font-size: 12px;
+  font-weight: 600;
+  padding: 9px 18px;
+  border-radius: 999px;
+  box-shadow: var(--shadow-md);
+  animation: pigRise .25s ease both;
+}
+
+/* Chips row wrap */
+.chip-row {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}

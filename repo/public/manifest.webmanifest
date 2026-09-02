@@ -1,0 +1,12 @@
+{
+  "name": "Grouin — TCG cochons",
+  "short_name": "Grouin",
+  "description": "Collectionne, ouvre des sacs, complète ta bassecour de cochons.",
+  "start_url": "/collection",
+  "display": "standalone",
+  "background_color": "#f5ead8",
+  "theme_color": "#f5ead8",
+  "icons": [
+    { "src": "/favicon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }
+  ]
+}

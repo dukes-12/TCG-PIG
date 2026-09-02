@@ -1,0 +1,306 @@
+{
+  "version": 1,
+  "types": [
+    "Super-héros",
+    "Dictateurs",
+    "Politiques",
+    "Métiers",
+    "Hors catégorie"
+  ],
+  "rarities": [
+    {
+      "id": 1,
+      "key": "commune",
+      "name": "Commune",
+      "weight": 44,
+      "recycleValue": 8
+    },
+    {
+      "id": 2,
+      "key": "peu_commune",
+      "name": "Peu commune",
+      "weight": 28,
+      "recycleValue": 22
+    },
+    {
+      "id": 3,
+      "key": "rare",
+      "name": "Rare",
+      "weight": 17,
+      "recycleValue": 60
+    },
+    {
+      "id": 4,
+      "key": "epique",
+      "name": "Épique",
+      "weight": 8,
+      "recycleValue": 160
+    },
+    {
+      "id": 5,
+      "key": "legendaire",
+      "name": "Légendaire",
+      "weight": 2.5,
+      "recycleValue": 450
+    },
+    {
+      "id": 6,
+      "key": "mythique",
+      "name": "Mythique",
+      "weight": 0.5,
+      "recycleValue": 1500
+    }
+  ],
+  "packs": [
+    {
+      "key": "basic",
+      "name": "Sac de glands",
+      "price": 100,
+      "cards": 5,
+      "guaranteedFloor": null,
+      "subtitle": "5 cartes · standard"
+    },
+    {
+      "key": "foire",
+      "name": "Caisse de la Foire",
+      "price": 260,
+      "cards": 5,
+      "guaranteedFloor": 3,
+      "subtitle": "5 cartes · 1 rare garantie"
+    },
+    {
+      "key": "doree",
+      "name": "Malle Dorée",
+      "price": 640,
+      "cards": 5,
+      "guaranteedFloor": 4,
+      "subtitle": "5 cartes · 1 épique garantie"
+    }
+  ],
+  "cards": [
+    {
+      "id": 1,
+      "name": "Porc-Éclair",
+      "type": "Super-héros",
+      "rarity": 1,
+      "image": "assets/cards/001.jpg",
+      "slotId": "art-1"
+    },
+    {
+      "id": 2,
+      "name": "Capitaine Lardon",
+      "type": "Super-héros",
+      "rarity": 1,
+      "image": "assets/cards/002.jpg",
+      "slotId": "art-2"
+    },
+    {
+      "id": 3,
+      "name": "Sergent Bouseux",
+      "type": "Dictateurs",
+      "rarity": 1,
+      "image": "assets/cards/003.jpg",
+      "slotId": "art-3"
+    },
+    {
+      "id": 4,
+      "name": "Conseiller Grouik",
+      "type": "Politiques",
+      "rarity": 1,
+      "image": "assets/cards/004.jpg",
+      "slotId": "art-4"
+    },
+    {
+      "id": 5,
+      "name": "Plombier Groin",
+      "type": "Métiers",
+      "rarity": 1,
+      "image": "assets/cards/005.jpg",
+      "slotId": "art-5"
+    },
+    {
+      "id": 6,
+      "name": "Boulanger Bacon",
+      "type": "Métiers",
+      "rarity": 1,
+      "image": "assets/cards/006.jpg",
+      "slotId": "art-6"
+    },
+    {
+      "id": 7,
+      "name": "Barista Truffe",
+      "type": "Métiers",
+      "rarity": 1,
+      "image": "assets/cards/007.jpg",
+      "slotId": "art-7"
+    },
+    {
+      "id": 8,
+      "name": "Cochon Facteur",
+      "type": "Métiers",
+      "rarity": 1,
+      "image": "assets/cards/008.jpg",
+      "slotId": "art-8"
+    },
+    {
+      "id": 9,
+      "name": "Flaque du Matin",
+      "type": "Hors catégorie",
+      "rarity": 1,
+      "image": "assets/cards/009.jpg",
+      "slotId": "art-9"
+    },
+    {
+      "id": 10,
+      "name": "La Truie Invisible",
+      "type": "Super-héros",
+      "rarity": 2,
+      "image": "assets/cards/010.jpg",
+      "slotId": "art-10"
+    },
+    {
+      "id": 11,
+      "name": "Groin de Fer",
+      "type": "Super-héros",
+      "rarity": 2,
+      "image": "assets/cards/011.jpg",
+      "slotId": "art-11"
+    },
+    {
+      "id": 12,
+      "name": "Colonel Saucisson",
+      "type": "Dictateurs",
+      "rarity": 2,
+      "image": "assets/cards/012.jpg",
+      "slotId": "art-12"
+    },
+    {
+      "id": 13,
+      "name": "Sénateur Bacon",
+      "type": "Politiques",
+      "rarity": 2,
+      "image": "assets/cards/013.jpg",
+      "slotId": "art-13"
+    },
+    {
+      "id": 14,
+      "name": "Députée Truffe",
+      "type": "Politiques",
+      "rarity": 2,
+      "image": "assets/cards/014.jpg",
+      "slotId": "art-14"
+    },
+    {
+      "id": 15,
+      "name": "Docteur Lardon",
+      "type": "Métiers",
+      "rarity": 2,
+      "image": "assets/cards/015.jpg",
+      "slotId": "art-15"
+    },
+    {
+      "id": 16,
+      "name": "Pompier Porcinet",
+      "type": "Métiers",
+      "rarity": 2,
+      "image": "assets/cards/016.jpg",
+      "slotId": "art-16"
+    },
+    {
+      "id": 17,
+      "name": "Super Groin",
+      "type": "Super-héros",
+      "rarity": 3,
+      "image": "assets/cards/017.jpg",
+      "slotId": "art-17"
+    },
+    {
+      "id": 18,
+      "name": "Généralissime Bouseux",
+      "type": "Dictateurs",
+      "rarity": 3,
+      "image": "assets/cards/018.jpg",
+      "slotId": "art-18"
+    },
+    {
+      "id": 19,
+      "name": "Le Tyran de la Soue",
+      "type": "Dictateurs",
+      "rarity": 3,
+      "image": "assets/cards/019.jpg",
+      "slotId": "art-19"
+    },
+    {
+      "id": 20,
+      "name": "Candidat Groin 2028",
+      "type": "Politiques",
+      "rarity": 3,
+      "image": "assets/cards/020.jpg",
+      "slotId": "art-20"
+    },
+    {
+      "id": 21,
+      "name": "Maître Notaire Jambon",
+      "type": "Métiers",
+      "rarity": 3,
+      "image": "assets/cards/021.jpg",
+      "slotId": "art-21"
+    },
+    {
+      "id": 22,
+      "name": "Cochon-Man",
+      "type": "Super-héros",
+      "rarity": 4,
+      "image": "assets/cards/022.jpg",
+      "slotId": "art-22"
+    },
+    {
+      "id": 23,
+      "name": "Chef Suprême Groin Iᵉʳ",
+      "type": "Dictateurs",
+      "rarity": 4,
+      "image": "assets/cards/023.jpg",
+      "slotId": "art-23"
+    },
+    {
+      "id": 24,
+      "name": "Madame la Présidente Truie",
+      "type": "Politiques",
+      "rarity": 4,
+      "image": "assets/cards/024.jpg",
+      "slotId": "art-24"
+    },
+    {
+      "id": 25,
+      "name": "Cochon Quantique",
+      "type": "Hors catégorie",
+      "rarity": 4,
+      "image": "assets/cards/025.jpg",
+      "slotId": "art-25"
+    },
+    {
+      "id": 26,
+      "name": "Aurore, Première Truie",
+      "type": "Hors catégorie",
+      "rarity": 5,
+      "image": "assets/cards/026.jpg",
+      "slotId": "art-26"
+    },
+    {
+      "id": 27,
+      "name": "Le Grand Sanglier d'Or",
+      "type": "Hors catégorie",
+      "rarity": 5,
+      "image": "assets/cards/027.jpg",
+      "slotId": "art-27"
+    },
+    {
+      "id": 28,
+      "name": "Cochon OG",
+      "type": "Hors catégorie",
+      "rarity": 6,
+      "image": "assets/cards/028.jpg",
+      "slotId": "art-28"
+    }
+  ]
+}

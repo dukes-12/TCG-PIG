@@ -1,0 +1,9 @@
+0000000000000000000000000000000000000000 67c2a1ce2268ec62b96600943a8b61b06d94d9a9 Claude <noreply@anthropic.com> 1788377204 +0000	clone: from /home/claude/.seed.bundle
+67c2a1ce2268ec62b96600943a8b61b06d94d9a9 67c2a1ce2268ec62b96600943a8b61b06d94d9a9 Claude <noreply@anthropic.com> 1788378554 +0000	checkout: moving from main to grouin-web-app
+67c2a1ce2268ec62b96600943a8b61b06d94d9a9 229b500db052d399651f5e34c309504ca76f82c8 Claude <noreply@anthropic.com> 1788378554 +0000	commit: Implement Grouin web app (React + Vite + TS)
+229b500db052d399651f5e34c309504ca76f82c8 c16deee43e2694b95b5e81a14bc434a83a3908cd Claude <noreply@anthropic.com> 1788383473 +0000	commit: Add real card art, triaged from Designs.zip
+c16deee43e2694b95b5e81a14bc434a83a3908cd 44f26d7daf3fea6786c9d9b05ae14a672ef024d5 Claude <noreply@anthropic.com> 1788384509 +0000	commit: Expand roster to 58 cards, fix pack-reveal spoiler
+44f26d7daf3fea6786c9d9b05ae14a672ef024d5 16ff1e507558143a3e9bd647396817cbf1850cda Claude <noreply@anthropic.com> 1788384519 +0000	commit (amend): Expand roster to 58 cards, fix pack-reveal spoiler
+16ff1e507558143a3e9bd647396817cbf1850cda e04816e4a65ca8b2240d270f078dd075c9f95819 Claude <noreply@anthropic.com> 1788384924 +0000	commit: Add card-editing tutorial, relax CardType to a plain string
+e04816e4a65ca8b2240d270f078dd075c9f95819 61404b99d209d6786f8a4de0a201179b11779885 Claude <noreply@anthropic.com> 1788385758 +0000	commit: Add hourly free booster (stacks to 3), remove card corner studs
+61404b99d209d6786f8a4de0a201179b11779885 dfaf71b1a6bf06aaf4b7e059c2bc0ace2ac9c703 Claude <noreply@anthropic.com> 1788386691 +0000	commit: Add pack picker to Ouvrir, remove auto-flip on reveal

@@ -1,0 +1,803 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="_ds/organic-e959b7bb-ed0e-4722-85ab-2cde5c154feb/styles.css">
+<script src="_ds/organic-e959b7bb-ed0e-4722-85ab-2cde5c154feb/_ds_bundle.js"></script>
+<style>
+html,body{margin:0;background:#e3d6c0}
+a{color:var(--color-accent)}a:hover{color:var(--color-accent-700)}
+@keyframes pigPop{0%{transform:scale(.86);opacity:0}60%{transform:scale(1.03);opacity:1}100%{transform:scale(1);opacity:1}}
+@keyframes pigRise{0%{transform:translateY(16px);opacity:0}100%{transform:translateY(0);opacity:1}}
+@keyframes pigBreathe{0%{transform:translateY(0) rotate(-1.6deg)}50%{transform:translateY(-12px) rotate(1.6deg)}100%{transform:translateY(0) rotate(-1.6deg)}}
+@keyframes pigGlow{0%{opacity:.4;transform:scale(.9)}50%{opacity:.95;transform:scale(1.08)}100%{opacity:.4;transform:scale(.9)}}
+@keyframes pigTear{0%{transform:scale(1) rotate(0)}35%{transform:scale(1.06) rotate(-3deg)}100%{transform:scale(1.5) rotate(6deg);opacity:0}}
+@keyframes pigBurst{0%{transform:scale(.2);opacity:.9}100%{transform:scale(2.6);opacity:0}}
+</style>
+</helmet>
+<div style="min-height:100vh;display:flex;align-items:center;justify-content:center;padding:40px 0;font-family:var(--font-body)">
+<x-import component-from-global-scope="IOSDevice" from="./ios-frame.jsx" hint-size="402px,874px">
+
+  <div style="position:relative;height:100%;display:flex;flex-direction:column;background:var(--color-bg);color:var(--color-text);overflow:hidden">
+
+    <!-- ══ COLLECTION ══ -->
+    <sc-if value="{{ isCollection }}" hint-placeholder-val="{{ true }}">
+    <div style="flex:1;overflow:auto;padding:54px 0 104px">
+      <div style="padding:8px 18px 0">
+        <div style="display:flex;align-items:flex-end;gap:10px">
+          <h1 style="font-size:30px;margin:0;line-height:1">Ma bassecour</h1>
+          <span style="margin-left:auto;font-size:12px;font-weight:700;opacity:.5;padding-bottom:4px">{{ ownedLabel }}</span>
+        </div>
+        <div style="height:7px;border-radius:999px;background:var(--color-neutral-300);margin-top:12px;overflow:hidden">
+          <div style="{{ progressStyle }}"></div>
+        </div>
+      </div>
+
+      <div style="display:flex;gap:5px;padding:16px 18px 0">
+        <sc-for list="{{ rarityStats }}" as="s" hint-placeholder-count="5">
+          <div style="{{ s.box }}">
+            <i style="{{ s.dot }}"></i>
+            <span style="font-size:7.2px;letter-spacing:.02em;text-transform:uppercase;opacity:.55;font-weight:700;text-align:center;line-height:1.1;white-space:nowrap">{{ s.name }}</span>
+            <span style="font-family:var(--font-heading);font-size:12px;line-height:1">{{ s.val }}</span>
+          </div>
+        </sc-for>
+      </div>
+
+      <div style="padding:16px 18px 0;display:flex;gap:8px;align-items:center">
+        <input class="input" placeholder="Chercher un cochon…" value="{{ query }}" onInput="{{ onQuery }}" style="flex:1;background:var(--color-neutral-100)">
+        <button onClick="{{ toggleOwned }}" style="{{ ownedToggleStyle }}">{{ ownedToggleLabel }}</button>
+      </div>
+
+      <div style="padding:14px 18px 0">
+        <div style="font-size:8.5px;letter-spacing:.14em;text-transform:uppercase;opacity:.42;font-weight:700;margin-bottom:7px">Trier</div>
+        <div style="display:flex;gap:6px;flex-wrap:wrap">
+          <sc-for list="{{ sortChips }}" as="c" hint-placeholder-count="4">
+            <button onClick="{{ c.onClick }}" style="{{ c.style }}">{{ c.label }}</button>
+          </sc-for>
+        </div>
+        <div style="font-size:8.5px;letter-spacing:.14em;text-transform:uppercase;opacity:.42;font-weight:700;margin:13px 0 7px">Rareté</div>
+        <div style="display:flex;gap:6px;flex-wrap:wrap">
+          <sc-for list="{{ rarityChips }}" as="c" hint-placeholder-count="6">
+            <button onClick="{{ c.onClick }}" style="{{ c.style }}">{{ c.label }}</button>
+          </sc-for>
+        </div>
+        <div style="font-size:8.5px;letter-spacing:.14em;text-transform:uppercase;opacity:.42;font-weight:700;margin:13px 0 7px">Type</div>
+        <div style="display:flex;gap:6px;flex-wrap:wrap">
+          <sc-for list="{{ typeChips }}" as="c" hint-placeholder-count="6">
+            <button onClick="{{ c.onClick }}" style="{{ c.style }}">{{ c.label }}</button>
+          </sc-for>
+        </div>
+      </div>
+
+      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;padding:20px 18px 0">
+        <sc-for list="{{ grid }}" as="card" hint-placeholder-count="9">
+          <div onClick="{{ card.onOpen }}" style="{{ card.cellStyle }}">
+            <dc-import name="PigCard" d="{{ card.d }}" style="width:100%;height:100%" hint-size="100%,100%"></dc-import>
+            <sc-if value="{{ card.showCount }}">
+              <span style="{{ card.countStyle }}">{{ card.countLabel }}</span>
+            </sc-if>
+          </div>
+        </sc-for>
+      </div>
+
+      <sc-if value="{{ gridEmpty }}">
+        <p style="text-align:center;padding:44px 34px;font-size:13px;opacity:.5;text-wrap:pretty">Aucun cochon ne correspond. Enlève un filtre, ou va ouvrir un sac.</p>
+      </sc-if>
+    </div>
+    </sc-if>
+
+    <!-- ══ BOUTIQUE ══ -->
+    <sc-if value="{{ isShop }}">
+    <div style="flex:1;overflow:auto;padding:54px 0 104px">
+      <div style="padding:8px 18px 0;display:flex;align-items:flex-end;gap:10px">
+        <h1 style="font-size:30px;margin:0;line-height:1">Boutique</h1>
+        <span style="margin-left:auto;display:inline-flex;align-items:center;gap:6px;background:var(--color-accent-200);color:var(--color-accent-800);padding:6px 12px;border-radius:999px;font-size:12px;font-weight:700">
+          <i style="width:9px;height:11px;border-radius:50% 50% 45% 45%;background:var(--color-accent-700);display:block"></i>{{ glands }}
+        </span>
+      </div>
+      <p style="padding:0 18px;font-size:13px;opacity:.6;margin:10px 0 0;text-wrap:pretty">Les glands se gagnent en recyclant tes doublons.</p>
+
+      <div style="display:flex;flex-direction:column;gap:12px;padding:20px 18px 0">
+        <sc-for list="{{ shopPacks }}" as="p" hint-placeholder-count="3">
+          <div style="{{ p.box }}">
+            <div style="{{ p.thumb }}">
+              <div style="{{ p.snout }}">
+                <i style="{{ p.nostril }}"></i><i style="{{ p.nostril }}"></i>
+              </div>
+            </div>
+            <div style="flex:1;min-width:0">
+              <div style="font-family:var(--font-heading);font-size:18px;line-height:1.1">{{ p.name }}</div>
+              <div style="font-size:11.5px;opacity:.65;margin-top:4px;text-wrap:pretty">{{ p.desc }}</div>
+              <div style="display:flex;align-items:center;gap:8px;margin-top:10px">
+                <span style="{{ p.priceStyle }}">{{ p.price }}</span>
+                <span style="font-size:10px;opacity:.5;font-weight:700">{{ p.stock }}</span>
+              </div>
+            </div>
+            <div style="display:flex;flex-direction:column;gap:6px">
+              <button onClick="{{ p.onBuy }}" style="{{ p.buyStyle }}">Acheter</button>
+              <button onClick="{{ p.onOpen }}" style="{{ p.openStyle }}">Ouvrir</button>
+            </div>
+          </div>
+        </sc-for>
+      </div>
+    </div>
+    </sc-if>
+
+    <!-- ══ OUVERTURE ══ -->
+    <sc-if value="{{ isOpen }}">
+    <div style="flex:1;overflow:auto;padding:54px 0 104px;display:flex;flex-direction:column">
+
+      <sc-if value="{{ packIdle }}" hint-placeholder-val="{{ true }}">
+      <div style="flex:1;display:flex;flex-direction:column;padding:8px 18px 0">
+        <div style="display:flex;align-items:flex-end;gap:10px">
+          <h1 style="font-size:30px;margin:0;line-height:1">{{ currentPackName }}</h1>
+          <span style="{{ packCountStyle }}">{{ packsLabel }}</span>
+        </div>
+        <p style="font-size:13px;opacity:.6;margin:10px 0 0;max-width:270px;text-wrap:pretty">{{ packBlurb }}</p>
+
+        <div style="flex:1;display:flex;align-items:center;justify-content:center;padding:10px 0;min-height:300px">
+          <div onClick="{{ startTear }}" style="{{ sachetStyle }}">
+            <div style="position:absolute;top:0;left:0;right:0;height:24px;background:repeating-linear-gradient(90deg,rgba(245,234,216,.85) 0 9px,transparent 9px 18px);opacity:.45"></div>
+            <div style="width:98px;height:80px;border-radius:50%;background:#ffd2b4;display:flex;align-items:center;justify-content:center;gap:15px;box-shadow:inset 0 -7px 14px rgba(140,73,26,.35)">
+              <i style="width:15px;height:24px;border-radius:50%;background:#8c491a;display:block"></i>
+              <i style="width:15px;height:24px;border-radius:50%;background:#8c491a;display:block"></i>
+            </div>
+            <div style="font-family:var(--font-heading);font-size:27px;color:#fff6ef;margin-top:18px;text-align:center;line-height:1">GROUIN</div>
+            <div style="font-size:9px;letter-spacing:.26em;text-transform:uppercase;color:#ffd2b4;margin-top:9px">{{ sachetSub }}</div>
+            <div style="position:absolute;bottom:0;left:0;right:0;height:46px;background:linear-gradient(0deg,rgba(64,35,16,.45),transparent)"></div>
+          </div>
+        </div>
+
+        <button onClick="{{ startTear }}" style="{{ openBtnStyle }}">{{ openBtnLabel }}</button>
+
+        <sc-if value="{{ showRates }}">
+        <div style="margin-top:16px;padding:14px 18px;border-radius:26px;background:var(--color-surface)">
+          <div style="font-size:8.5px;letter-spacing:.14em;text-transform:uppercase;opacity:.5;font-weight:700;margin-bottom:9px">Chances par carte</div>
+          <sc-for list="{{ odds }}" as="o" hint-placeholder-count="5">
+            <div style="display:flex;align-items:center;gap:9px;padding:3px 0">
+              <i style="{{ o.dot }}"></i>
+              <span style="font-size:12px;flex:1">{{ o.name }}</span>
+              <span style="font-family:var(--font-heading);font-size:12px;opacity:.65">{{ o.pct }}</span>
+            </div>
+          </sc-for>
+        </div>
+        </sc-if>
+      </div>
+      </sc-if>
+
+      <sc-if value="{{ packTearing }}">
+      <div style="flex:1;display:flex;align-items:center;justify-content:center;position:relative">
+        <div style="position:absolute;width:230px;height:230px;border-radius:50%;background:radial-gradient(circle,rgba(246,160,107,.9),transparent 70%);animation:pigBurst .7s ease-out both"></div>
+        <div style="{{ sachetTearStyle }}">
+          <div style="width:98px;height:80px;border-radius:50%;background:#ffd2b4;display:flex;align-items:center;justify-content:center;gap:15px">
+            <i style="width:15px;height:24px;border-radius:50%;background:#8c491a;display:block"></i>
+            <i style="width:15px;height:24px;border-radius:50%;background:#8c491a;display:block"></i>
+          </div>
+        </div>
+      </div>
+      </sc-if>
+
+      <sc-if value="{{ packReveal }}">
+      <div onClick="{{ nextReveal }}" onPointerDown="{{ dragStart }}" onPointerMove="{{ dragMove }}" onPointerUp="{{ dragEnd }}" onPointerCancel="{{ dragEnd }}" style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;position:relative;padding:0 18px;touch-action:none;user-select:none">
+        <div style="{{ glowStyle }}"></div>
+        <div style="position:absolute;top:4px;left:0;right:0;display:flex;justify-content:center;gap:6px">
+          <sc-for list="{{ revealDots }}" as="p" hint-placeholder-count="5">
+            <i style="{{ p.s }}"></i>
+          </sc-for>
+        </div>
+        <div style="{{ flipOuter }}">
+          <div style="{{ flipInner }}">
+            <div style="{{ faceBack }}">
+              <div style="width:64px;height:52px;border-radius:50%;background:#ffd2b4;display:flex;align-items:center;justify-content:center;gap:10px;box-shadow:inset 0 -5px 10px rgba(140,73,26,.35)">
+                <i style="width:10px;height:16px;border-radius:50%;background:#8c491a;display:block"></i>
+                <i style="width:10px;height:16px;border-radius:50%;background:#8c491a;display:block"></i>
+              </div>
+              <div style="font-family:var(--font-heading);font-size:20px;color:#ffe1d0;margin-top:14px">GROUIN</div>
+            </div>
+            <div style="{{ faceFront }}">
+              <dc-import name="PigCard" d="{{ revealCard }}" style="width:100%;height:100%" hint-size="100%,100%"></dc-import>
+            </div>
+          </div>
+        </div>
+        <div style="{{ revealCapStyle }}">{{ revealCaption }}</div>
+        <div style="font-size:11px;opacity:.4;margin-top:7px">{{ revealHint }}</div>
+      </div>
+      </sc-if>
+
+      <sc-if value="{{ packSummary }}">
+      <div style="flex:1;padding:8px 18px 0;animation:pigRise .4s ease both">
+        <h1 style="font-size:30px;margin:0;line-height:1">Ton butin</h1>
+        <p style="font-size:13px;opacity:.6;margin:10px 0 18px">{{ summaryLine }}</p>
+        <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px">
+          <sc-for list="{{ pullGrid }}" as="card" hint-placeholder-count="5">
+            <div onClick="{{ card.onOpen }}" style="{{ card.cellStyle }}">
+              <dc-import name="PigCard" d="{{ card.d }}" style="width:100%;height:100%" hint-size="100%,100%"></dc-import>
+              <sc-if value="{{ card.isNew }}">
+                <span style="{{ card.newStyle }}">NOUVEAU</span>
+              </sc-if>
+              <sc-if value="{{ card.showCount }}">
+                <span style="{{ card.countStyle }}">{{ card.countLabel }}</span>
+              </sc-if>
+            </div>
+          </sc-for>
+        </div>
+        <button onClick="{{ startTear }}" style="{{ openBtnStyle }}">{{ openBtnLabel }}</button>
+        <button onClick="{{ goCollection }}" style="{{ ghostBtnStyle }}">Voir la collection</button>
+      </div>
+      </sc-if>
+
+    </div>
+    </sc-if>
+
+    <!-- ══ DOUBLONS ══ -->
+    <sc-if value="{{ isDupes }}">
+    <div style="flex:1;overflow:auto;padding:54px 0 104px">
+      <div style="padding:8px 18px 0;display:flex;align-items:flex-end;gap:10px">
+        <h1 style="font-size:30px;margin:0;line-height:1">Doublons</h1>
+        <span style="margin-left:auto;display:inline-flex;align-items:center;gap:6px;background:var(--color-accent-200);color:var(--color-accent-800);padding:6px 12px;border-radius:999px;font-size:12px;font-weight:700">
+          <i style="width:9px;height:11px;border-radius:50% 50% 45% 45%;background:var(--color-accent-700);display:block"></i>{{ glands }}
+        </span>
+      </div>
+      <p style="padding:0 18px;font-size:13px;opacity:.6;margin:10px 0 0;text-wrap:pretty">{{ dupesBlurb }}</p>
+      <sc-if value="{{ hasDupes }}">
+      <div style="padding:18px 18px 0;display:flex;flex-direction:column;gap:10px">
+        <sc-for list="{{ dupes }}" as="row" hint-placeholder-count="4">
+          <div style="display:flex;align-items:center;gap:12px;padding:10px 12px;border-radius:26px;background:var(--color-surface)">
+            <div onClick="{{ row.onOpen }}" style="width:60px;height:84px;flex:none;cursor:pointer">
+              <dc-import name="PigCard" d="{{ row.d }}" style="width:100%;height:100%" hint-size="100%,100%"></dc-import>
+            </div>
+            <div style="flex:1;min-width:0">
+              <div style="font-family:var(--font-heading);font-size:15px;line-height:1.15">{{ row.name }}</div>
+              <div style="font-size:10.5px;opacity:.6;margin-top:3px">{{ row.meta }}</div>
+              <div style="display:flex;align-items:center;gap:6px;margin-top:7px">
+                <span style="{{ row.tagStyle }}">{{ row.extraLabel }}</span>
+              </div>
+            </div>
+            <button onClick="{{ row.onRecycle }}" style="{{ row.btnStyle }}">{{ row.btnLabel }}</button>
+          </div>
+        </sc-for>
+      </div>
+      </sc-if>
+      <sc-if value="{{ noDupes }}">
+      <p style="text-align:center;padding:50px 34px;font-size:13px;opacity:.5;text-wrap:pretty">Pas un seul doublon. Ouvre des sacs — ça viendra.</p>
+      </sc-if>
+    </div>
+    </sc-if>
+
+    <!-- ══ PROFIL ══ -->
+    <sc-if value="{{ isProfile }}">
+    <div style="flex:1;overflow:auto;padding:54px 0 104px">
+      <div style="padding:8px 18px 0">
+        <h1 style="font-size:30px;margin:0;line-height:1">Profil</h1>
+      </div>
+      <div style="padding:18px 18px 0;display:flex;align-items:center;gap:14px">
+        <div style="width:74px;height:74px;border-radius:50%;background:linear-gradient(160deg,#ffd2b4,#f6a06b);display:flex;align-items:center;justify-content:center;gap:11px;box-shadow:var(--shadow-md);flex:none">
+          <i style="width:12px;height:19px;border-radius:50%;background:#8c491a;display:block"></i>
+          <i style="width:12px;height:19px;border-radius:50%;background:#8c491a;display:block"></i>
+        </div>
+        <div>
+          <div style="font-family:var(--font-heading);font-size:22px;line-height:1.1">Éleveur Grouik</div>
+          <div style="font-size:11.5px;opacity:.6;margin-top:4px">{{ profileRank }}</div>
+        </div>
+      </div>
+
+      <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:10px;padding:20px 18px 0">
+        <sc-for list="{{ stats }}" as="s" hint-placeholder-count="4">
+          <div style="padding:14px 16px;border-radius:26px;background:var(--color-surface)">
+            <div style="font-family:var(--font-heading);font-size:26px;line-height:1">{{ s.val }}</div>
+            <div style="font-size:9.5px;letter-spacing:.1em;text-transform:uppercase;opacity:.55;font-weight:700;margin-top:5px">{{ s.label }}</div>
+          </div>
+        </sc-for>
+      </div>
+
+      <div style="padding:20px 18px 0">
+        <div style="font-size:8.5px;letter-spacing:.14em;text-transform:uppercase;opacity:.42;font-weight:700;margin-bottom:11px">Complétion par rareté</div>
+        <div style="display:flex;flex-direction:column;gap:11px">
+          <sc-for list="{{ rarityBars }}" as="b" hint-placeholder-count="5">
+            <div>
+              <div style="display:flex;align-items:center;gap:7px;font-size:11.5px;margin-bottom:5px">
+                <i style="{{ b.dot }}"></i><span style="flex:1;font-weight:600">{{ b.name }}</span><span style="opacity:.55">{{ b.val }}</span>
+              </div>
+              <div style="height:6px;border-radius:999px;background:var(--color-neutral-300);overflow:hidden">
+                <div style="{{ b.fill }}"></div>
+              </div>
+            </div>
+          </sc-for>
+        </div>
+      </div>
+
+      <div style="padding:22px 18px 0">
+        <div style="font-size:8.5px;letter-spacing:.14em;text-transform:uppercase;opacity:.42;font-weight:700;margin-bottom:11px">Meilleure trouvaille</div>
+        <div onClick="{{ bestOpen }}" style="display:flex;align-items:center;gap:14px;padding:12px 14px;border-radius:28px;background:var(--color-surface);cursor:pointer">
+          <div style="width:74px;height:104px;flex:none">
+            <dc-import name="PigCard" d="{{ bestCard }}" style="width:100%;height:100%" hint-size="100%,100%"></dc-import>
+          </div>
+          <div>
+            <div style="font-family:var(--font-heading);font-size:18px;line-height:1.15">{{ bestName }}</div>
+            <div style="font-size:11px;opacity:.6;margin-top:5px">{{ bestMeta }}</div>
+          </div>
+        </div>
+      </div>
+    </div>
+    </sc-if>
+
+    <!-- ══ DÉTAIL ══ -->
+    <sc-if value="{{ detailOpen }}">
+    <div style="position:absolute;inset:0;z-index:80;background:rgba(32,30,29,.6);backdrop-filter:blur(7px);display:flex;flex-direction:column;align-items:center;justify-content:center;padding:30px 24px">
+      <div style="{{ detailGlow }}"></div>
+      <div style="width:238px;height:332px;animation:pigPop .3s ease both;position:relative;z-index:2">
+        <dc-import name="PigCard" d="{{ detailCard }}" style="width:100%;height:100%" hint-size="100%,100%"></dc-import>
+      </div>
+      <div style="margin-top:22px;text-align:center;color:var(--color-bg);position:relative;z-index:2">
+        <div style="font-size:9px;letter-spacing:.2em;text-transform:uppercase;opacity:.7">{{ detailRarity }}</div>
+        <h2 style="font-size:25px;margin:7px 0 0;color:var(--color-bg);text-wrap:balance">{{ detailName }}</h2>
+        <div style="font-size:12px;opacity:.7;margin-top:7px">{{ detailMeta }}</div>
+      </div>
+      <button onClick="{{ closeDetail }}" style="margin-top:24px;position:relative;z-index:2;border:0;cursor:pointer;font-family:var(--font-heading);font-size:14px;background:var(--color-bg);color:var(--color-text);padding:12px 28px;border-radius:999px">Fermer</button>
+    </div>
+    </sc-if>
+
+    <!-- ══ TAB BAR ══ -->
+    <div style="position:absolute;bottom:0;left:0;right:0;z-index:40;background:var(--color-surface);border-top-left-radius:32px;border-top-right-radius:32px;box-shadow:0 -8px 24px rgba(46,43,37,.12);padding:11px 12px 30px;display:flex;gap:2px">
+      <button onClick="{{ goCollection }}" style="{{ tab1 }}">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.75" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="7" height="7" rx="2"></rect><rect x="14" y="3" width="7" height="7" rx="2"></rect><rect x="14" y="14" width="7" height="7" rx="2"></rect><rect x="3" y="14" width="7" height="7" rx="2"></rect></svg>
+        <span style="font-size:8.5px;font-weight:700;letter-spacing:.02em">Collection</span>
+      </button>
+      <button onClick="{{ goShop }}" style="{{ tab2 }}">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.75" strokeLinecap="round" strokeLinejoin="round"><path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"></path><path d="M3 6h18"></path><path d="M16 10a4 4 0 0 1-8 0"></path></svg>
+        <span style="font-size:8.5px;font-weight:700;letter-spacing:.02em">Boutique</span>
+      </button>
+      <button onClick="{{ goOpen }}" style="{{ tab3 }}">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.75" strokeLinecap="round" strokeLinejoin="round"><path d="M21 8v8a2 2 0 0 1-1 1.73l-7 4a2 2 0 0 1-2 0l-7-4A2 2 0 0 1 3 16V8a2 2 0 0 1 1-1.73l7-4a2 2 0 0 1 2 0l7 4A2 2 0 0 1 21 8z"></path><path d="m3.3 7 8.7 5 8.7-5"></path><path d="M12 22V12"></path></svg>
+        <span style="font-size:8.5px;font-weight:700;letter-spacing:.02em">Ouvrir</span>
+      </button>
+      <button onClick="{{ goDupes }}" style="{{ tab4 }}">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.75" strokeLinecap="round" strokeLinejoin="round"><rect x="9" y="9" width="13" height="13" rx="2.5"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
+        <span style="font-size:8.5px;font-weight:700;letter-spacing:.02em">Doublons</span>
+      </button>
+      <button onClick="{{ goProfile }}" style="{{ tab5 }}">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.75" strokeLinecap="round" strokeLinejoin="round"><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>
+        <span style="font-size:8.5px;font-weight:700;letter-spacing:.02em">Profil</span>
+      </button>
+    </div>
+
+    <sc-if value="{{ toastOn }}">
+      <div style="position:absolute;left:0;right:0;bottom:104px;z-index:70;display:flex;justify-content:center;pointer-events:none">
+        <div style="background:var(--color-neutral-900);color:var(--color-bg);font-size:12px;font-weight:600;padding:9px 18px;border-radius:999px;box-shadow:var(--shadow-md);animation:pigRise .25s ease both">{{ toast }}</div>
+      </div>
+    </sc-if>
+
+  </div>
+
+</x-import>
+</div>
+
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:470,&quot;height&quot;:954},&quot;cardStyle&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;Collector foil&quot;,&quot;Sticker cartoon&quot;],&quot;default&quot;:&quot;Collector foil&quot;,&quot;tsType&quot;:&quot;string&quot;,&quot;section&quot;:&quot;Direction visuelle&quot;},&quot;holoAnim&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:true,&quot;tsType&quot;:&quot;boolean&quot;,&quot;section&quot;:&quot;Direction visuelle&quot;},&quot;packSize&quot;:{&quot;editor&quot;:&quot;int&quot;,&quot;default&quot;:5,&quot;min&quot;:3,&quot;max&quot;:8,&quot;tsType&quot;:&quot;number&quot;,&quot;section&quot;:&quot;Règles du jeu&quot;},&quot;showRates&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:true,&quot;tsType&quot;:&quot;boolean&quot;,&quot;section&quot;:&quot;Règles du jeu&quot;}}">
+class Component extends DCLogic {
+  RAR = [
+    { i: 1, name: 'Commune',     short: 'Com.',    w: 44,  ink: 'var(--color-neutral-700)',  glow: 'rgba(161,151,134,.55)', worth: 8 },
+    { i: 2, name: 'Peu commune', short: 'Peu c.',  w: 28,  ink: 'var(--color-accent-2-700)', glow: 'rgba(143,160,115,.6)',  worth: 22 },
+    { i: 3, name: 'Rare',        short: 'Rare',    w: 17,  ink: 'var(--color-accent-700)',   glow: 'rgba(246,160,107,.75)', worth: 60 },
+    { i: 4, name: 'Épique',      short: 'Épique',  w: 8,   ink: 'var(--color-accent-2-800)', glow: 'rgba(86,99,63,.85)',    worth: 160 },
+    { i: 5, name: 'Légendaire',  short: 'Légend.', w: 2.5, ink: 'var(--color-accent-800)',   glow: 'rgba(246,160,107,.95)', worth: 450 },
+    { i: 6, name: 'Mythique',    short: 'Myth.',   w: 0.5, ink: '#8c6318',                   glow: 'rgba(255,215,130,1)',   worth: 1500 }
+  ];
+
+  TYPES = ['Super-héros', 'Dictateurs', 'Politiques', 'Métiers', 'Hors catégorie'];
+
+  CARDS = [
+    { id: 1,  n: 'Porc-Éclair', t: 'Super-héros', r: 1 },
+    { id: 2,  n: 'Capitaine Lardon', t: 'Super-héros', r: 1 },
+    { id: 3,  n: 'Sergent Bouseux', t: 'Dictateurs', r: 1 },
+    { id: 4,  n: 'Conseiller Grouik', t: 'Politiques', r: 1 },
+    { id: 5,  n: 'Plombier Groin', t: 'Métiers', r: 1 },
+    { id: 6,  n: 'Boulanger Bacon', t: 'Métiers', r: 1 },
+    { id: 7,  n: 'Barista Truffe', t: 'Métiers', r: 1 },
+    { id: 8,  n: 'Cochon Facteur', t: 'Métiers', r: 1 },
+    { id: 9,  n: 'Flaque du Matin', t: 'Hors catégorie', r: 1 },
+    { id: 10, n: 'La Truie Invisible', t: 'Super-héros', r: 2 },
+    { id: 11, n: 'Groin de Fer', t: 'Super-héros', r: 2 },
+    { id: 12, n: 'Colonel Saucisson', t: 'Dictateurs', r: 2 },
+    { id: 13, n: 'Sénateur Bacon', t: 'Politiques', r: 2 },
+    { id: 14, n: 'Députée Truffe', t: 'Politiques', r: 2 },
+    { id: 15, n: 'Docteur Lardon', t: 'Métiers', r: 2 },
+    { id: 16, n: 'Pompier Porcinet', t: 'Métiers', r: 2 },
+    { id: 17, n: 'Super Groin', t: 'Super-héros', r: 3 },
+    { id: 18, n: 'Généralissime Bouseux', t: 'Dictateurs', r: 3 },
+    { id: 19, n: 'Le Tyran de la Soue', t: 'Dictateurs', r: 3 },
+    { id: 20, n: 'Candidat Groin 2028', t: 'Politiques', r: 3 },
+    { id: 21, n: 'Maître Notaire Jambon', t: 'Métiers', r: 3 },
+    { id: 22, n: 'Cochon-Man', t: 'Super-héros', r: 4 },
+    { id: 23, n: 'Chef Suprême Groin Iᵉʳ', t: 'Dictateurs', r: 4 },
+    { id: 24, n: 'Madame la Présidente Truie', t: 'Politiques', r: 4 },
+    { id: 25, n: 'Cochon Quantique', t: 'Hors catégorie', r: 4 },
+    { id: 26, n: 'Aurore, Première Truie', t: 'Hors catégorie', r: 5 },
+    { id: 27, n: "Le Grand Sanglier d'Or", t: 'Hors catégorie', r: 5 },
+    { id: 28, n: 'Cochon OG', t: 'Hors catégorie', r: 6 }
+  ];
+
+  PACKS = [
+    { key: 'basic',  name: 'Sac de glands',    price: 100, desc: '5 cartes, taux standard.', floor: 0, sub: '5 cartes · standard', bg: 'linear-gradient(160deg,#f6a06b,#8c491a)' },
+    { key: 'foire',  name: 'Caisse de la Foire', price: 260, desc: '5 cartes, au moins une Rare.', floor: 3, sub: '5 cartes · 1 rare garantie', bg: 'linear-gradient(160deg,#aebf92,#3d472b)' },
+    { key: 'doree',  name: 'Malle Dorée',      price: 640, desc: '5 cartes, au moins une Épique.', floor: 4, sub: '5 cartes · 1 épique garantie', bg: 'linear-gradient(160deg,#ffd2b4,#b2622d 55%,#402310)' }
+  ];
+
+  state = {
+    tab: 'collection', sort: 'rarete', rarity: 'all', type: 'all', q: '', ownedOnly: false,
+    detail: null, glands: 480,
+    owned: { 1: 3, 2: 1, 4: 2, 5: 1, 6: 4, 8: 2, 10: 1, 13: 2, 15: 1, 20: 1, 22: 1, 28: 1 },
+    stock: { basic: 4, foire: 1, doree: 0 },
+    activePack: 'basic', packState: 'idle', pull: [], pullIndex: 0, flipped: false,
+    isNew: {}, dragX: 0, opened: 12, toast: null
+  };
+
+  componentWillUnmount() { clearTimeout(this._t); clearTimeout(this._tt); }
+
+  say(msg) { clearTimeout(this._tt); this.setState({ toast: msg }); this._tt = setTimeout(() => this.setState({ toast: null }), 1700); }
+
+  // ───────── card visual language: 5 rarities × 3 directions ─────────
+  build(card, big, opts) {
+    const o = opts || {};
+    const dir = this.props.cardStyle || 'Collector foil';
+    const holo = this.props.holoAnim ?? true;
+    const r = this.RAR[card.r - 1];
+    const count = this.state.owned[card.id] || 0;
+    const owned = o.forceOwned || count > 0;
+
+    const s = big
+      ? { pad: 8, name: 18, type: 10, pip: 7, num: 10 }
+      : { pad: 4, name: 10, type: 7, pip: 4, num: 7 };
+
+    const skin = [
+      { p: 1,   bg: 'var(--color-neutral-400)', inner: 'var(--color-neutral-100)', art: 'var(--color-neutral-200)', txt: 'var(--color-text)',       sh: 'none' },
+      { p: 2,   bg: 'linear-gradient(180deg,var(--color-accent-2-400),var(--color-accent-2-700))', inner: 'linear-gradient(180deg,#f4fce9,#e1eecc)', art: '#ccdbb2', txt: 'var(--color-accent-2-900)', sh: 'var(--shadow-sm)' },
+      { p: 2.5, bg: 'linear-gradient(150deg,#f6a06b,#ffeacb 42%,#c67139)', inner: 'linear-gradient(180deg,#fff6ef,#ffe1d0)', art: '#ffc6a5', txt: 'var(--color-accent-900)', sh: '0 2px 12px rgba(198,113,57,.35)', corners: true },
+      { p: 3,   bg: 'linear-gradient(200deg,#8fa073,#2e2b25 46%,#56633f)', inner: 'radial-gradient(120% 80% at 50% 0%,#474238,#201e1d)', art: '#2e2b25', txt: '#f5ead8', sh: 'var(--shadow-md)', sheen: true },
+      { p: 3.5, bg: 'linear-gradient(100deg,#f6a06b,#ffe1d0,#aebf92,#ffc6a5,#f6a06b)', inner: 'radial-gradient(130% 90% at 50% 0%,#5a3016,#201e1d 72%)', art: '#402310', txt: '#ffe1d0', sh: '0 6px 22px rgba(214,127,72,.5)', sheen: true, mythic: true },
+      { p: 4,   bg: 'linear-gradient(115deg,#8c6318,#ffe9b0 28%,#c99a3a 52%,#fff6d8 74%,#8c6318)', inner: 'radial-gradient(140% 100% at 50% 0%,#3a2c10,#141210 74%)', art: '#221b0e', txt: '#ffe9b0', sh: '0 8px 30px rgba(201,154,58,.6)', sheen: true, mythic: true, corners: true }
+    ][card.r - 1];
+
+    // direction geometry
+    const retro = false, toon = dir === 'Sticker cartoon';
+    const R1 = retro ? (big ? 12 : 8) : toon ? (big ? 30 : 18) : (big ? 26 : 15);
+    const R2 = R1 - (big ? 7 : 4);
+    let outerPad = skin.p;
+    let outerBg = skin.bg;
+    let shellShadow = skin.sh;
+    if (retro) { outerPad = big ? 4 : 2.5; outerBg = skin.bg; shellShadow = card.r >= 4 ? 'var(--shadow-md)' : 'none'; }
+    if (toon) { outerPad = big ? 7 : 4; outerBg = '#fffaf2'; shellShadow = '0 ' + (big ? 8 : 4) + 'px 0 ' + (card.r >= 4 ? 'rgba(46,43,37,.55)' : 'rgba(140,73,26,.35)'); }
+
+    const shell = {
+      position: 'relative', width: '100%', height: '100%', boxSizing: 'border-box',
+      padding: outerPad, borderRadius: R1, background: outerBg, boxShadow: shellShadow
+    };
+    if (toon) shell.border = (big ? 3 : 2) + 'px solid ' + (card.r >= 4 ? '#201e1d' : 'var(--color-accent-800)');
+    if (skin.mythic && holo && owned) { shell.backgroundSize = '300% 100%'; if (!toon) shell.animation = 'pigHolo 5s linear infinite'; }
+    if (!owned) { shell.filter = 'grayscale(1)'; shell.opacity = 0.4; shell.animation = 'none'; shell.boxShadow = 'none'; }
+
+    const inner = {
+      position: 'relative', height: '100%', boxSizing: 'border-box', overflow: 'hidden',
+      display: 'flex', flexDirection: 'column', gap: big ? 6 : 3,
+      padding: s.pad, borderRadius: R2, background: skin.inner, color: skin.txt
+    };
+    if (retro) inner.boxShadow = 'inset 0 0 0 ' + (big ? 2 : 1.2) + 'px ' + skin.txt;
+
+    const artWrap = {
+      position: 'relative', flex: 1, overflow: 'hidden', background: skin.art,
+      borderRadius: toon ? R2 - (big ? 6 : 3) : retro ? (big ? 5 : 3) : R2 - (big ? 8 : 4)
+    };
+    if (toon) artWrap.boxShadow = 'inset 0 0 0 ' + (big ? 3 : 2) + 'px #fffaf2';
+
+    const namePlate = retro
+      ? { fontFamily: 'var(--font-body)', fontWeight: 700, fontSize: s.name * 0.94, lineHeight: 1.05,
+          letterSpacing: '.01em', textTransform: 'uppercase', textAlign: 'left',
+          background: skin.txt, color: skin.inner.indexOf('gradient') === 0 && card.r < 4 ? '#fff6ef' : (card.r >= 4 ? '#201e1d' : '#fff6ef'),
+          padding: big ? '5px 8px' : '2.5px 5px', borderRadius: big ? 4 : 2.5, overflow: 'hidden' }
+      : { fontFamily: 'var(--font-heading)', fontSize: s.name, lineHeight: 1.06, textAlign: 'center',
+          padding: big ? '2px 4px 0' : '1px 2px 0', color: skin.txt, overflow: 'hidden',
+          textShadow: card.r >= 4 ? '0 1px 6px rgba(0,0,0,.5)' : 'none' };
+
+    const metaRow = { display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 4, padding: big ? '0 3px 2px' : '0 3px 1px' };
+    const typeStyle = { flex: 1, minWidth: 0, fontSize: s.type, letterSpacing: '.06em', textTransform: 'uppercase', fontWeight: 700, opacity: .65, color: skin.txt, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' };
+    const pips = this.RAR.map(x => ({
+      s: x.i <= card.r
+        ? { display: 'block', width: s.pip, height: s.pip, borderRadius: '50%', background: skin.txt, opacity: .9 }
+        : { display: 'block', width: s.pip, height: s.pip, borderRadius: '50%', boxShadow: 'inset 0 0 0 1px ' + skin.txt, opacity: .28 }
+    }));
+
+    const corners = (skin.corners && !retro) ? [['top', 'left'], ['top', 'right'], ['bottom', 'left'], ['bottom', 'right']].map(([a, b]) => {
+      const st = { position: 'absolute', width: big ? 10 : 5, height: big ? 10 : 5, borderRadius: '50%', background: card.r === 6 ? 'linear-gradient(140deg,#fff6d8,#c99a3a)' : 'linear-gradient(140deg,#ffeacb,#c67139)', boxShadow: '0 0 0 1px rgba(255,255,255,.6)' };
+      st[a] = big ? 8 : 4; st[b] = big ? 8 : 4;
+      return { s: st };
+    }) : [];
+
+    const dots = (skin.mythic && owned) ? [0, 1, 2].map(k => ({
+      s: { position: 'absolute', left: (18 + k * 28) + '%', bottom: '12%', width: big ? 6 : 3.5, height: big ? 6 : 3.5,
+           borderRadius: '50%', background: card.r === 6 ? '#ffe9b0' : '#ffe1d0', animation: holo ? 'pigFloat ' + (2.4 + k * .6) + 's ease-in-out infinite' : 'none', opacity: .6 }
+    })) : [];
+
+    const textureStyle = retro
+      ? { position: 'absolute', inset: 0, pointerEvents: 'none', borderRadius: R2, opacity: card.r >= 4 ? .18 : .13,
+          backgroundImage: 'radial-gradient(' + skin.txt + ' 1px, transparent 1px)', backgroundSize: (big ? 6 : 4) + 'px ' + (big ? 6 : 4) + 'px' }
+      : null;
+
+    return {
+      name: card.n, type: card.t, slotId: 'art-' + card.id,
+      owned: owned, locked: !owned, mini: big ? null : true,
+      shell, inner, artWrap, namePlate, metaRow, typeStyle, pipWrap: { display: 'flex', flex: 'none', gap: big ? 3 : 1.5 }, pips, corners, dots,
+      hasNum: retro, num: 'N°' + String(card.id).padStart(3, '0'),
+      numStyle: { position: 'absolute', top: big ? 12 : 6, left: big ? 13 : 7, fontSize: s.num, fontWeight: 700, letterSpacing: '.06em', color: skin.txt, opacity: .75, background: skin.inner.indexOf('radial') === 0 ? 'rgba(32,30,29,.5)' : 'rgba(255,255,255,.65)', padding: big ? '2px 6px' : '1px 4px', borderRadius: 3 },
+      hasTexture: !!textureStyle, textureStyle: textureStyle || {},
+      sheen: !!skin.sheen && owned && holo,
+      sheenStyle: { position: 'absolute', top: '-20%', left: 0, width: '55%', height: '140%', pointerEvents: 'none',
+                    background: 'linear-gradient(100deg,transparent,rgba(255,255,255,.45),transparent)',
+                    animation: 'pigShine ' + (card.r >= 5 ? 3.1 : 4.6) + 's ease-in-out infinite' },
+      lockStyle: { position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center',
+                   fontFamily: 'var(--font-heading)', fontSize: big ? 54 : 24, color: skin.txt, opacity: .3 }
+    };
+  }
+
+  chip(label, active, onClick) {
+    return {
+      label, onClick,
+      style: {
+        cursor: 'pointer', border: 0, fontFamily: 'var(--font-body)', fontWeight: 700, fontSize: 11.5,
+        padding: '6px 13px', borderRadius: 999, lineHeight: 1.2, whiteSpace: 'nowrap',
+        background: active ? 'var(--color-accent)' : 'var(--color-neutral-200)',
+        color: active ? 'var(--color-bg)' : 'var(--color-text)',
+        boxShadow: active ? 'var(--shadow-sm)' : 'inset 0 0 0 1px var(--color-divider)'
+      }
+    };
+  }
+
+  cell(card, opts) {
+    const o = opts || {};
+    const count = this.state.owned[card.id] || 0;
+    return {
+      d: this.build(card, false, o),
+      cellStyle: { position: 'relative', aspectRatio: '0.72', cursor: 'pointer' },
+      onOpen: () => this.setState({ detail: card.id }),
+      showCount: count > 1,
+      countLabel: '×' + count,
+      countStyle: { position: 'absolute', top: -5, right: -4, background: 'var(--color-neutral-900)', color: 'var(--color-bg)', fontSize: 9.5, fontWeight: 700, padding: '2px 7px', borderRadius: 999, boxShadow: 'var(--shadow-sm)' },
+      isNew: !!o.isNew,
+      newStyle: { position: 'absolute', top: -6, left: -4, background: 'var(--color-accent)', color: 'var(--color-bg)', fontSize: 7.5, fontWeight: 700, letterSpacing: '.1em', padding: '3px 6px', borderRadius: 999, boxShadow: 'var(--shadow-sm)' }
+    };
+  }
+
+  // ───────── pack flow ─────────
+  pack() { return this.PACKS.find(p => p.key === this.state.activePack) || this.PACKS[0]; }
+
+  roll(floor) {
+    const x = Math.random() * 100; let acc = 0, ri = 1;
+    for (const r of this.RAR) { acc += r.w; if (x < acc) { ri = r.i; break; } }
+    if (floor && ri < floor) ri = floor;
+    const pool = this.CARDS.filter(c => c.r === ri);
+    return pool[Math.floor(Math.random() * pool.length)];
+  }
+
+  startTear = () => {
+    const S = this.state, p = this.pack();
+    if ((S.stock[p.key] || 0) <= 0) { this.say('Plus de ' + p.name + ' — passe en boutique.'); return; }
+    const size = this.props.packSize ?? 5;
+    const pull = []; const floor = p.floor;
+    for (let k = 0; k < size; k++) pull.push(this.roll(k === size - 1 ? floor : 0));
+    if (floor && !pull.some(c => c.r >= floor)) pull[size - 1] = this.roll(floor);
+    const owned = Object.assign({}, S.owned); const isNew = {};
+    pull.forEach(c => { if (!owned[c.id]) isNew[c.id] = true; owned[c.id] = (owned[c.id] || 0) + 1; });
+    const stock = Object.assign({}, S.stock); stock[p.key] = stock[p.key] - 1;
+    this.setState({ tab: 'open', packState: 'tearing', pull, pullIndex: 0, flipped: false, owned, isNew, stock, opened: S.opened + 1, dragX: 0 });
+    clearTimeout(this._t);
+    this._t = setTimeout(() => { this.setState({ packState: 'reveal' }); this.flipSoon(); }, 680);
+  };
+
+  flipSoon() { clearTimeout(this._t); this._t = setTimeout(() => this.setState({ flipped: true }), 360); }
+
+  nextReveal = () => {
+    const S = this.state;
+    if (S.packState !== 'reveal') return;
+    if (!S.flipped) { clearTimeout(this._t); this.setState({ flipped: true }); return; }
+    if (S.pullIndex < S.pull.length - 1) { this.setState({ pullIndex: S.pullIndex + 1, flipped: false, dragX: 0 }); this.flipSoon(); }
+    else this.setState({ packState: 'summary', dragX: 0 });
+  };
+
+  dragStart = e => { this._dx = e.clientX; this._drag = true; };
+  dragMove = e => { if (this._drag) this.setState({ dragX: e.clientX - this._dx }); };
+  dragEnd = () => {
+    if (!this._drag) return;
+    this._drag = false;
+    if (Math.abs(this.state.dragX) > 70) { this.setState({ dragX: 0 }); this.nextReveal(); }
+    else this.setState({ dragX: 0 });
+  };
+
+  buy(p) {
+    const S = this.state;
+    if (S.glands < p.price) { this.say('Pas assez de glands (' + p.price + ' requis).'); return; }
+    const stock = Object.assign({}, S.stock); stock[p.key] = (stock[p.key] || 0) + 1;
+    this.setState({ glands: S.glands - p.price, stock, activePack: p.key });
+    this.say(p.name + ' ajouté·e');
+  }
+
+  recycle(card) {
+    const S = this.state, count = S.owned[card.id] || 0;
+    if (count < 2) return;
+    const gain = this.RAR[card.r - 1].worth * (count - 1);
+    const owned = Object.assign({}, S.owned); owned[card.id] = 1;
+    this.setState({ owned, glands: S.glands + gain });
+    this.say('+' + gain + ' glands');
+  }
+
+  renderVals() {
+    const S = this.state, R = this.RAR;
+    const showRates = this.props.showRates ?? true;
+    const ownedIds = Object.keys(S.owned).filter(k => S.owned[k] > 0).map(Number);
+    const total = this.CARDS.length, uniq = ownedIds.length;
+
+    // collection list
+    const q = S.q.trim().toLowerCase();
+    let list = this.CARDS.filter(c =>
+      (S.rarity === 'all' || c.r === S.rarity) &&
+      (S.type === 'all' || c.t === S.type) &&
+      (!q || c.n.toLowerCase().indexOf(q) >= 0) &&
+      (!S.ownedOnly || (S.owned[c.id] || 0) > 0));
+    if (S.sort === 'rarete') list = list.slice().sort((a, b) => b.r - a.r || a.n.localeCompare(b.n));
+    if (S.sort === 'nom') list = list.slice().sort((a, b) => a.n.localeCompare(b.n));
+    if (S.sort === 'type') list = list.slice().sort((a, b) => a.t.localeCompare(b.t) || b.r - a.r);
+    if (S.sort === 'nb') list = list.slice().sort((a, b) => (S.owned[b.id] || 0) - (S.owned[a.id] || 0) || b.r - a.r);
+
+    const detailCard = S.detail ? this.CARDS.find(c => c.id === S.detail) : null;
+    const dCount = detailCard ? (S.owned[detailCard.id] || 0) : 0;
+    const revealSrc = S.pull[S.pullIndex] || this.CARDS[0];
+    const revealR = R[revealSrc.r - 1];
+    const flipped = S.flipped;
+    const best = ownedIds.map(id => this.CARDS.find(c => c.id === id)).sort((a, b) => b.r - a.r)[0] || this.CARDS[0];
+    const dupeList = this.CARDS.filter(c => (S.owned[c.id] || 0) > 1).sort((a, b) => b.r - a.r);
+    const p = this.pack();
+
+    const smallBtn = (bg, col) => ({ cursor: 'pointer', border: 0, fontFamily: 'var(--font-heading)', fontSize: 12, padding: '8px 14px', borderRadius: 999, background: bg, color: col });
+
+    return {
+      isCollection: S.tab === 'collection', isShop: S.tab === 'shop', isOpen: S.tab === 'open',
+      isDupes: S.tab === 'dupes', isProfile: S.tab === 'profile',
+      goCollection: () => this.setState({ tab: 'collection' }),
+      goShop: () => this.setState({ tab: 'shop' }),
+      goOpen: () => this.setState({ tab: 'open' }),
+      goDupes: () => this.setState({ tab: 'dupes' }),
+      goProfile: () => this.setState({ tab: 'profile' }),
+      tab1: this.tabStyle(S.tab === 'collection'), tab2: this.tabStyle(S.tab === 'shop'),
+      tab3: this.tabStyle(S.tab === 'open'), tab4: this.tabStyle(S.tab === 'dupes'),
+      tab5: this.tabStyle(S.tab === 'profile'),
+
+      glands: S.glands,
+      toastOn: !!S.toast, toast: S.toast || '',
+
+      // collection
+      ownedLabel: uniq + '/' + total,
+      progressStyle: { height: '100%', width: Math.round(uniq / total * 100) + '%', background: 'linear-gradient(90deg,var(--color-accent-2-500),var(--color-accent))', borderRadius: 999, transition: 'width .4s ease' },
+      rarityStats: R.map(r => {
+        const t = this.CARDS.filter(c => c.r === r.i).length;
+        const o = this.CARDS.filter(c => c.r === r.i && (S.owned[c.id] || 0) > 0).length;
+        return { name: r.short, val: o + '/' + t,
+          box: { flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4, padding: '9px 2px', borderRadius: 18, background: 'var(--color-surface)' },
+          dot: { display: 'block', width: 7, height: 7, borderRadius: '50%', background: r.ink } };
+      }),
+      query: S.q, onQuery: e => this.setState({ q: e.target.value }),
+      toggleOwned: () => this.setState({ ownedOnly: !S.ownedOnly }),
+      ownedToggleLabel: S.ownedOnly ? 'Possédées' : 'Toutes',
+      ownedToggleStyle: { cursor: 'pointer', border: 0, whiteSpace: 'nowrap', fontFamily: 'var(--font-body)', fontWeight: 700, fontSize: 11.5, padding: '9px 14px', borderRadius: 999, background: S.ownedOnly ? 'var(--color-accent-2-600)' : 'var(--color-neutral-200)', color: S.ownedOnly ? 'var(--color-bg)' : 'var(--color-text)', boxShadow: S.ownedOnly ? 'var(--shadow-sm)' : 'inset 0 0 0 1px var(--color-divider)' },
+      sortChips: [['rarete', 'Rareté'], ['nom', 'Nom'], ['type', 'Type'], ['nb', 'Quantité']]
+        .map(([k, l]) => this.chip(l, S.sort === k, () => this.setState({ sort: k }))),
+      rarityChips: [this.chip('Toutes', S.rarity === 'all', () => this.setState({ rarity: 'all' }))]
+        .concat(R.map(r => this.chip(r.name, S.rarity === r.i, () => this.setState({ rarity: r.i })))),
+      typeChips: [this.chip('Tous', S.type === 'all', () => this.setState({ type: 'all' }))]
+        .concat(this.TYPES.map(t => this.chip(t, S.type === t, () => this.setState({ type: t })))),
+      grid: list.map(c => this.cell(c)),
+      gridEmpty: list.length === 0,
+
+      // shop
+      shopPacks: this.PACKS.map(pk => ({
+        name: pk.name, desc: pk.desc, price: pk.price + ' glands',
+        stock: (S.stock[pk.key] || 0) > 0 ? 'En poche : ' + S.stock[pk.key] : 'En poche : 0',
+        box: { display: 'flex', gap: 13, alignItems: 'center', padding: 13, borderRadius: 30, background: 'var(--color-surface)', boxShadow: pk.key === S.activePack ? 'inset 0 0 0 2px var(--color-accent)' : 'none' },
+        thumb: { width: 66, height: 88, flex: 'none', borderRadius: 20, background: pk.bg, display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: 'var(--shadow-sm)' },
+        snout: { width: 34, height: 27, borderRadius: '50%', background: '#ffd2b4', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5 },
+        nostril: { width: 5, height: 9, borderRadius: '50%', background: '#8c491a', display: 'block' },
+        priceStyle: { fontFamily: 'var(--font-heading)', fontSize: 13, color: 'var(--color-accent-800)', background: 'var(--color-accent-200)', padding: '3px 10px', borderRadius: 999 },
+        buyStyle: smallBtn('var(--color-accent)', 'var(--color-bg)'),
+        openStyle: { cursor: 'pointer', border: 0, fontFamily: 'var(--font-heading)', fontSize: 12, padding: '8px 14px', borderRadius: 999, background: 'transparent', color: 'var(--color-text)', boxShadow: 'inset 0 0 0 1px var(--color-divider)' },
+        onBuy: () => this.buy(pk),
+        onOpen: () => { this.setState({ activePack: pk.key, packState: 'idle', tab: 'open' }); }
+      })),
+
+      // pack opening
+      currentPackName: p.name, sachetSub: p.sub,
+      packsLabel: (S.stock[p.key] || 0) + ' en poche',
+      packCountStyle: { marginLeft: 'auto', paddingBottom: 4, fontSize: 12, fontWeight: 700, opacity: .5 },
+      packBlurb: p.desc + ' Touche le sac pour le déchirer, puis glisse pour révéler carte par carte.',
+      sachetStyle: { position: 'relative', width: 214, height: 286, borderRadius: 34, background: p.bg, boxShadow: 'var(--shadow-lg)', cursor: 'pointer', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', overflow: 'hidden', animation: 'pigBreathe 4.5s ease-in-out infinite' },
+      sachetTearStyle: { position: 'relative', width: 214, height: 286, borderRadius: 34, background: p.bg, boxShadow: 'var(--shadow-lg)', display: 'flex', alignItems: 'center', justifyContent: 'center', animation: 'pigTear .68s cubic-bezier(.4,0,.3,1) both' },
+      openBtnLabel: (S.stock[p.key] || 0) > 0 ? 'Déchirer le sac' : 'Aller en boutique',
+      openBtnStyle: { width: '100%', marginTop: 16, cursor: 'pointer', border: 0, fontFamily: 'var(--font-heading)', fontSize: 16, padding: '14px', borderRadius: 999, background: 'var(--color-accent)', color: 'var(--color-bg)', boxShadow: 'var(--shadow-sm)' },
+      ghostBtnStyle: { width: '100%', marginTop: 9, cursor: 'pointer', border: 0, fontFamily: 'var(--font-heading)', fontSize: 15, padding: '13px', borderRadius: 999, background: 'transparent', color: 'var(--color-text)', boxShadow: 'inset 0 0 0 1px var(--color-divider)' },
+      startTear: this.startTear,
+      showRates,
+      odds: R.map(r => ({ name: r.name, pct: r.w + '%', dot: { display: 'block', width: 9, height: 9, borderRadius: '50%', background: r.ink } })),
+      packIdle: S.packState === 'idle', packTearing: S.packState === 'tearing',
+      packReveal: S.packState === 'reveal', packSummary: S.packState === 'summary',
+
+      revealCard: this.build(revealSrc, true, { forceOwned: true }),
+      revealDots: S.pull.map((c, i) => ({ s: { display: 'block', width: i === S.pullIndex ? 20 : 7, height: 7, borderRadius: 999, background: i <= S.pullIndex ? 'var(--color-accent)' : 'var(--color-neutral-400)', transition: 'width .25s ease' } })),
+      glowStyle: { position: 'absolute', width: 320, height: 320, borderRadius: '50%', background: 'radial-gradient(circle,' + revealR.glow + ',transparent 68%)', animation: flipped && revealSrc.r >= 3 ? 'pigGlow 2.6s ease-in-out infinite' : 'none', opacity: flipped ? (revealSrc.r >= 3 ? 1 : .35) : 0, transition: 'opacity .5s ease', pointerEvents: 'none' },
+      flipOuter: { width: 238, height: 332, perspective: '1100px', transform: 'translateX(' + S.dragX + 'px) rotate(' + (S.dragX / 26) + 'deg)', transition: this._drag ? 'none' : 'transform .3s ease', position: 'relative', zIndex: 2 },
+      flipInner: { position: 'relative', width: '100%', height: '100%', transformStyle: 'preserve-3d', transform: flipped ? 'rotateY(0deg)' : 'rotateY(180deg)', transition: 'transform .62s cubic-bezier(.3,.7,.2,1)' },
+      faceBack: { position: 'absolute', inset: 0, backfaceVisibility: 'hidden', transform: 'rotateY(180deg)', borderRadius: 26, background: 'linear-gradient(160deg,#8c491a,#402310)', boxShadow: 'var(--shadow-lg)', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' },
+      faceFront: { position: 'absolute', inset: 0, backfaceVisibility: 'hidden' },
+      revealCaption: flipped ? revealR.name + ' · ' + revealSrc.t : 'Carte ' + (S.pullIndex + 1) + ' sur ' + S.pull.length,
+      revealCapStyle: { marginTop: 22, fontFamily: 'var(--font-heading)', fontSize: 15, opacity: flipped ? 1 : .45, transition: 'opacity .3s ease', position: 'relative', zIndex: 2 },
+      revealHint: flipped ? (S.pullIndex < S.pull.length - 1 ? 'Glisse ou touche pour la suivante' : 'Glisse pour voir le butin') : 'Touche pour retourner',
+      nextReveal: this.nextReveal, dragStart: this.dragStart, dragMove: this.dragMove, dragEnd: this.dragEnd,
+      pullGrid: S.pull.map(c => this.cell(c, { isNew: !!S.isNew[c.id] })),
+      summaryLine: S.pull.length + ' cartes · ' + Object.keys(S.isNew).length + ' nouvelle(s) · meilleure : ' + R[(S.pull.length ? Math.max.apply(null, S.pull.map(c => c.r)) : 1) - 1].name,
+
+      // dupes
+      dupesBlurb: dupeList.length > 0 ? 'Recycle tes exemplaires en trop contre des glands. Tu gardes toujours un exemplaire.' : 'Recycle tes exemplaires en trop contre des glands.',
+      hasDupes: dupeList.length > 0, noDupes: dupeList.length === 0,
+      dupes: dupeList.map(c => {
+        const n = S.owned[c.id], gain = R[c.r - 1].worth * (n - 1);
+        return { name: c.n, meta: R[c.r - 1].name + ' · ' + c.t, extraLabel: '×' + n + ' — ' + (n - 1) + ' en trop',
+          d: this.build(c, false), onOpen: () => this.setState({ detail: c.id }),
+          tagStyle: { fontSize: 10, fontWeight: 700, padding: '3px 9px', borderRadius: 999, background: 'var(--color-neutral-200)', color: 'var(--color-neutral-800)' },
+          btnLabel: '+' + gain, btnStyle: smallBtn('var(--color-accent-2-600)', 'var(--color-bg)'),
+          onRecycle: () => this.recycle(c) };
+      }),
+
+      // profil
+      profileRank: uniq >= total ? 'Grand Maître Truffier' : uniq > total * 0.6 ? 'Éleveur confirmé' : 'Apprenti fermier',
+      stats: [
+        { val: uniq + '/' + total, label: 'Cartes uniques' },
+        { val: Math.round(uniq / total * 100) + '%', label: 'Complétion' },
+        { val: S.opened, label: 'Sacs ouverts' },
+        { val: S.glands, label: 'Glands' }
+      ],
+      rarityBars: R.map(r => {
+        const t = this.CARDS.filter(c => c.r === r.i).length;
+        const o = this.CARDS.filter(c => c.r === r.i && (S.owned[c.id] || 0) > 0).length;
+        return { name: r.name, val: o + '/' + t,
+          dot: { display: 'block', width: 8, height: 8, borderRadius: '50%', background: r.ink },
+          fill: { height: '100%', width: Math.round(o / t * 100) + '%', background: r.ink, borderRadius: 999, transition: 'width .4s ease' } };
+      }),
+      bestCard: this.build(best, false), bestName: best.n,
+      bestMeta: R[best.r - 1].name + ' · ' + best.t + ' · ×' + (S.owned[best.id] || 1),
+      bestOpen: () => this.setState({ detail: best.id }),
+
+      // détail
+      detailOpen: !!detailCard,
+      detailCard: detailCard ? this.build(detailCard, true) : this.build(this.CARDS[0], true),
+      detailName: detailCard ? detailCard.n : '',
+      detailRarity: detailCard ? R[detailCard.r - 1].name : '',
+      detailMeta: detailCard ? (dCount > 0 ? detailCard.t + ' · ' + dCount + ' exemplaire' + (dCount > 1 ? 's' : '') + ' · ' + R[detailCard.r - 1].worth + ' glands' : detailCard.t + ' · pas encore trouvée') : '',
+      detailGlow: { position: 'absolute', width: 340, height: 340, borderRadius: '50%', pointerEvents: 'none', background: 'radial-gradient(circle,' + (detailCard ? R[detailCard.r - 1].glow : 'transparent') + ',transparent 68%)', opacity: .8 },
+      closeDetail: () => this.setState({ detail: null })
+    };
+  }
+
+  tabStyle(active) {
+    return {
+      flex: 1, minWidth: 0, cursor: 'pointer', border: 0, background: 'transparent',
+      display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4, padding: '6px 2px',
+      fontFamily: 'var(--font-body)', color: active ? 'var(--color-accent)' : 'var(--color-neutral-600)',
+      opacity: active ? 1 : .8
+    };
+  }
+}
+
+</script>
+</body>
+</html>
