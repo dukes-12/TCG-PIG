@@ -230,7 +230,7 @@
     { "id": 133, "name": "Piglet", "type": "Hors catégorie", "rarity": 2, "image": "assets/cards/133.jpg", "slotId": "art-133" },
     { "id": 134, "name": "Normpig", "type": "Humains", "rarity": 1, "image": "assets/cards/134.jpg", "slotId": "art-134" },
     { "id": 135, "name": "Euro Chipo", "type": "Humains", "rarity": 2, "image": "assets/cards/135.jpg", "slotId": "art-135" },
-    { "id": 136, "name": "Bob", "type": "Humains", "rarity": 1, "image": "assets/cards/136.jpg", "slotId": "art-136" },
+    { "id": 136, "name": "Chipo Drama", "type": "Humains", "rarity": 1, "image": "assets/cards/136.jpg", "slotId": "art-136" },
     { "id": 137, "name": "Afidou", "type": "Célébrités", "rarity": 1, "image": "assets/cards/137.jpg", "slotId": "art-137" },
     { "id": 138, "name": "Ribs", "type": "Graille", "rarity": 5, "image": "assets/cards/138.jpg", "slotId": "art-138" },
     { "id": 139, "name": "Gucco chipo", "type": "Humains", "rarity": 3, "image": "assets/cards/139.jpg", "slotId": "art-139" },
