@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import CardBack from '../components/CardBack';
 import PackPicker from '../components/PackPicker';
 import PigCard from '../components/PigCard';
+import QtyPicker from '../components/QtyPicker';
 import RarePullFx from '../components/RarePullFx';
 import Snout from '../components/Snout';
 import { CARDS, RARITIES, packByKey, rarityById } from '../data/catalog';
@@ -65,7 +66,9 @@ export default function OpenScreen() {
   const isNew = useStore((s) => s.isNew);
   const owned = useStore((s) => s.owned);
   const cardBack = useStore((s) => s.cardBack);
+  const openQty = useStore((s) => s.openQty);
   const startTear = useStore((s) => s.startTear);
+  const revealAll = useStore((s) => s.revealAll);
   const nextReveal = useStore((s) => s.nextReveal);
   const dragStart = useStore((s) => s.dragStart);
   const dragMove = useStore((s) => s.dragMove);
@@ -85,6 +88,8 @@ export default function OpenScreen() {
     if (inPocket <= 0) navigate('/shop');
     else startTear();
   };
+  const qtyToOpen = Math.max(1, Math.min(openQty, inPocket || 1));
+  const tearLabel = inPocket > 0 ? `Déchirer ${qtyToOpen} sac${qtyToOpen > 1 ? 's' : ''}` : 'Aller en boutique';
 
   return (
     <div className="screen" style={{ display: 'flex', flexDirection: 'column' }}>
@@ -99,6 +104,7 @@ export default function OpenScreen() {
           </p>
 
           <PackPicker />
+          <QtyPicker />
 
           <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '10px 0', minHeight: 260 }}>
             <div
@@ -139,7 +145,7 @@ export default function OpenScreen() {
           </div>
 
           <button className="pressable" onClick={tearOrShop} style={openBtnStyle}>
-            {inPocket > 0 ? 'Déchirer le sac' : 'Aller en boutique'}
+            {tearLabel}
           </button>
 
           <div style={{ marginTop: 16, padding: '14px 18px', borderRadius: 26, background: 'var(--color-surface)' }}>
@@ -324,6 +330,36 @@ export default function OpenScreen() {
             <div style={{ fontSize: 11, opacity: 0.4, marginTop: 7 }}>
               {flipped ? (pullIndex < pull.length - 1 ? 'Glisse ou touche pour la suivante' : 'Glisse pour voir le butin') : 'Touche pour retourner'}
             </div>
+
+            {/* Utile surtout après une ouverture groupée (QtyPicker) — flipper
+                10, 15, 25 cartes une par une devient vite fastidieux. Les
+                cartes sont déjà résolues (owned/isNew), sauter la mise en
+                scène ne change rien au résultat. */}
+            {pull.length > 1 && (
+              <button
+                className="pressable"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  revealAll();
+                }}
+                style={{
+                  marginTop: 18,
+                  position: 'relative',
+                  zIndex: 2,
+                  cursor: 'pointer',
+                  border: 0,
+                  background: 'none',
+                  fontFamily: 'var(--font-body)',
+                  fontWeight: 700,
+                  fontSize: 11.5,
+                  opacity: 0.5,
+                  textDecoration: 'underline',
+                  padding: 6,
+                }}
+              >
+                Tout révéler
+              </button>
+            )}
           </div>
         );
       })()}
@@ -392,7 +428,7 @@ export default function OpenScreen() {
               })}
             </div>
             <button className="pressable" onClick={tearOrShop} style={openBtnStyle}>
-              {inPocket > 0 ? 'Déchirer le sac' : 'Aller en boutique'}
+              {tearLabel}
             </button>
             <button className="pressable" onClick={() => navigate('/collection')} style={ghostBtnStyle}>
               Voir la collection

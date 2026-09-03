@@ -6,7 +6,7 @@ import { DEFAULT_AVATAR } from '../data/avatars';
 import { openPack, roll } from '../lib/draw';
 import { playSfx, revealSfx, setSfxEnabled } from '../lib/sfx';
 import { trackCardPulled, trackGlandsEarned, trackGlandsSpent, trackPackOpened } from '../lib/analytics';
-import { apiFetchState, apiLogin, apiPushState, apiRegister, getToken, setToken } from '../lib/api';
+import { apiFetchMailbox, apiFetchState, apiLogin, apiMarkMailboxRead, apiPushState, apiRegister, getToken, setToken, type MailboxMessage } from '../lib/api';
 import type {
   AnimationPref,
   AvatarKey,
@@ -27,6 +27,10 @@ import type {
 // the relevant store action.
 
 const PACK_SIZE = 5; // fixed in production (the prototype exposed 3–8 as a design-time tweak)
+/** Ouverture groupée : jusqu'à MAX_OPEN_QTY sacs du même type d'un coup.
+ *  Plafonné pour que la rangée de pastilles de progression pendant la
+ *  révélation (une par carte, voir OpenScreen) reste lisible sur mobile. */
+export const MAX_OPEN_QTY = 5;
 const TEAR_MS = 680;
 const FLIP_TRANSITION_MS = 620; // matches OpenScreen's flipInner CSS transition duration
 const TOAST_MS = 1700;
@@ -92,6 +96,7 @@ interface UiState {
   detail: number | null;
   activePack: PackKey;
   packState: PackState;
+  openQty: number;
   pull: Card[];
   pullIndex: number;
   flipped: boolean;
@@ -104,6 +109,8 @@ interface UiState {
   lotteryIsNew: boolean;
   wheelState: WheelState;
   wheelWon: boolean;
+  mailbox: MailboxMessage[];
+  mailboxUnread: number;
 }
 
 interface Actions {
@@ -123,7 +130,9 @@ interface Actions {
 
   buyPack: (key: PackKey) => void;
   selectPackForOpening: (key: PackKey) => void;
+  setOpenQty: (n: number) => void;
   startTear: () => void;
+  revealAll: () => void;
   backToIdle: () => void;
   reconcileDailyGrant: () => void;
   reconcileFreeBoosters: () => void;
@@ -142,6 +151,9 @@ interface Actions {
   spinWheel: () => void;
   closeWheel: () => void;
   reconcileWheel: () => void;
+
+  fetchMailbox: () => Promise<void>;
+  markMailboxRead: (ids: number[]) => Promise<void>;
 
   login: (username: string, pin: string) => Promise<void>;
   register: (username: string, pin: string) => Promise<void>;
@@ -219,16 +231,19 @@ function readLegacyLocalSave(): Partial<PersistedState> | null {
   }
 }
 
-function beginTear(get: () => Store, set: (partial: Partial<Store>) => void, pack: Pack, source: 'stock' | 'free_hourly' = 'stock') {
+function beginTear(get: () => Store, set: (partial: Partial<Store>) => void, pack: Pack, source: 'stock' | 'free_hourly' = 'stock', qty = 1) {
   const s = get();
-  const pull = openPack(pack, PACK_SIZE);
+  // Chaque sac tire son propre `openPack()` — sa garantie éventuelle
+  // (guaranteedFloor) s'applique donc à *chaque* sac du lot, pas une seule
+  // fois pour tout le paquet groupé.
+  const pull = Array.from({ length: qty }, () => openPack(pack, PACK_SIZE)).flat();
   const owned = { ...s.owned };
   const isNew: Record<number, true> = {};
   pull.forEach((c) => {
     if (!owned[c.id]) isNew[c.id] = true;
     owned[c.id] = (owned[c.id] || 0) + 1;
   });
-  trackPackOpened(pack.key, source);
+  for (let i = 0; i < qty; i++) trackPackOpened(pack.key, source);
   pull.forEach((c) => trackCardPulled(c, pack.key));
   set({
     activePack: pack.key,
@@ -238,7 +253,7 @@ function beginTear(get: () => Store, set: (partial: Partial<Store>) => void, pac
     flipped: false,
     owned,
     isNew,
-    openedCount: s.openedCount + 1,
+    openedCount: s.openedCount + qty,
     dragX: 0,
   });
   playSfx('tear');
@@ -278,6 +293,7 @@ export const useStore = create<Store>()(
       detail: null,
       activePack: 'basic',
       packState: 'idle',
+      openQty: 1,
       pull: [],
       pullIndex: 0,
       flipped: false,
@@ -290,6 +306,8 @@ export const useStore = create<Store>()(
       lotteryIsNew: false,
       wheelState: 'idle',
       wheelWon: false,
+      mailbox: [],
+      mailboxUnread: 0,
 
       // ── actions ──
       setSort: (sort) => set({ sort }),
@@ -345,17 +363,37 @@ export const useStore = create<Store>()(
         s.say(`${p.name} ajouté·e`);
       },
 
-      selectPackForOpening: (key) => set({ activePack: key, packState: 'idle' }),
+      selectPackForOpening: (key) => set({ activePack: key, packState: 'idle', openQty: 1 }),
+
+      setOpenQty: (n) => {
+        const s = get();
+        const inPocket = s.stock[s.activePack] || 0;
+        set({ openQty: Math.max(1, Math.min(n, MAX_OPEN_QTY, inPocket || 1)) });
+      },
 
       startTear: () => {
         const s = get();
         const p = packByKey(s.activePack);
-        if ((s.stock[p.key] || 0) <= 0) {
+        const inPocket = s.stock[p.key] || 0;
+        if (inPocket <= 0) {
           s.say(`Plus de ${p.name} — passe en boutique.`);
           return;
         }
-        set({ stock: { ...s.stock, [p.key]: s.stock[p.key] - 1 } });
-        beginTear(get, set, p);
+        const qty = Math.max(1, Math.min(s.openQty, MAX_OPEN_QTY, inPocket));
+        set({ stock: { ...s.stock, [p.key]: inPocket - qty } });
+        beginTear(get, set, p, 'stock', qty);
+      },
+
+      // Passe directement au butin, sans retourner les cartes une par une —
+      // utile pour un gros lot groupé (voir startTear/openQty). Les cartes
+      // sont déjà résolues (owned/isNew) au moment du tirage dans beginTear,
+      // cet écran n'est qu'une mise en scène : la sauter ne change rien au
+      // résultat, juste à la façon dont on le découvre.
+      revealAll: () => {
+        clearTimeout(tearTimer);
+        clearTimeout(advanceTimer);
+        clearTimeout(revealTimer);
+        set({ packState: 'summary', dragX: 0 });
       },
 
       backToIdle: () => {
@@ -542,6 +580,33 @@ export const useStore = create<Store>()(
         set({ wheelSpins: WHEEL_SPINS_MAX, nextWheelResetAt: null });
       },
 
+      // ── boîte aux lettres ──
+      fetchMailbox: async () => {
+        if (!get().account) return;
+        try {
+          const res = await apiFetchMailbox();
+          set({ mailbox: res.messages, mailboxUnread: res.unread });
+        } catch {
+          // Silencieux — un échec de sondage périodique ne doit pas spammer de toast.
+        }
+      },
+
+      markMailboxRead: async (ids) => {
+        if (ids.length === 0) return;
+        const s = get();
+        const idSet = new Set(ids);
+        set({
+          mailbox: s.mailbox.map((m) => (idSet.has(m.id) ? { ...m, read_at: m.read_at ?? Date.now() } : m)),
+          mailboxUnread: Math.max(0, s.mailboxUnread - ids.filter((id) => s.mailbox.find((m) => m.id === id)?.read_at == null).length),
+        });
+        try {
+          await apiMarkMailboxRead(ids);
+        } catch {
+          // L'état local reste "lu" même si l'appel échoue — au pire on re-marque
+          // au prochain fetchMailbox, jamais bloquant pour le joueur.
+        }
+      },
+
       // ── compte ──
       bootAuth: async () => {
         const token = getToken();
@@ -580,7 +645,7 @@ export const useStore = create<Store>()(
 
       logout: () => {
         setToken(null);
-        set({ account: null });
+        set({ account: null, mailbox: [], mailboxUnread: 0 });
       },
     }),
     {

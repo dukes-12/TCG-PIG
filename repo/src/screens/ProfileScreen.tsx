@@ -1,9 +1,11 @@
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import AnimationPicker from '../components/AnimationPicker';
 import AuthScreen from './AuthScreen';
 import Avatar from '../components/Avatar';
 import AvatarPicker from '../components/AvatarPicker';
 import CardBackPicker from '../components/CardBackPicker';
+import MailboxButton from '../components/MailboxButton';
+import MailboxOverlay from '../components/MailboxOverlay';
 import SoundToggle from '../components/SoundToggle';
 import PigCard from '../components/PigCard';
 import { CARDS, RARITIES, TOTAL_CARDS, rarityById } from '../data/catalog';
@@ -22,9 +24,11 @@ export default function ProfileScreen() {
   const glands = useStore((s) => s.glands);
   const openedCount = useStore((s) => s.openedCount);
   const avatar = useStore((s) => s.avatar);
+  const mailboxUnread = useStore((s) => s.mailboxUnread);
   const openDetail = useStore((s) => s.openDetail);
   const logout = useStore((s) => s.logout);
   const holoAnim = useAnimations();
+  const [mailboxOpen, setMailboxOpen] = useState(false);
 
   const ownedIds = useMemo(() => Object.keys(owned).filter((k) => owned[Number(k)] > 0).map(Number), [owned]);
   const uniq = ownedIds.length;
@@ -48,14 +52,19 @@ export default function ProfileScreen() {
       <div className="screen-inner" style={{ display: 'flex', alignItems: 'flex-end', gap: 10 }}>
         <h1 style={{ fontSize: 30, margin: 0, lineHeight: 1 }}>Profil</h1>
         {account && (
-          <button
-            onClick={logout}
-            style={{ marginLeft: 'auto', border: 0, background: 'none', cursor: 'pointer', fontSize: 11.5, fontWeight: 700, opacity: 0.5, paddingBottom: 4 }}
-          >
-            Se déconnecter
-          </button>
+          <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 14 }}>
+            <MailboxButton unread={mailboxUnread} onClick={() => setMailboxOpen(true)} />
+            <button
+              onClick={logout}
+              style={{ border: 0, background: 'none', cursor: 'pointer', fontSize: 11.5, fontWeight: 700, opacity: 0.5, paddingBottom: 4 }}
+            >
+              Se déconnecter
+            </button>
+          </div>
         )}
       </div>
+
+      {mailboxOpen && <MailboxOverlay onClose={() => setMailboxOpen(false)} />}
 
       <div className="screen-inner" style={{ paddingTop: 18, display: 'flex', alignItems: 'center', gap: 14 }}>
         <Avatar avatar={avatar} size={74} />

@@ -37,3 +37,18 @@ CREATE TABLE IF NOT EXISTS trades (
 );
 CREATE INDEX IF NOT EXISTS idx_trades_from ON trades(from_user_id);
 CREATE INDEX IF NOT EXISTS idx_trades_to ON trades(to_user_id);
+
+-- Boîte aux lettres : notifications lues côté joueur dans Profil. Pensée pour
+-- les cadeaux manuels via la console D1 (voir ADMIN.md) — quand tu crédites
+-- des glands à la main, le joueur voit désormais *pourquoi* son solde a
+-- changé plutôt qu'un chiffre qui bouge sans explication. `glands` à 0 pour
+-- un message sans cadeau (annonce, etc.).
+CREATE TABLE IF NOT EXISTS mailbox (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  message TEXT NOT NULL,
+  glands INTEGER NOT NULL DEFAULT 0,
+  created_at INTEGER NOT NULL,
+  read_at INTEGER
+);
+CREATE INDEX IF NOT EXISTS idx_mailbox_user ON mailbox(user_id);

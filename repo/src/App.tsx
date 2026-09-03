@@ -26,6 +26,7 @@ export default function App() {
   const reconcileDailyGrant = useStore((s) => s.reconcileDailyGrant);
   const reconcileFreeBoosters = useStore((s) => s.reconcileFreeBoosters);
   const reconcileWheel = useStore((s) => s.reconcileWheel);
+  const fetchMailbox = useStore((s) => s.fetchMailbox);
 
   useEffect(() => {
     bootAuth();
@@ -46,6 +47,12 @@ export default function App() {
     const id = setInterval(reconcileWheel, 60 * 1000);
     return () => clearInterval(id);
   }, [reconcileWheel]);
+  useEffect(() => {
+    if (!account) return;
+    fetchMailbox();
+    const id = setInterval(fetchMailbox, 30 * 1000);
+    return () => clearInterval(id);
+  }, [account, fetchMailbox]);
 
   // Échanges et vue "profil d'un ami" supposent un compte — sans, on renvoie
   // simplement vers Profil, où se trouve désormais la connexion/inscription.
