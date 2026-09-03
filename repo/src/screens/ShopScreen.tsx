@@ -1,5 +1,5 @@
 import { useNavigate } from 'react-router-dom';
-import FreeBoosterBanner from '../components/FreeBoosterBanner';
+import DailyBoosterBanner from '../components/DailyBoosterBanner';
 import GlandsPill from '../components/GlandsPill';
 import Snout from '../components/Snout';
 import { PACKS } from '../data/catalog';
@@ -37,7 +37,7 @@ export default function ShopScreen() {
       </p>
 
       <div style={{ padding: '20px 18px 0' }}>
-        <FreeBoosterBanner />
+        <DailyBoosterBanner />
       </div>
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: 12, padding: '13px 18px 0' }}>
