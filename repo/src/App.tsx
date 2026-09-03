@@ -1,42 +1,44 @@
 import { useEffect } from 'react';
-import { Navigate, Route, Routes, useLocation } from 'react-router-dom';
-import { trackPageView } from './lib/analytics';
+import { Navigate, Route, Routes } from 'react-router-dom';
 import CardDetailOverlay from './components/CardDetailOverlay';
 import TabBar from './components/TabBar';
 import Toast from './components/Toast';
+import AuthScreen from './screens/AuthScreen';
 import CollectionScreen from './screens/CollectionScreen';
 import DupesScreen from './screens/DupesScreen';
 import OpenScreen from './screens/OpenScreen';
+import PlayerProfileScreen from './screens/PlayerProfileScreen';
 import ProfileScreen from './screens/ProfileScreen';
 import ShopScreen from './screens/ShopScreen';
+import TradesScreen from './screens/TradesScreen';
 import { useStore } from './state/store';
 
-const SCREEN_TITLES: Record<string, string> = {
-  '/collection': 'Collection',
-  '/shop': 'Boutique',
-  '/open': 'Ouverture',
-  '/dupes': 'Doublons',
-  '/profile': 'Profil',
-};
-
 export default function App() {
-  const location = useLocation();
-  useEffect(() => {
-    trackPageView(location.pathname, SCREEN_TITLES[location.pathname] ?? location.pathname);
-  }, [location.pathname]);
-
-  // Versement quotidien : on rattrape une fois au chargement (ce qui couvre
-  // le temps passé app fermée), puis on revérifie chaque minute pour que les
-  // sachets tombent en direct si l'app reste ouverte au passage de minuit.
-  // Une minute suffit — inutile de sonder chaque seconde pour une échéance
-  // quotidienne. Le store n'est touché (et localStorage écrit) que lorsqu'un
-  // versement a réellement lieu.
+  const account = useStore((s) => s.account);
+  const authReady = useStore((s) => s.authReady);
+  const bootAuth = useStore((s) => s.bootAuth);
   const reconcileDailyGrant = useStore((s) => s.reconcileDailyGrant);
+  const reconcileFreeBoosters = useStore((s) => s.reconcileFreeBoosters);
+
   useEffect(() => {
+    bootAuth();
+  }, [bootAuth]);
+
+  useEffect(() => {
+    if (!account) return;
     reconcileDailyGrant();
     const id = setInterval(reconcileDailyGrant, 60 * 1000);
     return () => clearInterval(id);
-  }, [reconcileDailyGrant]);
+  }, [account, reconcileDailyGrant]);
+  useEffect(() => {
+    if (!account) return;
+    reconcileFreeBoosters();
+    const id = setInterval(reconcileFreeBoosters, 1000);
+    return () => clearInterval(id);
+  }, [account, reconcileFreeBoosters]);
+
+  if (!authReady) return null; // évite un flash de l'écran de connexion pendant la vérification du jeton
+  if (!account) return <AuthScreen />;
 
   return (
     <div className="app-shell">
@@ -46,7 +48,9 @@ export default function App() {
         <Route path="/shop" element={<ShopScreen />} />
         <Route path="/open" element={<OpenScreen />} />
         <Route path="/dupes" element={<DupesScreen />} />
+        <Route path="/trades" element={<TradesScreen />} />
         <Route path="/profile" element={<ProfileScreen />} />
+        <Route path="/players/:username" element={<PlayerProfileScreen />} />
         <Route path="*" element={<Navigate to="/collection" replace />} />
       </Routes>
 
