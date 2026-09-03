@@ -9,7 +9,7 @@ import MailboxButton from '../components/MailboxButton';
 import MailboxOverlay from '../components/MailboxOverlay';
 import SoundToggle from '../components/SoundToggle';
 import PigCard from '../components/PigCard';
-import { CARDS, RARITIES, SECRET_CARD, TOTAL_CARDS, rarityById } from '../data/catalog';
+import { CARDS, RARITIES, SECRET_CARD, SECRET_RARITY_ID, TOTAL_CARDS, rarityById } from '../data/catalog';
 import { RARITY_VISUALS } from '../data/rarityVisuals';
 import { useAnimations } from '../lib/useAnimations';
 import { useStore } from '../state/store';
@@ -38,6 +38,9 @@ export default function ProfileScreen() {
   // Complétion : la carte secrète ne compte pas dedans (comme TOTAL_CARDS),
   // sinon "uniq/TOTAL_CARDS" peut dépasser 100 % pour qui l'a trouvée.
   const uniq = useMemo(() => ownedIds.filter((id) => id !== SECRET_CARD?.id).length, [ownedIds]);
+  // Tant qu'elle n'a jamais été tirée, aucune trace d'elle dans l'interface
+  // — même pas une ligne "Secrète 0/1" dans la complétion par rareté.
+  const hasSecret = !!SECRET_CARD && (owned[SECRET_CARD.id] || 0) > 0;
 
   const best = useMemo(() => {
     // Ici en revanche on la laisse concourir — "meilleure trouvaille" sur
@@ -153,7 +156,7 @@ export default function ProfileScreen() {
       <div className="screen-inner" style={{ paddingTop: 20 }}>
         <div className="section-label" style={{ marginBottom: 11 }}>Complétion par rareté</div>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 11 }}>
-          {RARITIES.map((r) => {
+          {RARITIES.filter((r) => r.id !== SECRET_RARITY_ID || hasSecret).map((r) => {
             const t = CARDS.filter((c) => c.rarity === r.id).length;
             const o = CARDS.filter((c) => c.rarity === r.id && (owned[c.id] || 0) > 0).length;
             const ink = RARITY_VISUALS[r.id as RarityId].ink;
