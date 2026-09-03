@@ -1,6 +1,6 @@
 import { cardById, rarityById } from '../data/catalog';
 import { RARITY_VISUALS } from '../data/rarityVisuals';
-import { usePrefersReducedMotion } from '../lib/usePrefersReducedMotion';
+import { useAnimations } from '../lib/useAnimations';
 import { useStore } from '../state/store';
 import PigCard from './PigCard';
 
@@ -11,7 +11,7 @@ export default function CardDetailOverlay() {
   const detailId = useStore((s) => s.detail);
   const owned = useStore((s) => s.owned);
   const closeDetail = useStore((s) => s.closeDetail);
-  const holoAnim = !usePrefersReducedMotion();
+  const holoAnim = useAnimations();
 
   if (detailId == null) return null;
   const card = cardById(detailId);

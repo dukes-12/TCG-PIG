@@ -8,7 +8,7 @@ import Snout from '../components/Snout';
 import { CARDS, RARITIES, packByKey, rarityById } from '../data/catalog';
 import { RARITY_VISUALS } from '../data/rarityVisuals';
 import { PACK_VISUALS } from '../data/packVisuals';
-import { usePrefersReducedMotion } from '../lib/usePrefersReducedMotion';
+import { useAnimations } from '../lib/useAnimations';
 import { useRevealed } from '../lib/useRevealed';
 import { useStore } from '../state/store';
 import type { RarityId } from '../types';
@@ -71,7 +71,7 @@ export default function OpenScreen() {
   const dragMove = useStore((s) => s.dragMove);
   const dragEnd = useStore((s) => s.dragEnd);
   const openDetail = useStore((s) => s.openDetail);
-  const holoAnim = !usePrefersReducedMotion();
+  const holoAnim = useAnimations();
   const navigate = useNavigate();
 
   // true seulement quand la carte est réellement face visible.

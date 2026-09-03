@@ -1,10 +1,11 @@
 import { useMemo } from 'react';
+import AnimationPicker from '../components/AnimationPicker';
 import CardBackPicker from '../components/CardBackPicker';
 import PigCard from '../components/PigCard';
 import Snout from '../components/Snout';
 import { CARDS, RARITIES, TOTAL_CARDS, rarityById } from '../data/catalog';
 import { RARITY_VISUALS } from '../data/rarityVisuals';
-import { usePrefersReducedMotion } from '../lib/usePrefersReducedMotion';
+import { useAnimations } from '../lib/useAnimations';
 import { useStore } from '../state/store';
 import type { RarityId } from '../types';
 
@@ -17,7 +18,7 @@ export default function ProfileScreen() {
   const glands = useStore((s) => s.glands);
   const openedCount = useStore((s) => s.openedCount);
   const openDetail = useStore((s) => s.openDetail);
-  const holoAnim = !usePrefersReducedMotion();
+  const holoAnim = useAnimations();
 
   const ownedIds = useMemo(() => Object.keys(owned).filter((k) => owned[Number(k)] > 0).map(Number), [owned]);
   const uniq = ownedIds.length;
@@ -60,6 +61,8 @@ export default function ProfileScreen() {
       </div>
 
       <CardBackPicker />
+
+      <AnimationPicker />
 
       <div className="screen-inner" style={{ paddingTop: 20 }}>
         <div className="section-label" style={{ marginBottom: 11 }}>Complétion par rareté</div>

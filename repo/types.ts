@@ -53,6 +53,9 @@ export interface CardCatalog {
  *  défaut, les trois autres s'achètent en glands. */
 export type CardBackKey = 'sceau' | 'souille' | 'deco' | 'nuit';
 
+/** Préférence d'animations — voir src/lib/useAnimations.ts. */
+export type AnimationPref = 'auto' | 'on' | 'off';
+
 /** Nombre de cartes par ligne dans la collection. */
 export type GridCols = 2 | 3 | 4;
 

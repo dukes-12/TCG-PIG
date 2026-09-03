@@ -80,9 +80,15 @@
   100% { transform: scale(1); }
 }
 
-/* Respect reduced-motion: freeze decorative loops, keep functional transitions. */
+/* Respect reduced-motion: freeze decorative loops, keep functional transitions.
+   Le sélecteur exclut `html.anim-forced` : quand le joueur choisit
+   « Animations : activées » dans Profil, cette règle ne doit pas gagner —
+   son `!important` est inatteignable depuis le JavaScript.
+   Voir src/lib/useAnimations.ts. */
 @media (prefers-reduced-motion: reduce) {
-  *, *::before, *::after {
+  html:not(.anim-forced) *,
+  html:not(.anim-forced) *::before,
+  html:not(.anim-forced) *::after {
     animation-duration: .001ms !important;
     animation-iteration-count: 1 !important;
   }

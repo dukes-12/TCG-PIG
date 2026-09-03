@@ -3,7 +3,7 @@ import Chip from '../components/Chip';
 import PigCard from '../components/PigCard';
 import { CARDS, RARITIES, TOTAL_CARDS, TYPES } from '../data/catalog';
 import { RARITY_VISUALS } from '../data/rarityVisuals';
-import { usePrefersReducedMotion } from '../lib/usePrefersReducedMotion';
+import { useAnimations } from '../lib/useAnimations';
 import { useStore } from '../state/store';
 import type { Card, GridCols, RarityId } from '../types';
 
@@ -28,7 +28,7 @@ export default function CollectionScreen() {
   const setGridCols = useStore((s) => s.setGridCols);
   const toggleOwnedOnly = useStore((s) => s.toggleOwnedOnly);
   const openDetail = useStore((s) => s.openDetail);
-  const holoAnim = !usePrefersReducedMotion();
+  const holoAnim = useAnimations();
 
   const ownedIds = useMemo(() => Object.keys(owned).filter((k) => owned[Number(k)] > 0), [owned]);
   const uniq = ownedIds.length;

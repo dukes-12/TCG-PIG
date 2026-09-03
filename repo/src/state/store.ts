@@ -4,6 +4,7 @@ import { CARDS, PACKS, packByKey, rarityById } from '../data/catalog';
 import { CARD_BACKS, DEFAULT_CARD_BACK, cardBackByKey } from '../data/cardBacks';
 import { openPack } from '../lib/draw';
 import type {
+  AnimationPref,
   Card,
   CardBackKey,
   CardType,
@@ -46,6 +47,8 @@ interface PersistedState {
   unlockedBacks: CardBackKey[];
   /** Densité de la grille de collection. */
   gridCols: GridCols;
+  /** Animations décoratives : auto (système) / on / off. */
+  animPref: AnimationPref;
 }
 
 interface UiState {
@@ -76,6 +79,7 @@ interface Actions {
   closeDetail: () => void;
   setCardBack: (key: CardBackKey) => void;
   setGridCols: (n: GridCols) => void;
+  setAnimPref: (p: AnimationPref) => void;
   buyCardBack: (key: CardBackKey) => void;
 
   buyPack: (key: PackKey) => void;
@@ -146,6 +150,7 @@ export const useStore = create<Store>()(
       cardBack: DEFAULT_CARD_BACK,
       unlockedBacks: [DEFAULT_CARD_BACK],
       gridCols: 3,
+      animPref: 'on',
 
       // ── ui / session ──
       sort: 'rarete',
@@ -172,6 +177,7 @@ export const useStore = create<Store>()(
       toggleOwnedOnly: () => set((s) => ({ ownedOnly: !s.ownedOnly })),
       openDetail: (id) => set({ detail: id }),
       setGridCols: (gridCols) => set({ gridCols }),
+      setAnimPref: (animPref) => set({ animPref }),
       closeDetail: () => set({ detail: null }),
 
       /** Ne change le dos que s'il est débloqué (garde-fou : un save trafiqué
@@ -336,6 +342,7 @@ export const useStore = create<Store>()(
         cardBack: s.cardBack,
         unlockedBacks: s.unlockedBacks,
         gridCols: s.gridCols,
+        animPref: s.animPref,
       }),
       // Les saves antérieurs au système de dos n'ont ni `cardBack` ni
       // `unlockedBacks` : on les remet sur le dos par défaut plutôt que sur
@@ -344,7 +351,7 @@ export const useStore = create<Store>()(
         const p = (persisted ?? {}) as Partial<PersistedState>;
         const unlocked = p.unlockedBacks?.length ? p.unlockedBacks : [DEFAULT_CARD_BACK];
         const back = p.cardBack && unlocked.includes(p.cardBack) ? p.cardBack : DEFAULT_CARD_BACK;
-        return { ...current, ...p, unlockedBacks: unlocked, cardBack: back, gridCols: p.gridCols ?? 3 };
+        return { ...current, ...p, unlockedBacks: unlocked, cardBack: back, gridCols: p.gridCols ?? 3, animPref: p.animPref ?? 'on' };
       },
     },
   ),

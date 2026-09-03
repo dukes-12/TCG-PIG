@@ -1,7 +1,7 @@
 import GlandsPill from '../components/GlandsPill';
 import PigCard from '../components/PigCard';
 import { CARDS, rarityById } from '../data/catalog';
-import { usePrefersReducedMotion } from '../lib/usePrefersReducedMotion';
+import { useAnimations } from '../lib/useAnimations';
 import { useStore } from '../state/store';
 
 /** Ported from the "DOUBLONS" block in Grouin - TCG Cochons.dc.html.
@@ -11,7 +11,7 @@ export default function DupesScreen() {
   const glands = useStore((s) => s.glands);
   const openDetail = useStore((s) => s.openDetail);
   const recycle = useStore((s) => s.recycle);
-  const holoAnim = !usePrefersReducedMotion();
+  const holoAnim = useAnimations();
 
   const dupeList = CARDS.filter((c) => (owned[c.id] || 0) > 1).sort((a, b) => b.rarity - a.rarity);
 
