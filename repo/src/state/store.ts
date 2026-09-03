@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-import { CARDS, PACKS, packByKey, rarityById } from '../data/catalog';
+import { CARDS, PACKS, SECRET_CARD, packByKey, rarityById } from '../data/catalog';
 import { CARD_BACKS, DEFAULT_CARD_BACK, cardBackByKey } from '../data/cardBacks';
 import { DEFAULT_AVATAR } from '../data/avatars';
 import { openPack, roll } from '../lib/draw';
@@ -154,6 +154,10 @@ interface Actions {
   setOpenQty: (n: number) => void;
   startTear: () => void;
   revealAll: () => void;
+  /** Outil de test (Profil, compte "Dukes" uniquement) : rejoue la vraie
+   *  séquence de révélation avec la carte secrète comme seul tirage, sans
+   *  toucher au stock de sacs réel. Voir ProfileScreen. */
+  debugTriggerSecret: () => void;
   backToIdle: () => void;
   reconcileDailyGrant: () => void;
   reconcileFreeBoosters: () => void;
@@ -428,6 +432,25 @@ export const useStore = create<Store>()(
         clearTimeout(advanceTimer);
         clearTimeout(revealTimer);
         set({ packState: 'summary', dragX: 0 });
+      },
+
+      // Ne touche ni au stock ni à `openedCount` — ce n'est pas un vrai
+      // sac. Rejoue exactement le même enchaînement que beginTear
+      // (tearing → reveal via tearTimer) pour que la mise en scène jouée
+      // soit la vraie, pas une maquette.
+      debugTriggerSecret: () => {
+        if (!SECRET_CARD) return;
+        const s = get();
+        const pull = [SECRET_CARD];
+        const owned = { ...s.owned };
+        const isNew: Record<number, true> = {};
+        if (!owned[SECRET_CARD.id]) isNew[SECRET_CARD.id] = true;
+        owned[SECRET_CARD.id] = (owned[SECRET_CARD.id] || 0) + 1;
+        set({ packState: 'tearing', pull, pullIndex: 0, flipped: false, owned, isNew, dragX: 0 });
+        playSfx('tear');
+        clearTimeout(tearTimer);
+        clearTimeout(advanceTimer);
+        tearTimer = setTimeout(() => set({ packState: 'reveal' }), TEAR_MS);
       },
 
       backToIdle: () => {

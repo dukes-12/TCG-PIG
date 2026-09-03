@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import AnimationPicker from '../components/AnimationPicker';
 import AuthScreen from './AuthScreen';
 import Avatar from '../components/Avatar';
@@ -28,7 +29,9 @@ export default function ProfileScreen() {
   const mailboxUnread = useStore((s) => s.mailboxUnread);
   const openDetail = useStore((s) => s.openDetail);
   const logout = useStore((s) => s.logout);
+  const debugTriggerSecret = useStore((s) => s.debugTriggerSecret);
   const holoAnim = useAnimations();
+  const navigate = useNavigate();
   const [mailboxOpen, setMailboxOpen] = useState(false);
 
   const ownedIds = useMemo(() => Object.keys(owned).filter((k) => owned[Number(k)] > 0).map(Number), [owned]);
@@ -71,6 +74,54 @@ export default function ProfileScreen() {
       </div>
 
       {mailboxOpen && <MailboxOverlay onClose={() => setMailboxOpen(false)} />}
+
+      {/* Outil de test — visible seulement sur ce compte précis, pas un vrai
+          contrôle d'accès (juste une condition côté client, contournable en
+          devtools par qui saurait la chercher). Rejoue la vraie séquence de
+          révélation avec la carte secrète comme seul tirage, sans toucher au
+          stock de sacs réel — voir debugTriggerSecret dans store.ts. */}
+      {account === 'Dukes' && (
+        <div className="screen-inner" style={{ paddingTop: 16 }}>
+          <div
+            style={{
+              boxSizing: 'border-box',
+              padding: '12px 15px',
+              borderRadius: 22,
+              background: 'var(--color-surface)',
+              border: '1.5px dashed var(--color-accent-500)',
+              display: 'flex',
+              alignItems: 'center',
+              gap: 12,
+            }}
+          >
+            <span style={{ fontSize: 20 }}>🔧</span>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontFamily: 'var(--font-heading)', fontSize: 14 }}>Outils de test</div>
+              <div style={{ fontSize: 10.5, opacity: 0.6, marginTop: 2 }}>Visible seulement sur ce compte.</div>
+            </div>
+            <button
+              className="pressable"
+              onClick={() => {
+                debugTriggerSecret();
+                navigate('/open');
+              }}
+              style={{
+                cursor: 'pointer',
+                border: 0,
+                fontFamily: 'var(--font-heading)',
+                fontSize: 11.5,
+                padding: '9px 14px',
+                borderRadius: 999,
+                background: 'var(--color-accent)',
+                color: 'var(--color-bg)',
+                whiteSpace: 'nowrap',
+              }}
+            >
+              Voir la carte secrète
+            </button>
+          </div>
+        </div>
+      )}
 
       <div className="screen-inner" style={{ paddingTop: 18, display: 'flex', alignItems: 'center', gap: 14 }}>
         <Avatar avatar={avatar} photo={avatarPhoto} size={74} />
