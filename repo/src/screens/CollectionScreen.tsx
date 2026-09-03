@@ -1,7 +1,7 @@
 import { useMemo } from 'react';
 import Chip from '../components/Chip';
 import PigCard from '../components/PigCard';
-import { CARDS, RARITIES, TOTAL_CARDS, TYPES } from '../data/catalog';
+import { CARDS, RARITIES, SECRET_CARD, SECRET_RARITY_ID, TOTAL_CARDS, TYPES } from '../data/catalog';
 import { RARITY_VISUALS } from '../data/rarityVisuals';
 import { useAnimations } from '../lib/useAnimations';
 import { useStore } from '../state/store';
@@ -30,13 +30,26 @@ export default function CollectionScreen() {
   const openDetail = useStore((s) => s.openDetail);
   const holoAnim = useAnimations();
 
-  const ownedIds = useMemo(() => Object.keys(owned).filter((k) => owned[Number(k)] > 0), [owned]);
+  // La carte secrète ne compte pas dans "cartes uniques" — comme
+  // TOTAL_CARDS, c'est un bonus caché, pas un objectif de complétion.
+  const ownedIds = useMemo(
+    () => Object.keys(owned).filter((k) => owned[Number(k)] > 0 && Number(k) !== SECRET_CARD?.id),
+    [owned],
+  );
   const uniq = ownedIds.length;
+
+  // Tant qu'elle n'a jamais été tirée, la carte secrète n'existe nulle
+  // part dans l'interface — pas de case verrouillée, pas de filtre, pas de
+  // pastille de complétion. Elle n'apparaît qu'une fois vraiment possédée.
+  const hasSecret = !!SECRET_CARD && (owned[SECRET_CARD.id] || 0) > 0;
+  const visibleRarities = useMemo(() => RARITIES.filter((r) => r.id !== SECRET_RARITY_ID || hasSecret), [hasSecret]);
+  const visibleTypes = useMemo(() => TYPES.filter((t) => t !== SECRET_CARD?.type || hasSecret), [hasSecret]);
 
   const list = useMemo(() => {
     const q = query.trim().toLowerCase();
     let l = CARDS.filter(
       (c) =>
+        (c.rarity !== SECRET_RARITY_ID || hasSecret) &&
         (rarityFilter === 'all' || c.rarity === rarityFilter) &&
         (typeFilter === 'all' || c.type === typeFilter) &&
         (!q || c.name.toLowerCase().includes(q)) &&
@@ -47,8 +60,14 @@ export default function CollectionScreen() {
     if (sort === 'nom') l.sort((a, b) => a.name.localeCompare(b.name));
     if (sort === 'type') l.sort((a, b) => a.type.localeCompare(b.type) || b.rarity - a.rarity);
     if (sort === 'nb') l.sort((a, b) => (owned[b.id] || 0) - (owned[a.id] || 0) || b.rarity - a.rarity);
+
+    // Toujours en dernier, quel que soit le tri — jamais mêlée aux autres
+    // cartes même quand elle est possédée.
+    const secretIdx = l.findIndex((c) => c.rarity === SECRET_RARITY_ID);
+    if (secretIdx !== -1) l.push(...l.splice(secretIdx, 1));
+
     return l;
-  }, [query, rarityFilter, typeFilter, ownedOnly, owned, sort]);
+  }, [query, rarityFilter, typeFilter, ownedOnly, owned, sort, hasSecret]);
 
   // En 4 de front la carte fait ~90 px : on resserre la gouttière pour ne pas
   // rogner davantage, et on garde le grand format pour 2 de front.
@@ -77,7 +96,7 @@ export default function CollectionScreen() {
       </div>
 
       <div style={{ display: 'flex', gap: 5, padding: '16px 18px 0' }}>
-        {RARITIES.map((r) => {
+        {visibleRarities.map((r) => {
           const rTotal = CARDS.filter((c) => c.rarity === r.id).length;
           const rOwned = CARDS.filter((c) => c.rarity === r.id && (owned[c.id] || 0) > 0).length;
           return (
@@ -149,7 +168,7 @@ export default function CollectionScreen() {
         <div className="section-label" style={{ margin: '13px 0 7px' }}>Rareté</div>
         <div className="chip-row">
           <Chip label="Toutes" active={rarityFilter === 'all'} onClick={() => setRarityFilter('all')} />
-          {RARITIES.map((r) => (
+          {visibleRarities.map((r) => (
             <Chip key={r.id} label={r.name} active={rarityFilter === r.id} onClick={() => setRarityFilter(r.id as RarityId)} />
           ))}
         </div>
@@ -157,7 +176,7 @@ export default function CollectionScreen() {
         <div className="section-label" style={{ margin: '13px 0 7px' }}>Type</div>
         <div className="chip-row">
           <Chip label="Tous" active={typeFilter === 'all'} onClick={() => setTypeFilter('all')} />
-          {TYPES.map((t) => (
+          {visibleTypes.map((t) => (
             <Chip key={t} label={t} active={typeFilter === t} onClick={() => setTypeFilter(t)} />
           ))}
         </div>

@@ -10,6 +10,6 @@ export interface PackVisual {
 
 export const PACK_VISUALS: Record<PackKey, PackVisual> = {
   basic: { desc: '5 cartes, taux standard.', bg: 'linear-gradient(160deg,#f6a06b,#8c491a)' },
-  foire: { desc: '5 cartes, au moins une Rare.', bg: 'linear-gradient(160deg,#aebf92,#3d472b)' },
-  doree: { desc: '5 cartes, au moins une Épique.', bg: 'linear-gradient(160deg,#ffd2b4,#b2622d 55%,#402310)' },
+  foire: { desc: '6 cartes, dont 3 Rare ou mieux garanties.', bg: 'linear-gradient(160deg,#aebf92,#3d472b)' },
+  doree: { desc: '7 cartes, dont 2 Épique ou mieux garanties.', bg: 'linear-gradient(160deg,#ffd2b4,#b2622d 55%,#402310)' },
 };

@@ -94,6 +94,48 @@
   100% { transform: rotate(360deg); }
 }
 
+/* ── Carte secrète (Chipo Oméga, rareté 7) ─────────────────────────
+   Utilisées par src/components/SecretCard.tsx et SecretRevealFx.tsx. */
+@keyframes pigSecretRainbow {
+  0% { filter: hue-rotate(0deg); }
+  100% { filter: hue-rotate(360deg); }
+}
+@keyframes pigSecretTwinkle {
+  0%, 100% { opacity: .15; transform: scale(.7); }
+  50% { opacity: 1; transform: scale(1.6); }
+}
+/* Halo géant qui pulse en couleur derrière la carte pendant la révélation —
+   beaucoup plus long que pigGlow (carte normale) pour une mise en scène
+   qui se remarque. */
+@keyframes pigSecretHalo {
+  0%, 100% { opacity: .5; transform: scale(.94); }
+  50% { opacity: 1; transform: scale(1.14); }
+}
+/* Anneaux d'expansion, plus grands et plus lents que pigRareRing. */
+@keyframes pigSecretRing {
+  0% { transform: scale(.25); opacity: 0; }
+  15% { opacity: .9; }
+  100% { transform: scale(3.4); opacity: 0; }
+}
+/* Pluie d'éclats dorés — même principe que pigRareShard (distance portée
+   par --pig-reach) mais une trajectoire nettement plus longue. */
+@keyframes pigSecretShard {
+  0% {
+    transform: rotate(var(--pig-angle)) translateY(0) scale(.3);
+    opacity: 0;
+  }
+  12% { opacity: 1; }
+  100% {
+    transform: rotate(var(--pig-angle)) translateY(calc(var(--pig-reach) * -1)) scale(1);
+    opacity: 0;
+  }
+}
+/* Le libellé "CARTE SECRÈTE" arrive après coup, une fois la gerbe posée. */
+@keyframes pigSecretLabel {
+  0% { transform: translateY(6px) scale(.9); opacity: 0; }
+  100% { transform: translateY(0) scale(1); opacity: 1; }
+}
+
 /* Respect reduced-motion: freeze decorative loops, keep functional transitions.
    Le sélecteur exclut `html.anim-forced` : quand le joueur choisit
    « Animations : activées » dans Profil, cette règle ne doit pas gagner —

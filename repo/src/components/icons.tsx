@@ -75,6 +75,15 @@ export function FriendsIcon() {
   );
 }
 
+export function MailIcon() {
+  return (
+    <svg {...common}>
+      <rect x="2" y="4" width="20" height="16" rx="2.5" />
+      <path d="m2.5 5.5 8.6 6.8a2.2 2.2 0 0 0 2.8 0l8.6-6.8" />
+    </svg>
+  );
+}
+
 export function ProfileIcon() {
   return (
     <svg {...common}>

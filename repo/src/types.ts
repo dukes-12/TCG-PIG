@@ -1,4 +1,7 @@
-export type RarityId = 1 | 2 | 3 | 4 | 5 | 6;
+/** 7 = Secrète — pas une rareté "normale" : poids 0 dans `roll()`, elle
+ *  n'est jamais tirée par la table pondérée habituelle. Voir SECRET_CHANCE
+ *  dans lib/draw.ts. */
+export type RarityId = 1 | 2 | 3 | 4 | 5 | 6 | 7;
 
 export type RarityKey =
   | 'commune'
@@ -6,7 +9,8 @@ export type RarityKey =
   | 'rare'
   | 'epique'
   | 'legendaire'
-  | 'mythique';
+  | 'mythique'
+  | 'secrete';
 
 export interface Rarity {
   id: RarityId;
@@ -35,6 +39,10 @@ export interface Pack {
   price: number;
   cards: number;
   guaranteedFloor: RarityId | null;
+  /** Combien de cartes du sac doivent atteindre `guaranteedFloor` — au
+   *  moins, pas exactement (un tirage naturel peut en donner plus). Absent
+   *  ou 0 : pas de garantie, `guaranteedFloor` est alors ignoré. */
+  guaranteedCount?: number;
   subtitle: string;
 }
 

@@ -1,4 +1,4 @@
-import { cardById, rarityById } from '../data/catalog';
+import { SECRET_RARITY_ID, cardById, rarityById } from '../data/catalog';
 import { RARITY_VISUALS } from '../data/rarityVisuals';
 import { useAnimations } from '../lib/useAnimations';
 import { useStore } from '../state/store';
@@ -20,8 +20,12 @@ export default function CardDetailOverlay() {
   const rarity = rarityById(card.rarity);
   const visual = RARITY_VISUALS[card.rarity];
   const count = owned[card.id] || 0;
-  const meta =
-    count > 0
+  const isSecret = card.rarity === SECRET_RARITY_ID;
+  const meta = isSecret
+    ? count > 0
+      ? '1 sur 1 — pièce unique, ne se recycle pas'
+      : 'Existe quelque part. 1 chance sur 6 000 000 par carte tirée.'
+    : count > 0
       ? `${card.type} · ${count} exemplaire${count > 1 ? 's' : ''} · ${rarity.recycleValue} glands`
       : `${card.type} · pas encore trouvée`;
 

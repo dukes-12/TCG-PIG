@@ -1,12 +1,23 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-import { CARDS, PACKS, packByKey, rarityById } from '../data/catalog';
+import { CARDS, PACKS, SECRET_CARD, packByKey, rarityById } from '../data/catalog';
 import { CARD_BACKS, DEFAULT_CARD_BACK, cardBackByKey } from '../data/cardBacks';
 import { DEFAULT_AVATAR } from '../data/avatars';
 import { openPack, roll } from '../lib/draw';
 import { playSfx, revealSfx, setSfxEnabled } from '../lib/sfx';
 import { trackCardPulled, trackGlandsEarned, trackGlandsSpent, trackPackOpened } from '../lib/analytics';
-import { apiFetchState, apiLogin, apiPushState, apiRegister, getToken, setToken } from '../lib/api';
+import {
+  apiFetchMailbox,
+  apiFetchState,
+  apiFetchTrades,
+  apiLogin,
+  apiMarkMailboxRead,
+  apiPushState,
+  apiRegister,
+  getToken,
+  setToken,
+  type MailboxMessage,
+} from '../lib/api';
 import type {
   AnimationPref,
   AvatarKey,
@@ -26,7 +37,13 @@ import type {
 // this store — screens that need to switch tabs call `navigate()` alongside
 // the relevant store action.
 
-const PACK_SIZE = 5; // fixed in production (the prototype exposed 3–8 as a design-time tweak)
+// Le nombre de cartes est désormais lu sur chaque pack (`pack.cards`) —
+// jusqu'ici toujours 5 pour les trois, la rareté et le nombre de cartes
+// garanties variaient sans que la taille du sac suive. Voir cards.json.
+/** Ouverture groupée : jusqu'à MAX_OPEN_QTY sacs du même type d'un coup.
+ *  Plafonné pour que la rangée de pastilles de progression pendant la
+ *  révélation (une par carte, voir OpenScreen) reste lisible sur mobile. */
+export const MAX_OPEN_QTY = 5;
 const TEAR_MS = 680;
 const FLIP_TRANSITION_MS = 620; // matches OpenScreen's flipInner CSS transition duration
 const TOAST_MS = 1700;
@@ -74,6 +91,10 @@ interface PersistedState {
   cardBack: CardBackKey;
   unlockedBacks: CardBackKey[];
   avatar: AvatarKey;
+  /** Photo de profil choisie dans la galerie de l'appareil — data URI JPEG
+   *  déjà compressée (voir lib/photo.ts), prioritaire sur `avatar` quand
+   *  elle est définie. `null` = pas de photo, on retombe sur le préréglage. */
+  avatarPhoto: string | null;
   gridCols: GridCols;
   animPref: AnimationPref;
   soundOn: boolean;
@@ -92,6 +113,7 @@ interface UiState {
   detail: number | null;
   activePack: PackKey;
   packState: PackState;
+  openQty: number;
   pull: Card[];
   pullIndex: number;
   flipped: boolean;
@@ -104,6 +126,11 @@ interface UiState {
   lotteryIsNew: boolean;
   wheelState: WheelState;
   wheelWon: boolean;
+  mailbox: MailboxMessage[];
+  mailboxUnread: number;
+  /** Propositions d'échange entrantes en attente — voir TradesScreen et la
+   *  pastille sur l'onglet Échanges de TabBar. */
+  tradesUnread: number;
 }
 
 interface Actions {
@@ -116,6 +143,7 @@ interface Actions {
   closeDetail: () => void;
   setCardBack: (key: CardBackKey) => void;
   setAvatar: (key: AvatarKey) => void;
+  setAvatarPhoto: (dataUri: string | null) => void;
   setGridCols: (n: GridCols) => void;
   setAnimPref: (p: AnimationPref) => void;
   setSoundOn: (on: boolean) => void;
@@ -123,7 +151,13 @@ interface Actions {
 
   buyPack: (key: PackKey) => void;
   selectPackForOpening: (key: PackKey) => void;
+  setOpenQty: (n: number) => void;
   startTear: () => void;
+  revealAll: () => void;
+  /** Outil de test (Profil, compte "Dukes" uniquement) : rejoue la vraie
+   *  séquence de révélation avec la carte secrète comme seul tirage, sans
+   *  toucher au stock de sacs réel. Voir ProfileScreen. */
+  debugTriggerSecret: () => void;
   backToIdle: () => void;
   reconcileDailyGrant: () => void;
   reconcileFreeBoosters: () => void;
@@ -142,6 +176,12 @@ interface Actions {
   spinWheel: () => void;
   closeWheel: () => void;
   reconcileWheel: () => void;
+
+  fetchMailbox: () => Promise<void>;
+  markMailboxRead: (ids: number[]) => Promise<void>;
+
+  setTradesUnread: (n: number) => void;
+  fetchTradesUnread: () => Promise<void>;
 
   login: (username: string, pin: string) => Promise<void>;
   register: (username: string, pin: string) => Promise<void>;
@@ -176,6 +216,7 @@ function persistedSlice(s: Store): PersistedState {
     cardBack: s.cardBack,
     unlockedBacks: s.unlockedBacks,
     avatar: s.avatar,
+    avatarPhoto: s.avatarPhoto,
     gridCols: s.gridCols,
     animPref: s.animPref,
     soundOn: s.soundOn,
@@ -194,6 +235,12 @@ function mergeServer(current: Store, incoming: Partial<PersistedState>): Partial
     unlockedBacks: unlocked,
     cardBack: back,
     avatar: incoming.avatar ?? current.avatar,
+    // `??` ne convient pas ici : `null` est une valeur légitime ("pas de
+    // photo", volontairement effacée) à distinguer du champ simplement
+    // absent (compte créé avant cet ajout) — d'où le test explicite sur la
+    // présence de la clé plutôt qu'un `?? current...` qui écraserait un
+    // retrait de photo volontaire par l'ancienne valeur locale.
+    avatarPhoto: 'avatarPhoto' in incoming ? (incoming.avatarPhoto ?? null) : current.avatarPhoto,
     gridCols: incoming.gridCols ?? current.gridCols,
     animPref: incoming.animPref ?? current.animPref,
     soundOn: incoming.soundOn ?? current.soundOn,
@@ -219,16 +266,19 @@ function readLegacyLocalSave(): Partial<PersistedState> | null {
   }
 }
 
-function beginTear(get: () => Store, set: (partial: Partial<Store>) => void, pack: Pack, source: 'stock' | 'free_hourly' = 'stock') {
+function beginTear(get: () => Store, set: (partial: Partial<Store>) => void, pack: Pack, source: 'stock' | 'free_hourly' = 'stock', qty = 1) {
   const s = get();
-  const pull = openPack(pack, PACK_SIZE);
+  // Chaque sac tire son propre `openPack()` — sa garantie éventuelle
+  // (guaranteedFloor) s'applique donc à *chaque* sac du lot, pas une seule
+  // fois pour tout le paquet groupé.
+  const pull = Array.from({ length: qty }, () => openPack(pack, pack.cards)).flat();
   const owned = { ...s.owned };
   const isNew: Record<number, true> = {};
   pull.forEach((c) => {
     if (!owned[c.id]) isNew[c.id] = true;
     owned[c.id] = (owned[c.id] || 0) + 1;
   });
-  trackPackOpened(pack.key, source);
+  for (let i = 0; i < qty; i++) trackPackOpened(pack.key, source);
   pull.forEach((c) => trackCardPulled(c, pack.key));
   set({
     activePack: pack.key,
@@ -238,7 +288,7 @@ function beginTear(get: () => Store, set: (partial: Partial<Store>) => void, pac
     flipped: false,
     owned,
     isNew,
-    openedCount: s.openedCount + 1,
+    openedCount: s.openedCount + qty,
     dragX: 0,
   });
   playSfx('tear');
@@ -261,6 +311,7 @@ export const useStore = create<Store>()(
       cardBack: DEFAULT_CARD_BACK,
       unlockedBacks: [DEFAULT_CARD_BACK],
       avatar: DEFAULT_AVATAR,
+      avatarPhoto: null,
       gridCols: 3,
       animPref: 'on',
       soundOn: true,
@@ -278,6 +329,7 @@ export const useStore = create<Store>()(
       detail: null,
       activePack: 'basic',
       packState: 'idle',
+      openQty: 1,
       pull: [],
       pullIndex: 0,
       flipped: false,
@@ -290,6 +342,9 @@ export const useStore = create<Store>()(
       lotteryIsNew: false,
       wheelState: 'idle',
       wheelWon: false,
+      mailbox: [],
+      mailboxUnread: 0,
+      tradesUnread: 0,
 
       // ── actions ──
       setSort: (sort) => set({ sort }),
@@ -313,6 +368,7 @@ export const useStore = create<Store>()(
       },
 
       setAvatar: (avatar) => set({ avatar }),
+      setAvatarPhoto: (avatarPhoto) => set({ avatarPhoto }),
 
       buyCardBack: (key) => {
         const s = get();
@@ -345,17 +401,56 @@ export const useStore = create<Store>()(
         s.say(`${p.name} ajouté·e`);
       },
 
-      selectPackForOpening: (key) => set({ activePack: key, packState: 'idle' }),
+      selectPackForOpening: (key) => set({ activePack: key, packState: 'idle', openQty: 1 }),
+
+      setOpenQty: (n) => {
+        const s = get();
+        const inPocket = s.stock[s.activePack] || 0;
+        set({ openQty: Math.max(1, Math.min(n, MAX_OPEN_QTY, inPocket || 1)) });
+      },
 
       startTear: () => {
         const s = get();
         const p = packByKey(s.activePack);
-        if ((s.stock[p.key] || 0) <= 0) {
+        const inPocket = s.stock[p.key] || 0;
+        if (inPocket <= 0) {
           s.say(`Plus de ${p.name} — passe en boutique.`);
           return;
         }
-        set({ stock: { ...s.stock, [p.key]: s.stock[p.key] - 1 } });
-        beginTear(get, set, p);
+        const qty = Math.max(1, Math.min(s.openQty, MAX_OPEN_QTY, inPocket));
+        set({ stock: { ...s.stock, [p.key]: inPocket - qty } });
+        beginTear(get, set, p, 'stock', qty);
+      },
+
+      // Passe directement au butin, sans retourner les cartes une par une —
+      // utile pour un gros lot groupé (voir startTear/openQty). Les cartes
+      // sont déjà résolues (owned/isNew) au moment du tirage dans beginTear,
+      // cet écran n'est qu'une mise en scène : la sauter ne change rien au
+      // résultat, juste à la façon dont on le découvre.
+      revealAll: () => {
+        clearTimeout(tearTimer);
+        clearTimeout(advanceTimer);
+        clearTimeout(revealTimer);
+        set({ packState: 'summary', dragX: 0 });
+      },
+
+      // Ne touche ni au stock ni à `openedCount` — ce n'est pas un vrai
+      // sac. Rejoue exactement le même enchaînement que beginTear
+      // (tearing → reveal via tearTimer) pour que la mise en scène jouée
+      // soit la vraie, pas une maquette.
+      debugTriggerSecret: () => {
+        if (!SECRET_CARD) return;
+        const s = get();
+        const pull = [SECRET_CARD];
+        const owned = { ...s.owned };
+        const isNew: Record<number, true> = {};
+        if (!owned[SECRET_CARD.id]) isNew[SECRET_CARD.id] = true;
+        owned[SECRET_CARD.id] = (owned[SECRET_CARD.id] || 0) + 1;
+        set({ packState: 'tearing', pull, pullIndex: 0, flipped: false, owned, isNew, dragX: 0 });
+        playSfx('tear');
+        clearTimeout(tearTimer);
+        clearTimeout(advanceTimer);
+        tearTimer = setTimeout(() => set({ packState: 'reveal' }), TEAR_MS);
       },
 
       backToIdle: () => {
@@ -542,6 +637,46 @@ export const useStore = create<Store>()(
         set({ wheelSpins: WHEEL_SPINS_MAX, nextWheelResetAt: null });
       },
 
+      // ── boîte aux lettres ──
+      fetchMailbox: async () => {
+        if (!get().account) return;
+        try {
+          const res = await apiFetchMailbox();
+          set({ mailbox: res.messages, mailboxUnread: res.unread });
+        } catch {
+          // Silencieux — un échec de sondage périodique ne doit pas spammer de toast.
+        }
+      },
+
+      markMailboxRead: async (ids) => {
+        if (ids.length === 0) return;
+        const s = get();
+        const idSet = new Set(ids);
+        set({
+          mailbox: s.mailbox.map((m) => (idSet.has(m.id) ? { ...m, read_at: m.read_at ?? Date.now() } : m)),
+          mailboxUnread: Math.max(0, s.mailboxUnread - ids.filter((id) => s.mailbox.find((m) => m.id === id)?.read_at == null).length),
+        });
+        try {
+          await apiMarkMailboxRead(ids);
+        } catch {
+          // L'état local reste "lu" même si l'appel échoue — au pire on re-marque
+          // au prochain fetchMailbox, jamais bloquant pour le joueur.
+        }
+      },
+
+      // ── échanges (juste la pastille — le reste vit dans TradesScreen) ──
+      setTradesUnread: (tradesUnread) => set({ tradesUnread }),
+
+      fetchTradesUnread: async () => {
+        if (!get().account) return;
+        try {
+          const res = await apiFetchTrades();
+          set({ tradesUnread: res.trades.filter((t) => t.direction === 'incoming' && t.status === 'pending').length });
+        } catch {
+          // Sondage périodique — échec silencieux, comme fetchMailbox.
+        }
+      },
+
       // ── compte ──
       bootAuth: async () => {
         const token = getToken();
@@ -580,7 +715,7 @@ export const useStore = create<Store>()(
 
       logout: () => {
         setToken(null);
-        set({ account: null });
+        set({ account: null, mailbox: [], mailboxUnread: 0, tradesUnread: 0 });
       },
     }),
     {

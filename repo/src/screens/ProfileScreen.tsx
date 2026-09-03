@@ -1,12 +1,15 @@
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import AnimationPicker from '../components/AnimationPicker';
 import AuthScreen from './AuthScreen';
 import Avatar from '../components/Avatar';
 import AvatarPicker from '../components/AvatarPicker';
 import CardBackPicker from '../components/CardBackPicker';
+import MailboxButton from '../components/MailboxButton';
+import MailboxOverlay from '../components/MailboxOverlay';
 import SoundToggle from '../components/SoundToggle';
 import PigCard from '../components/PigCard';
-import { CARDS, RARITIES, TOTAL_CARDS, rarityById } from '../data/catalog';
+import { CARDS, RARITIES, SECRET_CARD, SECRET_RARITY_ID, TOTAL_CARDS, rarityById } from '../data/catalog';
 import { RARITY_VISUALS } from '../data/rarityVisuals';
 import { useAnimations } from '../lib/useAnimations';
 import { useStore } from '../state/store';
@@ -22,14 +25,27 @@ export default function ProfileScreen() {
   const glands = useStore((s) => s.glands);
   const openedCount = useStore((s) => s.openedCount);
   const avatar = useStore((s) => s.avatar);
+  const avatarPhoto = useStore((s) => s.avatarPhoto);
+  const mailboxUnread = useStore((s) => s.mailboxUnread);
   const openDetail = useStore((s) => s.openDetail);
   const logout = useStore((s) => s.logout);
+  const debugTriggerSecret = useStore((s) => s.debugTriggerSecret);
   const holoAnim = useAnimations();
+  const navigate = useNavigate();
+  const [mailboxOpen, setMailboxOpen] = useState(false);
 
   const ownedIds = useMemo(() => Object.keys(owned).filter((k) => owned[Number(k)] > 0).map(Number), [owned]);
-  const uniq = ownedIds.length;
+  // Complétion : la carte secrète ne compte pas dedans (comme TOTAL_CARDS),
+  // sinon "uniq/TOTAL_CARDS" peut dépasser 100 % pour qui l'a trouvée.
+  const uniq = useMemo(() => ownedIds.filter((id) => id !== SECRET_CARD?.id).length, [ownedIds]);
+  // Tant qu'elle n'a jamais été tirée, aucune trace d'elle dans l'interface
+  // — même pas une ligne "Secrète 0/1" dans la complétion par rareté.
+  const hasSecret = !!SECRET_CARD && (owned[SECRET_CARD.id] || 0) > 0;
 
   const best = useMemo(() => {
+    // Ici en revanche on la laisse concourir — "meilleure trouvaille" sur
+    // son propre profil, personne d'autre ne le voit, c'est le bon endroit
+    // pour s'en vanter.
     const candidates = ownedIds.map((id) => CARDS.find((c) => c.id === id)!).sort((a, b) => b.rarity - a.rarity);
     return candidates[0] || CARDS[0];
   }, [ownedIds]);
@@ -48,17 +64,70 @@ export default function ProfileScreen() {
       <div className="screen-inner" style={{ display: 'flex', alignItems: 'flex-end', gap: 10 }}>
         <h1 style={{ fontSize: 30, margin: 0, lineHeight: 1 }}>Profil</h1>
         {account && (
-          <button
-            onClick={logout}
-            style={{ marginLeft: 'auto', border: 0, background: 'none', cursor: 'pointer', fontSize: 11.5, fontWeight: 700, opacity: 0.5, paddingBottom: 4 }}
-          >
-            Se déconnecter
-          </button>
+          <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 14 }}>
+            <MailboxButton unread={mailboxUnread} onClick={() => setMailboxOpen(true)} />
+            <button
+              onClick={logout}
+              style={{ border: 0, background: 'none', cursor: 'pointer', fontSize: 11.5, fontWeight: 700, opacity: 0.5, paddingBottom: 4 }}
+            >
+              Se déconnecter
+            </button>
+          </div>
         )}
       </div>
 
+      {mailboxOpen && <MailboxOverlay onClose={() => setMailboxOpen(false)} />}
+
+      {/* Outil de test — visible seulement sur ce compte précis, pas un vrai
+          contrôle d'accès (juste une condition côté client, contournable en
+          devtools par qui saurait la chercher). Rejoue la vraie séquence de
+          révélation avec la carte secrète comme seul tirage, sans toucher au
+          stock de sacs réel — voir debugTriggerSecret dans store.ts. */}
+      {account === 'Dukes' && (
+        <div className="screen-inner" style={{ paddingTop: 16 }}>
+          <div
+            style={{
+              boxSizing: 'border-box',
+              padding: '12px 15px',
+              borderRadius: 22,
+              background: 'var(--color-surface)',
+              border: '1.5px dashed var(--color-accent-500)',
+              display: 'flex',
+              alignItems: 'center',
+              gap: 12,
+            }}
+          >
+            <span style={{ fontSize: 20 }}>🔧</span>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontFamily: 'var(--font-heading)', fontSize: 14 }}>Outils de test</div>
+              <div style={{ fontSize: 10.5, opacity: 0.6, marginTop: 2 }}>Visible seulement sur ce compte.</div>
+            </div>
+            <button
+              className="pressable"
+              onClick={() => {
+                debugTriggerSecret();
+                navigate('/open');
+              }}
+              style={{
+                cursor: 'pointer',
+                border: 0,
+                fontFamily: 'var(--font-heading)',
+                fontSize: 11.5,
+                padding: '9px 14px',
+                borderRadius: 999,
+                background: 'var(--color-accent)',
+                color: 'var(--color-bg)',
+                whiteSpace: 'nowrap',
+              }}
+            >
+              Voir la carte secrète
+            </button>
+          </div>
+        </div>
+      )}
+
       <div className="screen-inner" style={{ paddingTop: 18, display: 'flex', alignItems: 'center', gap: 14 }}>
-        <Avatar avatar={avatar} size={74} />
+        <Avatar avatar={avatar} photo={avatarPhoto} size={74} />
         <div>
           <div style={{ fontFamily: 'var(--font-heading)', fontSize: 22, lineHeight: 1.1 }}>{account ?? 'Éleveur Grouik'}</div>
           <div style={{ fontSize: 11.5, opacity: 0.6, marginTop: 4 }}>{account ? rank : 'Pas encore connecté'}</div>
@@ -87,7 +156,7 @@ export default function ProfileScreen() {
       <div className="screen-inner" style={{ paddingTop: 20 }}>
         <div className="section-label" style={{ marginBottom: 11 }}>Complétion par rareté</div>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 11 }}>
-          {RARITIES.map((r) => {
+          {RARITIES.filter((r) => r.id !== SECRET_RARITY_ID || hasSecret).map((r) => {
             const t = CARDS.filter((c) => c.rarity === r.id).length;
             const o = CARDS.filter((c) => c.rarity === r.id && (owned[c.id] || 0) > 0).length;
             const ink = RARITY_VISUALS[r.id as RarityId].ink;

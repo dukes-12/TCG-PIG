@@ -9,6 +9,7 @@ import AuthScreen from './AuthScreen';
 interface FriendRow {
   username: string;
   avatar: AvatarKey;
+  avatarPhoto: string | null;
 }
 
 /** Onglet Amis — remplace le petit bloc "Voir la collection d'un ami" qui
@@ -69,7 +70,7 @@ export default function FriendsScreen() {
                   background: 'var(--color-surface)',
                 }}
               >
-                <Avatar avatar={p.avatar} size={44} boxShadow="var(--shadow-sm)" />
+                <Avatar avatar={p.avatar} photo={p.avatarPhoto} size={44} boxShadow="var(--shadow-sm)" />
                 <span style={{ fontFamily: 'var(--font-heading)', fontSize: 15, color: 'var(--color-text)' }}>{p.username}</span>
               </button>
             ))}
