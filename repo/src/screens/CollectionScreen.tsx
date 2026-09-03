@@ -48,7 +48,7 @@ export default function CollectionScreen() {
     <div className="screen">
       <div className="screen-inner">
         <div style={{ display: 'flex', alignItems: 'flex-end', gap: 10 }}>
-          <h1 style={{ fontSize: 30, margin: 0, lineHeight: 1 }}>Ma bassecour</h1>
+          <h1 style={{ fontSize: 30, margin: 0, lineHeight: 1 }}>Ma collection</h1>
           <span style={{ marginLeft: 'auto', fontSize: 12, fontWeight: 700, opacity: 0.5, paddingBottom: 4 }}>
             {uniq}/{TOTAL_CARDS}
           </span>
