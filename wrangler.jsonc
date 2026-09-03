@@ -1,0 +1,13 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "tcg-pig",
+  "compatibility_date": "2026-09-01",
+  // Site statique : aucun Worker à exécuter, on sert simplement le build Vite.
+  // Sans ce bloc, `wrangler deploy` essaie d'auto-configurer le plugin Workers
+  // pour Vite et exige Vite >= 6 — d'où l'échec du déploiement.
+  "assets": {
+    "directory": "./dist",
+    // L'app est une SPA : toute URL inconnue renvoie index.html.
+    "not_found_handling": "single-page-application"
+  }
+}
