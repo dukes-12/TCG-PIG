@@ -52,8 +52,11 @@ export function apiPushState(state: Record<string, unknown>) {
 export function apiFetchPlayers() {
   return call<{ players: string[] }>('/players');
 }
+export function apiFetchFriends() {
+  return call<{ players: { username: string; avatar: string }[] }>('/friends');
+}
 export function apiFetchProfile(username: string) {
-  return call<{ username: string; owned: Record<string, number>; openedCount: number }>(
+  return call<{ username: string; owned: Record<string, number>; openedCount: number; avatar: string }>(
     `/profile/${encodeURIComponent(username)}`,
   );
 }

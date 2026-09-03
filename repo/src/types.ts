@@ -53,11 +53,26 @@ export type CardBackKey = 'sceau' | 'souille' | 'deco' | 'nuit';
 /** Préférence d'animations — voir src/lib/useAnimations.ts. */
 export type AnimationPref = 'auto' | 'on' | 'off';
 
+/** Avatars de profil — voir src/data/avatars.ts. Tous débloqués d'office
+ *  (identité, pas une rareté à collectionner comme les dos de carte). */
+export type AvatarKey =
+  | 'classique'
+  | 'truffe-rose'
+  | 'sanglier'
+  | 'dore'
+  | 'nuit-violette'
+  | 'prairie'
+  | 'givre-bleu'
+  | 'onyx';
+
 /** Nombre de cartes par ligne dans la collection. */
 export type GridCols = 2 | 3 | 4;
 
 export type SortKey = 'rarete' | 'nom' | 'type' | 'nb';
 
-export type TabKey = 'collection' | 'shop' | 'open' | 'dupes' | 'trades' | 'profile';
+export type TabKey = 'collection' | 'shop' | 'open' | 'dupes' | 'trades' | 'friends' | 'profile';
 
 export type PackState = 'idle' | 'tearing' | 'reveal' | 'summary';
+
+/** Roue de la chance — voir src/components/WheelOverlay.tsx. */
+export type WheelState = 'idle' | 'spinning' | 'result';

@@ -1,38 +1,30 @@
-import { useEffect, useMemo, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useMemo } from 'react';
 import AnimationPicker from '../components/AnimationPicker';
 import AuthScreen from './AuthScreen';
+import Avatar from '../components/Avatar';
+import AvatarPicker from '../components/AvatarPicker';
 import CardBackPicker from '../components/CardBackPicker';
 import SoundToggle from '../components/SoundToggle';
 import PigCard from '../components/PigCard';
-import Snout from '../components/Snout';
 import { CARDS, RARITIES, TOTAL_CARDS, rarityById } from '../data/catalog';
 import { RARITY_VISUALS } from '../data/rarityVisuals';
 import { useAnimations } from '../lib/useAnimations';
-import { apiFetchPlayers } from '../lib/api';
 import { useStore } from '../state/store';
 import type { RarityId } from '../types';
 
 /** Ported from the "PROFIL" block in Grouin - TCG Cochons.dc.html.
- *  Deux ajouts pour les comptes : le pseudo actif + déconnexion, et la
- *  liste des autres joueurs pour aller voir leur collection (leur profil
- *  est la seule façon de la consulter — pas de classement, pas d'annuaire
- *  affichant les cartes directement). */
+ *  Ajouts pour les comptes : le pseudo actif + déconnexion, l'avatar (voir
+ *  AvatarPicker plus bas). La liste des autres joueurs a déménagé dans son
+ *  propre onglet Amis — voir FriendsScreen. */
 export default function ProfileScreen() {
   const account = useStore((s) => s.account);
   const owned = useStore((s) => s.owned);
   const glands = useStore((s) => s.glands);
   const openedCount = useStore((s) => s.openedCount);
+  const avatar = useStore((s) => s.avatar);
   const openDetail = useStore((s) => s.openDetail);
   const logout = useStore((s) => s.logout);
   const holoAnim = useAnimations();
-  const navigate = useNavigate();
-
-  const [players, setPlayers] = useState<string[]>([]);
-  useEffect(() => {
-    if (!account) return;
-    apiFetchPlayers().then((r) => setPlayers(r.players)).catch(() => {});
-  }, [account]);
 
   const ownedIds = useMemo(() => Object.keys(owned).filter((k) => owned[Number(k)] > 0).map(Number), [owned]);
   const uniq = ownedIds.length;
@@ -66,7 +58,7 @@ export default function ProfileScreen() {
       </div>
 
       <div className="screen-inner" style={{ paddingTop: 18, display: 'flex', alignItems: 'center', gap: 14 }}>
-        <Snout width={74} height={74} nostrilWidth={12} nostrilHeight={19} gap={11} bg="linear-gradient(160deg,#ffd2b4,#f6a06b)" boxShadow="var(--shadow-md)" />
+        <Avatar avatar={avatar} size={74} />
         <div>
           <div style={{ fontFamily: 'var(--font-heading)', fontSize: 22, lineHeight: 1.1 }}>{account ?? 'Éleveur Grouik'}</div>
           <div style={{ fontSize: 11.5, opacity: 0.6, marginTop: 4 }}>{account ? rank : 'Pas encore connecté'}</div>
@@ -82,40 +74,9 @@ export default function ProfileScreen() {
         ))}
       </div>
 
-      <div className="screen-inner" style={{ paddingTop: 20 }}>
-        {!account ? (
-          <AuthScreen />
-        ) : (
-          <>
-            <div className="section-label" style={{ marginBottom: 8 }}>Voir la collection d'un ami</div>
-            {players.length === 0 ? (
-              <p style={{ fontSize: 12, opacity: 0.5, margin: 0 }}>Personne d'autre n'a encore de compte.</p>
-            ) : (
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 7 }}>
-            {players.map((p) => (
-              <button
-                key={p}
-                className="pressable"
-                onClick={() => navigate(`/players/${p}`)}
-                style={{
-                  cursor: 'pointer',
-                  border: 0,
-                  fontFamily: 'var(--font-body)',
-                  fontSize: 12.5,
-                  padding: '9px 14px',
-                  borderRadius: 999,
-                  background: 'var(--color-neutral-100)',
-                  color: 'var(--color-text)',
-                }}
-              >
-                {p}
-              </button>
-            ))}
-              </div>
-            )}
-          </>
-        )}
-      </div>
+      <div className="screen-inner" style={{ paddingTop: 20 }}>{!account && <AuthScreen />}</div>
+
+      <AvatarPicker />
 
       <CardBackPicker />
 
@@ -148,24 +109,26 @@ export default function ProfileScreen() {
         </div>
       </div>
 
-      <div className="screen-inner" style={{ paddingTop: 22, paddingBottom: 12 }}>
-        <div className="section-label" style={{ marginBottom: 11 }}>Meilleure trouvaille</div>
-        <div
-          className="pressable"
-          onClick={() => openDetail(best.id)}
-          style={{ display: 'flex', alignItems: 'center', gap: 14, padding: '12px 14px', borderRadius: 28, background: 'var(--color-surface)', cursor: 'pointer' }}
-        >
-          <div style={{ width: 74, height: 104, flex: 'none' }}>
-            <PigCard card={best} holoAnim={holoAnim} ownedCount={owned[best.id] || 0} />
-          </div>
-          <div>
-            <div style={{ fontFamily: 'var(--font-heading)', fontSize: 18, lineHeight: 1.15 }}>{best.name}</div>
-            <div style={{ fontSize: 11, opacity: 0.6, marginTop: 5 }}>
-              {rarityById(best.rarity).name} · {best.type} · ×{owned[best.id] || 1}
+      {uniq > 0 && (
+        <div className="screen-inner" style={{ paddingTop: 22, paddingBottom: 12 }}>
+          <div className="section-label" style={{ marginBottom: 11 }}>Meilleure trouvaille</div>
+          <div
+            className="pressable"
+            onClick={() => openDetail(best.id)}
+            style={{ display: 'flex', alignItems: 'center', gap: 14, padding: '12px 14px', borderRadius: 28, background: 'var(--color-surface)', cursor: 'pointer' }}
+          >
+            <div style={{ width: 74, height: 104, flex: 'none' }}>
+              <PigCard card={best} holoAnim={holoAnim} ownedCount={owned[best.id] || 0} />
+            </div>
+            <div>
+              <div style={{ fontFamily: 'var(--font-heading)', fontSize: 18, lineHeight: 1.15 }}>{best.name}</div>
+              <div style={{ fontSize: 11, opacity: 0.6, marginTop: 5 }}>
+                {rarityById(best.rarity).name} · {best.type} · ×{owned[best.id] || 1}
+              </div>
             </div>
           </div>
         </div>
-      </div>
+      )}
     </div>
   );
 }

@@ -43,7 +43,7 @@ export default function CardDetailOverlay() {
       </div>
       <div style={{ marginTop: 22, textAlign: 'center', color: 'var(--color-bg)', position: 'relative', zIndex: 2 }}>
         <div style={{ fontSize: 9, letterSpacing: '.2em', textTransform: 'uppercase', opacity: 0.7 }}>{rarity.name}</div>
-        <h2 style={{ fontSize: 25, margin: '7px 0 0', color: 'var(--color-bg)', textWrap: 'balance' as const }}>{card.name}</h2>
+        <h2 style={{ fontSize: 25, margin: '7px 0 0', color: 'var(--color-bg)', textWrap: 'balance' as const }}>{count > 0 ? card.name : '???'}</h2>
         <div style={{ fontSize: 12, opacity: 0.7, marginTop: 7 }}>{meta}</div>
       </div>
       <button

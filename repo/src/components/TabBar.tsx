@@ -1,5 +1,5 @@
 import { NavLink } from 'react-router-dom';
-import { CollectionIcon, DupesIcon, OpenIcon, ProfileIcon, ShopIcon, TradeIcon } from './icons';
+import { CollectionIcon, DupesIcon, FriendsIcon, OpenIcon, ProfileIcon, ShopIcon, TradeIcon } from './icons';
 
 const TABS = [
   { to: '/collection', label: 'Collection', Icon: CollectionIcon },
@@ -7,6 +7,7 @@ const TABS = [
   { to: '/open', label: 'Ouvrir', Icon: OpenIcon },
   { to: '/dupes', label: 'Doublons', Icon: DupesIcon },
   { to: '/trades', label: 'Échanges', Icon: TradeIcon },
+  { to: '/friends', label: 'Amis', Icon: FriendsIcon },
   { to: '/profile', label: 'Profil', Icon: ProfileIcon },
 ];
 
