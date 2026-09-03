@@ -1,5 +1,4 @@
 import { useState } from 'react';
-import Snout from '../components/Snout';
 import { useStore } from '../state/store';
 
 const inputStyle: React.CSSProperties = {
@@ -14,11 +13,11 @@ const inputStyle: React.CSSProperties = {
   boxSizing: 'border-box',
 };
 
-/** Écran bloquant tant qu'aucune session n'est active — le jeu est
- *  désormais lié à un compte (pseudo + code à 4 chiffres) pour permettre la
- *  synchronisation entre appareils et les échanges avec les autres joueurs.
- *  À l'inscription, la collection déjà présente sur cet appareil (si elle
- *  existe) est envoyée au serveur comme point de départ du compte. */
+/** Connexion / inscription — intégré dans Profil, jamais bloquant : le jeu
+ *  se joue entièrement en local sans compte. Se connecter permet de
+ *  retrouver sa collection sur un autre appareil et d'échanger avec
+ *  d'autres joueurs. À l'inscription, la collection déjà présente sur cet
+ *  appareil devient le point de départ du compte. */
 export default function AuthScreen() {
   const [mode, setMode] = useState<'login' | 'register'>('login');
   const [username, setUsername] = useState('');
@@ -44,23 +43,13 @@ export default function AuthScreen() {
   };
 
   return (
-    <div
-      style={{
-        minHeight: '100dvh',
-        display: 'flex',
-        flexDirection: 'column',
-        alignItems: 'center',
-        justifyContent: 'center',
-        gap: 22,
-        padding: '32px 24px',
-        background: 'var(--color-bg)',
-      }}
-    >
-      <Snout width={84} height={68} nostrilWidth={13} nostrilHeight={21} gap={13} bg="linear-gradient(160deg,#ffd2b4,#f6a06b)" boxShadow="var(--shadow-md)" />
+    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 16, padding: '16px 18px 22px', borderRadius: 26, background: 'var(--color-surface)' }}>
       <div style={{ textAlign: 'center' }}>
-        <div style={{ fontFamily: 'var(--font-heading)', fontSize: 26 }}>Grouin</div>
-        <div style={{ fontSize: 12, opacity: 0.6, marginTop: 4 }}>
+        <div style={{ fontFamily: 'var(--font-heading)', fontSize: 17 }}>
           {mode === 'login' ? 'Retrouve ta collection' : 'Crée ton compte d’éleveur'}
+        </div>
+        <div style={{ fontSize: 11, opacity: 0.55, marginTop: 3, textWrap: 'pretty' as const }}>
+          Facultatif — sync entre appareils et échanges avec d'autres joueurs.
         </div>
       </div>
 
@@ -87,7 +76,7 @@ export default function AuthScreen() {
         ))}
       </div>
 
-      <div style={{ width: '100%', maxWidth: 320, display: 'flex', flexDirection: 'column', gap: 10 }}>
+      <div style={{ width: '100%', display: 'flex', flexDirection: 'column', gap: 10 }}>
         <input
           style={inputStyle}
           placeholder="Pseudo"
