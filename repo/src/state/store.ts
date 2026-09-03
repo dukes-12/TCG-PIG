@@ -6,7 +6,6 @@ import { openPack } from '../lib/draw';
 import type {
   Card,
   CardBackKey,
-  CardStyle,
   CardType,
   Pack,
   PackKey,
@@ -38,7 +37,6 @@ interface PersistedState {
   glands: number;
   stock: Record<PackKey, number>;
   openedCount: number;
-  cardStyle: CardStyle;
   freeBoosters: number;
   nextFreeBoosterAt: number | null;
   /** Dos de carte actif. */
@@ -73,7 +71,6 @@ interface Actions {
   toggleOwnedOnly: () => void;
   openDetail: (id: number) => void;
   closeDetail: () => void;
-  setCardStyle: (style: CardStyle) => void;
   setCardBack: (key: CardBackKey) => void;
   buyCardBack: (key: CardBackKey) => void;
 
@@ -140,7 +137,6 @@ export const useStore = create<Store>()(
       glands: 0,
       stock: { basic: 3, foire: 0, doree: 0 },
       openedCount: 0,
-      cardStyle: 'Sticker cartoon',
       freeBoosters: 0,
       nextFreeBoosterAt: null,
       cardBack: DEFAULT_CARD_BACK,
@@ -171,7 +167,6 @@ export const useStore = create<Store>()(
       toggleOwnedOnly: () => set((s) => ({ ownedOnly: !s.ownedOnly })),
       openDetail: (id) => set({ detail: id }),
       closeDetail: () => set({ detail: null }),
-      setCardStyle: (cardStyle) => set({ cardStyle }),
 
       /** Ne change le dos que s'il est débloqué (garde-fou : un save trafiqué
        *  ou un skin retiré du catalogue ne doit pas casser la révélation). */
@@ -330,7 +325,6 @@ export const useStore = create<Store>()(
         glands: s.glands,
         stock: s.stock,
         openedCount: s.openedCount,
-        cardStyle: s.cardStyle,
         freeBoosters: s.freeBoosters,
         nextFreeBoosterAt: s.nextFreeBoosterAt,
         cardBack: s.cardBack,

@@ -2,12 +2,16 @@ import { useState } from 'react';
 import type { Card } from '../types';
 import Snout from './Snout';
 
-/** The card's art zone. Points at `/assets/cards/<id>.jpg` (from
- *  `cards.json`, already production-ready per the handoff). Until real
- *  art is dropped into `public/assets/cards/`, it falls back to a
- *  styled placeholder (the surrounding artWrap already carries a
- *  rarity-tinted background) instead of a broken-image icon — drop a
- *  correctly-named file in and it appears with no code changes. */
+/** The card's art zone. Points at `<base>assets/cards/<id>.jpg` (from
+ *  `cards.json`). Falls back to a styled placeholder if the file is
+ *  missing — drop a correctly-named file in `public/assets/cards/` and it
+ *  appears with no code changes.
+ *
+ *  Le chemin passe par `import.meta.env.BASE_URL` : un `src` absolu
+ *  (`/assets/…`) casse dès que l'app n'est pas servie à la racine du
+ *  domaine — GitHub Pages sert sous `/<repo>/`, et c'est la cause la plus
+ *  fréquente de « toutes les cartes affichent le placeholder » alors que
+ *  les fichiers sont bien commités. */
 export default function CardArt({ card, mini }: { card: Card; mini: boolean }) {
   const [failed, setFailed] = useState(false);
 
@@ -40,9 +44,15 @@ export default function CardArt({ card, mini }: { card: Card; mini: boolean }) {
   // /assets/*. Normal deploys never set this global, so this is a no-op.
   const inlineSrc = (window as unknown as { __CARD_ART__?: Record<string, string> }).__CARD_ART__?.[card.image];
 
+  // `cards.json` stocke des chemins relatifs ("assets/cards/058.jpg") ; on
+  // tolère un éventuel "/" en tête pour ne pas doubler le séparateur.
+  const base = import.meta.env.BASE_URL || '/';
+  const rel = card.image.replace(/^\/+/, '');
+  const src = inlineSrc ?? `${base}${rel}`;
+
   return (
     <img
-      src={inlineSrc ?? `/${card.image}`}
+      src={src}
       alt={card.name}
       loading="lazy"
       draggable={false}

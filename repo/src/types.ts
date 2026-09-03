@@ -49,8 +49,6 @@ export interface CardCatalog {
   cards: Card[];
 }
 
-export type CardStyle = 'Sticker cartoon' | 'Collector foil';
-
 /** Les dos de carte — voir src/data/cardBacks.ts. `sceau` est le dos par
  *  défaut, les trois autres s'achètent en glands. */
 export type CardBackKey = 'sceau' | 'souille' | 'deco' | 'nuit';

@@ -1,22 +1,21 @@
 import { useMemo } from 'react';
-import Chip from '../components/Chip';
+import CardBackPicker from '../components/CardBackPicker';
 import PigCard from '../components/PigCard';
 import Snout from '../components/Snout';
 import { CARDS, RARITIES, TOTAL_CARDS, rarityById } from '../data/catalog';
 import { RARITY_VISUALS } from '../data/rarityVisuals';
 import { usePrefersReducedMotion } from '../lib/usePrefersReducedMotion';
 import { useStore } from '../state/store';
-import type { CardStyle, RarityId } from '../types';
+import type { RarityId } from '../types';
 
-/** Ported from the "PROFIL" block in Grouin - TCG Cochons.dc.html. The
- *  "Style des cartes" section is new: the prototype's two card directions
- *  were a design-time tweak, here they're a real user-facing setting. */
+/** Ported from the "PROFIL" block in Grouin - TCG Cochons.dc.html.
+ *  La section « Style des cartes » a été retirée — le jeu ne garde que la
+ *  direction Collector foil. Ce que le joueur personnalise ici, c'est le
+ *  dos de carte (achetable en glands). */
 export default function ProfileScreen() {
   const owned = useStore((s) => s.owned);
   const glands = useStore((s) => s.glands);
   const openedCount = useStore((s) => s.openedCount);
-  const cardStyle = useStore((s) => s.cardStyle);
-  const setCardStyle = useStore((s) => s.setCardStyle);
   const openDetail = useStore((s) => s.openDetail);
   const holoAnim = !usePrefersReducedMotion();
 
@@ -51,15 +50,6 @@ export default function ProfileScreen() {
         </div>
       </div>
 
-      <div className="screen-inner" style={{ paddingTop: 20 }}>
-        <div className="section-label" style={{ marginBottom: 9 }}>Style des cartes</div>
-        <div className="chip-row">
-          {(['Sticker cartoon', 'Collector foil'] as CardStyle[]).map((opt) => (
-            <Chip key={opt} label={opt} active={cardStyle === opt} onClick={() => setCardStyle(opt)} />
-          ))}
-        </div>
-      </div>
-
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2,1fr)', gap: 10, padding: '20px 18px 0' }}>
         {stats.map((s) => (
           <div key={s.label} style={{ padding: '14px 16px', borderRadius: 26, background: 'var(--color-surface)' }}>
@@ -68,6 +58,8 @@ export default function ProfileScreen() {
           </div>
         ))}
       </div>
+
+      <CardBackPicker />
 
       <div className="screen-inner" style={{ paddingTop: 20 }}>
         <div className="section-label" style={{ marginBottom: 11 }}>Complétion par rareté</div>
@@ -102,7 +94,7 @@ export default function ProfileScreen() {
           style={{ display: 'flex', alignItems: 'center', gap: 14, padding: '12px 14px', borderRadius: 28, background: 'var(--color-surface)', cursor: 'pointer' }}
         >
           <div style={{ width: 74, height: 104, flex: 'none' }}>
-            <PigCard card={best} style={cardStyle} holoAnim={holoAnim} ownedCount={owned[best.id] || 0} />
+            <PigCard card={best} holoAnim={holoAnim} ownedCount={owned[best.id] || 0} />
           </div>
           <div>
             <div style={{ fontFamily: 'var(--font-heading)', fontSize: 18, lineHeight: 1.15 }}>{best.name}</div>
