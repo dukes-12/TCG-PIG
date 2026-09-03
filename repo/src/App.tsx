@@ -1,5 +1,6 @@
 import { useEffect } from 'react';
-import { Navigate, Route, Routes } from 'react-router-dom';
+import { Navigate, Route, Routes, useLocation } from 'react-router-dom';
+import { trackPageView } from './lib/analytics';
 import CardDetailOverlay from './components/CardDetailOverlay';
 import TabBar from './components/TabBar';
 import Toast from './components/Toast';
@@ -10,27 +11,32 @@ import ProfileScreen from './screens/ProfileScreen';
 import ShopScreen from './screens/ShopScreen';
 import { useStore } from './state/store';
 
+const SCREEN_TITLES: Record<string, string> = {
+  '/collection': 'Collection',
+  '/shop': 'Boutique',
+  '/open': 'Ouverture',
+  '/dupes': 'Doublons',
+  '/profile': 'Profil',
+};
+
 export default function App() {
-  // Deux horloges cumulatives, réconciliées séparément :
-  //   - le versement quotidien (+3 sachets, directement dans le stock) ;
-  //   - le sac gratuit horaire (réserve à part, plafonnée à 3, à réclamer).
-  // Chacune rattrape une fois au chargement (temps passé app fermée), puis se
-  // revérifie en continu pour que les deux évoluent en direct si l'app reste
-  // ouverte. La quotidienne se contente d'une minute — inutile de sonder plus
-  // vite une échéance journalière ; l'horaire reste à la seconde pour que le
-  // compte à rebours du bandeau boutique soit fluide.
+  const location = useLocation();
+  useEffect(() => {
+    trackPageView(location.pathname, SCREEN_TITLES[location.pathname] ?? location.pathname);
+  }, [location.pathname]);
+
+  // Versement quotidien : on rattrape une fois au chargement (ce qui couvre
+  // le temps passé app fermée), puis on revérifie chaque minute pour que les
+  // sachets tombent en direct si l'app reste ouverte au passage de minuit.
+  // Une minute suffit — inutile de sonder chaque seconde pour une échéance
+  // quotidienne. Le store n'est touché (et localStorage écrit) que lorsqu'un
+  // versement a réellement lieu.
   const reconcileDailyGrant = useStore((s) => s.reconcileDailyGrant);
-  const reconcileFreeBoosters = useStore((s) => s.reconcileFreeBoosters);
   useEffect(() => {
     reconcileDailyGrant();
     const id = setInterval(reconcileDailyGrant, 60 * 1000);
     return () => clearInterval(id);
   }, [reconcileDailyGrant]);
-  useEffect(() => {
-    reconcileFreeBoosters();
-    const id = setInterval(reconcileFreeBoosters, 1000);
-    return () => clearInterval(id);
-  }, [reconcileFreeBoosters]);
 
   return (
     <div className="app-shell">
