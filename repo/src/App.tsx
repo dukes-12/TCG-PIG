@@ -1,43 +1,45 @@
 import { useEffect } from 'react';
-import { Navigate, Route, Routes, useLocation } from 'react-router-dom';
-import { trackPageView } from './lib/analytics';
+import { Navigate, Route, Routes } from 'react-router-dom';
 import CardDetailOverlay from './components/CardDetailOverlay';
 import TabBar from './components/TabBar';
 import Toast from './components/Toast';
 import CollectionScreen from './screens/CollectionScreen';
 import DupesScreen from './screens/DupesScreen';
 import OpenScreen from './screens/OpenScreen';
+import PlayerProfileScreen from './screens/PlayerProfileScreen';
 import ProfileScreen from './screens/ProfileScreen';
 import ShopScreen from './screens/ShopScreen';
+import TradesScreen from './screens/TradesScreen';
 import { useStore } from './state/store';
 
-const SCREEN_TITLES: Record<string, string> = {
-  '/collection': 'Collection',
-  '/shop': 'Boutique',
-  '/open': 'Ouverture',
-  '/dupes': 'Doublons',
-  '/profile': 'Profil',
-};
-
+/** Le jeu se joue sans compte — tout se fait en local (comme avant les
+ *  comptes) jusqu'à ce que le joueur se connecte ou s'inscrive depuis
+ *  l'onglet Profil. `bootAuth` restaure juste une session déjà active
+ *  (jeton en localStorage) au chargement ; elle ne bloque jamais le rendu :
+ *  pas d'écran de connexion imposé, pas d'attente réseau avant de jouer. */
 export default function App() {
-  const location = useLocation();
-  useEffect(() => {
-    trackPageView(location.pathname, SCREEN_TITLES[location.pathname] ?? location.pathname);
-  }, [location.pathname]);
-
-  // Versement quotidien : on rattrape une fois au chargement (ce qui couvre
-  // le temps passé app fermée), puis on revérifie chaque minute pour que les
-  // sachets tombent en direct si l'app reste ouverte au passage de minuit.
-  // Une minute suffit — inutile de sonder chaque seconde pour une échéance
-  // quotidienne. Le store n'est touché (et localStorage écrit) que lorsqu'un
-  // versement a réellement lieu.
+  const account = useStore((s) => s.account);
+  const bootAuth = useStore((s) => s.bootAuth);
   const reconcileDailyGrant = useStore((s) => s.reconcileDailyGrant);
+  const reconcileFreeBoosters = useStore((s) => s.reconcileFreeBoosters);
+
+  useEffect(() => {
+    bootAuth();
+  }, [bootAuth]);
+
   useEffect(() => {
     reconcileDailyGrant();
     const id = setInterval(reconcileDailyGrant, 60 * 1000);
     return () => clearInterval(id);
   }, [reconcileDailyGrant]);
+  useEffect(() => {
+    reconcileFreeBoosters();
+    const id = setInterval(reconcileFreeBoosters, 1000);
+    return () => clearInterval(id);
+  }, [reconcileFreeBoosters]);
 
+  // Échanges et vue "profil d'un ami" supposent un compte — sans, on renvoie
+  // simplement vers Profil, où se trouve désormais la connexion/inscription.
   return (
     <div className="app-shell">
       <Routes>
@@ -46,7 +48,9 @@ export default function App() {
         <Route path="/shop" element={<ShopScreen />} />
         <Route path="/open" element={<OpenScreen />} />
         <Route path="/dupes" element={<DupesScreen />} />
+        <Route path="/trades" element={account ? <TradesScreen /> : <Navigate to="/profile" replace />} />
         <Route path="/profile" element={<ProfileScreen />} />
+        <Route path="/players/:username" element={account ? <PlayerProfileScreen /> : <Navigate to="/profile" replace />} />
         <Route path="*" element={<Navigate to="/collection" replace />} />
       </Routes>
 

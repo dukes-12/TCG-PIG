@@ -1,5 +1,7 @@
-import { useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import AnimationPicker from '../components/AnimationPicker';
+import AuthScreen from './AuthScreen';
 import CardBackPicker from '../components/CardBackPicker';
 import SoundToggle from '../components/SoundToggle';
 import PigCard from '../components/PigCard';
@@ -7,19 +9,30 @@ import Snout from '../components/Snout';
 import { CARDS, RARITIES, TOTAL_CARDS, rarityById } from '../data/catalog';
 import { RARITY_VISUALS } from '../data/rarityVisuals';
 import { useAnimations } from '../lib/useAnimations';
+import { apiFetchPlayers } from '../lib/api';
 import { useStore } from '../state/store';
 import type { RarityId } from '../types';
 
 /** Ported from the "PROFIL" block in Grouin - TCG Cochons.dc.html.
- *  La section « Style des cartes » a été retirée — le jeu ne garde que la
- *  direction Collector foil. Ce que le joueur personnalise ici, c'est le
- *  dos de carte (achetable en glands). */
+ *  Deux ajouts pour les comptes : le pseudo actif + déconnexion, et la
+ *  liste des autres joueurs pour aller voir leur collection (leur profil
+ *  est la seule façon de la consulter — pas de classement, pas d'annuaire
+ *  affichant les cartes directement). */
 export default function ProfileScreen() {
+  const account = useStore((s) => s.account);
   const owned = useStore((s) => s.owned);
   const glands = useStore((s) => s.glands);
   const openedCount = useStore((s) => s.openedCount);
   const openDetail = useStore((s) => s.openDetail);
+  const logout = useStore((s) => s.logout);
   const holoAnim = useAnimations();
+  const navigate = useNavigate();
+
+  const [players, setPlayers] = useState<string[]>([]);
+  useEffect(() => {
+    if (!account) return;
+    apiFetchPlayers().then((r) => setPlayers(r.players)).catch(() => {});
+  }, [account]);
 
   const ownedIds = useMemo(() => Object.keys(owned).filter((k) => owned[Number(k)] > 0).map(Number), [owned]);
   const uniq = ownedIds.length;
@@ -40,15 +53,23 @@ export default function ProfileScreen() {
 
   return (
     <div className="screen">
-      <div className="screen-inner">
+      <div className="screen-inner" style={{ display: 'flex', alignItems: 'flex-end', gap: 10 }}>
         <h1 style={{ fontSize: 30, margin: 0, lineHeight: 1 }}>Profil</h1>
+        {account && (
+          <button
+            onClick={logout}
+            style={{ marginLeft: 'auto', border: 0, background: 'none', cursor: 'pointer', fontSize: 11.5, fontWeight: 700, opacity: 0.5, paddingBottom: 4 }}
+          >
+            Se déconnecter
+          </button>
+        )}
       </div>
 
       <div className="screen-inner" style={{ paddingTop: 18, display: 'flex', alignItems: 'center', gap: 14 }}>
         <Snout width={74} height={74} nostrilWidth={12} nostrilHeight={19} gap={11} bg="linear-gradient(160deg,#ffd2b4,#f6a06b)" boxShadow="var(--shadow-md)" />
         <div>
-          <div style={{ fontFamily: 'var(--font-heading)', fontSize: 22, lineHeight: 1.1 }}>Éleveur Grouik</div>
-          <div style={{ fontSize: 11.5, opacity: 0.6, marginTop: 4 }}>{rank}</div>
+          <div style={{ fontFamily: 'var(--font-heading)', fontSize: 22, lineHeight: 1.1 }}>{account ?? 'Éleveur Grouik'}</div>
+          <div style={{ fontSize: 11.5, opacity: 0.6, marginTop: 4 }}>{account ? rank : 'Pas encore connecté'}</div>
         </div>
       </div>
 
@@ -59,6 +80,41 @@ export default function ProfileScreen() {
             <div style={{ fontSize: 9.5, letterSpacing: '.1em', textTransform: 'uppercase', opacity: 0.55, fontWeight: 700, marginTop: 5 }}>{s.label}</div>
           </div>
         ))}
+      </div>
+
+      <div className="screen-inner" style={{ paddingTop: 20 }}>
+        {!account ? (
+          <AuthScreen />
+        ) : (
+          <>
+            <div className="section-label" style={{ marginBottom: 8 }}>Voir la collection d'un ami</div>
+            {players.length === 0 ? (
+              <p style={{ fontSize: 12, opacity: 0.5, margin: 0 }}>Personne d'autre n'a encore de compte.</p>
+            ) : (
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 7 }}>
+            {players.map((p) => (
+              <button
+                key={p}
+                className="pressable"
+                onClick={() => navigate(`/players/${p}`)}
+                style={{
+                  cursor: 'pointer',
+                  border: 0,
+                  fontFamily: 'var(--font-body)',
+                  fontSize: 12.5,
+                  padding: '9px 14px',
+                  borderRadius: 999,
+                  background: 'var(--color-neutral-100)',
+                  color: 'var(--color-text)',
+                }}
+              >
+                {p}
+              </button>
+            ))}
+              </div>
+            )}
+          </>
+        )}
       </div>
 
       <CardBackPicker />
@@ -92,7 +148,7 @@ export default function ProfileScreen() {
         </div>
       </div>
 
-      <div className="screen-inner" style={{ paddingTop: 22 }}>
+      <div className="screen-inner" style={{ paddingTop: 22, paddingBottom: 12 }}>
         <div className="section-label" style={{ marginBottom: 11 }}>Meilleure trouvaille</div>
         <div
           className="pressable"

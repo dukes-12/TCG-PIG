@@ -16,9 +16,6 @@ export interface Rarity {
   recycleValue: number;
 }
 
-// A plain string, not a fixed union: the card types are whatever's listed in
-// cards.json's `types` array, so adding a new category is a JSON-only edit —
-// see CONTRIBUTING.md — with no TypeScript union to keep in sync.
 export type CardType = string;
 
 export interface Card {
@@ -61,6 +58,6 @@ export type GridCols = 2 | 3 | 4;
 
 export type SortKey = 'rarete' | 'nom' | 'type' | 'nb';
 
-export type TabKey = 'collection' | 'shop' | 'open' | 'dupes' | 'profile';
+export type TabKey = 'collection' | 'shop' | 'open' | 'dupes' | 'trades' | 'profile';
 
 export type PackState = 'idle' | 'tearing' | 'reveal' | 'summary';

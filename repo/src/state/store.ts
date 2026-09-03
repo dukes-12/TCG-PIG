@@ -5,6 +5,7 @@ import { CARD_BACKS, DEFAULT_CARD_BACK, cardBackByKey } from '../data/cardBacks'
 import { openPack } from '../lib/draw';
 import { playSfx, revealSfx, setSfxEnabled } from '../lib/sfx';
 import { trackCardPulled, trackGlandsEarned, trackGlandsSpent, trackPackOpened } from '../lib/analytics';
+import { apiFetchState, apiLogin, apiPushState, apiRegister, getToken, setToken } from '../lib/api';
 import type {
   AnimationPref,
   Card,
@@ -27,18 +28,19 @@ const TEAR_MS = 680;
 const FLIP_TRANSITION_MS = 620; // matches OpenScreen's flipInner CSS transition duration
 const TOAST_MS = 1700;
 const SWIPE_THRESHOLD = 70;
+const SYNC_DEBOUNCE_MS = 800;
+const LEGACY_SAVE_KEY = 'grouin-save-v1';
 
-/** Trois sachets offerts chaque jour, versés directement dans la poche.
- *
- *  L'horloge est un horodatage (`nextDailyGrantAt`), pas un compteur qui
- *  tourne : au lancement on rattrape tous les jours écoulés d'un coup, ce qui
- *  marche même si l'app est restée fermée une semaine. Le rattrapage est
- *  plafonné à `DAILY_GRANT_CATCHUP_MAX` jours — revenir après trois mois ne
- *  doit pas déverser 270 sachets. */
+/** Trois sachets offerts chaque jour, versés directement dans la poche. */
 export const DAILY_GRANT_INTERVAL_MS = 24 * 60 * 60 * 1000;
 export const DAILY_GRANT_AMOUNT = 3;
 export const DAILY_GRANT_CATCHUP_MAX = 7;
 const DAILY_GRANT_PACK: PackKey = 'basic';
+
+/** Un sac gratuit par heure, empilable jusqu'à 3 dans une réserve à part. */
+export const FREE_BOOSTER_INTERVAL_MS = 60 * 60 * 1000;
+export const FREE_BOOSTER_MAX = 3;
+const FREE_BOOSTER_PACK: PackKey = 'basic';
 
 /** Sachets offerts au tout premier lancement. */
 export const STARTER_PACKS = 5;
@@ -48,21 +50,19 @@ interface PersistedState {
   glands: number;
   stock: Record<PackKey, number>;
   openedCount: number;
-  /** Prochain versement quotidien. `null` = jamais initialisé (premier lancement). */
   nextDailyGrantAt: number | null;
-  /** Dos de carte actif. */
+  freeBoosters: number;
+  nextFreeBoosterAt: number | null;
   cardBack: CardBackKey;
-  /** Dos débloqués — `sceau` l'est d'office. */
   unlockedBacks: CardBackKey[];
-  /** Densité de la grille de collection. */
   gridCols: GridCols;
-  /** Animations décoratives : auto (système) / on / off. */
   animPref: AnimationPref;
-  /** Effets sonores (synthétisés, voir lib/sfx.ts). */
   soundOn: boolean;
 }
 
 interface UiState {
+  account: string | null;
+  authReady: boolean;
   sort: SortKey;
   rarityFilter: RarityId | 'all';
   typeFilter: CardType | 'all';
@@ -99,6 +99,8 @@ interface Actions {
   startTear: () => void;
   backToIdle: () => void;
   reconcileDailyGrant: () => void;
+  reconcileFreeBoosters: () => void;
+  claimFreeBooster: () => void;
   nextReveal: () => void;
   dragStart: (clientX: number) => void;
   dragMove: (clientX: number) => void;
@@ -106,21 +108,75 @@ interface Actions {
 
   recycle: (cardId: number) => void;
   say: (msg: string) => void;
+
+  login: (username: string, pin: string) => Promise<void>;
+  register: (username: string, pin: string) => Promise<void>;
+  logout: () => void;
+  bootAuth: () => Promise<void>;
 }
 
 export type Store = PersistedState & UiState & Actions;
 
-// Timer handles live outside the store (module singleton) — mirrors the
-// prototype's `this._t` / `this._tt` instance fields.
 let tearTimer: ReturnType<typeof setTimeout> | undefined;
 let advanceTimer: ReturnType<typeof setTimeout> | undefined;
 let toastTimer: ReturnType<typeof setTimeout> | undefined;
 let revealTimer: ReturnType<typeof setTimeout> | undefined;
+let syncTimer: ReturnType<typeof setTimeout> | undefined;
 let dragStartX = 0;
 
-/** Draws the pull, credits the collection, and kicks off the tear→reveal
- *  transition. Appelé par `startTear`, qui vérifie et décrémente la poche
- *  avant de déléguer ici. */
+/** Les seuls champs qu'on synchronise avec le compte — la même forme que
+ *  `partialize()` plus bas, réutilisée pour la sauvegarde serveur (voir le
+ *  `subscribe` en bas de fichier) et pour amorcer un nouveau compte avec la
+ *  collection déjà présente sur l'appareil. */
+function persistedSlice(s: Store): PersistedState {
+  return {
+    owned: s.owned,
+    glands: s.glands,
+    stock: s.stock,
+    openedCount: s.openedCount,
+    nextDailyGrantAt: s.nextDailyGrantAt,
+    freeBoosters: s.freeBoosters,
+    nextFreeBoosterAt: s.nextFreeBoosterAt,
+    cardBack: s.cardBack,
+    unlockedBacks: s.unlockedBacks,
+    gridCols: s.gridCols,
+    animPref: s.animPref,
+    soundOn: s.soundOn,
+  };
+}
+
+/** Fusionne un état venu du serveur sur l'état courant — mêmes garde-fous que
+ *  l'ancien `merge` de zustand/persist (dos par défaut si absent/invalide). */
+function mergeServer(current: Store, incoming: Partial<PersistedState>): Partial<Store> {
+  const unlocked = incoming.unlockedBacks?.length ? incoming.unlockedBacks : [DEFAULT_CARD_BACK];
+  const back = incoming.cardBack && unlocked.includes(incoming.cardBack) ? incoming.cardBack : DEFAULT_CARD_BACK;
+  return {
+    ...incoming,
+    unlockedBacks: unlocked,
+    cardBack: back,
+    gridCols: incoming.gridCols ?? current.gridCols,
+    animPref: incoming.animPref ?? current.animPref,
+    soundOn: incoming.soundOn ?? current.soundOn,
+    stock: incoming.stock ?? current.stock,
+    owned: incoming.owned ?? current.owned,
+  };
+}
+
+/** La collection locale d'avant les comptes (`grouin-save-v1`, écrite par
+ *  l'ancien zustand/persist) — lue une seule fois à l'inscription pour
+ *  amorcer le compte avec ce qui existe déjà sur l'appareil. */
+function readLegacyLocalSave(): Partial<PersistedState> | null {
+  if (typeof window === 'undefined') return null;
+  try {
+    const raw = window.localStorage.getItem(LEGACY_SAVE_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as { state?: Partial<PersistedState> };
+    return parsed.state ?? null;
+  } catch {
+    return null;
+  }
+}
+
 function beginTear(get: () => Store, set: (partial: Partial<Store>) => void, pack: Pack, source: 'stock' | 'free_hourly' = 'stock') {
   const s = get();
   const pull = openPack(pack, PACK_SIZE);
@@ -146,21 +202,20 @@ function beginTear(get: () => Store, set: (partial: Partial<Store>) => void, pac
   playSfx('tear');
   clearTimeout(tearTimer);
   clearTimeout(advanceTimer);
-  // The first card lands face-down (flipped: false, set above) and stays
-  // that way — no auto-flip. Revealing it is always an explicit tap/swipe,
-  // handled by nextReveal.
   tearTimer = setTimeout(() => set({ packState: 'reveal' }), TEAR_MS);
 }
 
 export const useStore = create<Store>()(
   persist(
     (set, get) => ({
-      // ── persisted ──
+      // ── persisted (miroir local — la source de vérité est le compte) ──
       owned: {},
       glands: 0,
       stock: { basic: STARTER_PACKS, foire: 0, doree: 0 },
       openedCount: 0,
       nextDailyGrantAt: null,
+      freeBoosters: 0,
+      nextFreeBoosterAt: null,
       cardBack: DEFAULT_CARD_BACK,
       unlockedBacks: [DEFAULT_CARD_BACK],
       gridCols: 3,
@@ -168,6 +223,8 @@ export const useStore = create<Store>()(
       soundOn: true,
 
       // ── ui / session ──
+      account: null,
+      authReady: false,
       sort: 'rarete',
       rarityFilter: 'all',
       typeFilter: 'all',
@@ -199,8 +256,6 @@ export const useStore = create<Store>()(
       },
       closeDetail: () => set({ detail: null }),
 
-      /** Ne change le dos que s'il est débloqué (garde-fou : un save trafiqué
-       *  ou un skin retiré du catalogue ne doit pas casser la révélation). */
       setCardBack: (key) => {
         const s = get();
         if (!s.unlockedBacks.includes(key)) return;
@@ -219,11 +274,7 @@ export const useStore = create<Store>()(
           s.say(`Pas assez de glands (${skin.price} requis).`);
           return;
         }
-        set({
-          glands: s.glands - skin.price,
-          unlockedBacks: [...s.unlockedBacks, key],
-          cardBack: key,
-        });
+        set({ glands: s.glands - skin.price, unlockedBacks: [...s.unlockedBacks, key], cardBack: key });
         trackGlandsSpent(skin.price, 'card_back', key);
         playSfx('coin');
         s.say(`Dos « ${skin.name} » débloqué`);
@@ -236,28 +287,13 @@ export const useStore = create<Store>()(
           s.say(`Pas assez de glands (${p.price} requis).`);
           return;
         }
-        set({
-          glands: s.glands - p.price,
-          stock: { ...s.stock, [key]: (s.stock[key] || 0) + 1 },
-          activePack: key,
-        });
+        set({ glands: s.glands - p.price, stock: { ...s.stock, [key]: (s.stock[key] || 0) + 1 }, activePack: key });
         trackGlandsSpent(p.price, 'pack', key);
         playSfx('coin');
         s.say(`${p.name} ajouté·e`);
       },
 
       selectPackForOpening: (key) => set({ activePack: key, packState: 'idle' }),
-
-      /** Retour au menu d'ouverture depuis la révélation ou le butin — sans
-       *  ouvrir de nouveau sac. Coupe aussi les timers en vol (un flip ou
-       *  une avance encore programmés) pour ne pas faire sauter l'état
-       *  qu'on vient de quitter. */
-      backToIdle: () => {
-        clearTimeout(tearTimer);
-        clearTimeout(advanceTimer);
-        clearTimeout(revealTimer);
-        set({ packState: 'idle', pull: [], pullIndex: 0, flipped: false, dragX: 0 });
-      },
 
       startTear: () => {
         const s = get();
@@ -270,34 +306,59 @@ export const useStore = create<Store>()(
         beginTear(get, set, p);
       },
 
+      backToIdle: () => {
+        clearTimeout(tearTimer);
+        clearTimeout(advanceTimer);
+        clearTimeout(revealTimer);
+        set({ packState: 'idle', pull: [], pullIndex: 0, flipped: false, dragX: 0 });
+      },
+
       reconcileDailyGrant: () => {
         const s = get();
         const now = Date.now();
-
-        // Premier lancement : la poche a déjà ses STARTER_PACKS, on amorce
-        // simplement l'horloge sans rien verser.
         if (s.nextDailyGrantAt == null) {
           set({ nextDailyGrantAt: now + DAILY_GRANT_INTERVAL_MS });
           return;
         }
         if (now < s.nextDailyGrantAt) return;
-
         let days = 0;
         let nextAt = s.nextDailyGrantAt;
         while (now >= nextAt && days < DAILY_GRANT_CATCHUP_MAX) {
           days += 1;
           nextAt += DAILY_GRANT_INTERVAL_MS;
         }
-        // Absence longue : on repart d'un cycle plein à partir de maintenant
-        // plutôt que de traîner une dette de versements.
         if (now >= nextAt) nextAt = now + DAILY_GRANT_INTERVAL_MS;
-
         const granted = days * DAILY_GRANT_AMOUNT;
-        set({
-          stock: { ...s.stock, [DAILY_GRANT_PACK]: (s.stock[DAILY_GRANT_PACK] || 0) + granted },
-          nextDailyGrantAt: nextAt,
-        });
+        set({ stock: { ...s.stock, [DAILY_GRANT_PACK]: (s.stock[DAILY_GRANT_PACK] || 0) + granted }, nextDailyGrantAt: nextAt });
         s.say(`+${granted} sachet${granted > 1 ? 's' : ''} du jour`);
+      },
+
+      reconcileFreeBoosters: () => {
+        const s = get();
+        if (s.freeBoosters >= FREE_BOOSTER_MAX) {
+          if (s.nextFreeBoosterAt !== null) set({ nextFreeBoosterAt: null });
+          return;
+        }
+        const now = Date.now();
+        if (s.nextFreeBoosterAt == null) {
+          set({ nextFreeBoosterAt: now + FREE_BOOSTER_INTERVAL_MS });
+          return;
+        }
+        if (now < s.nextFreeBoosterAt) return;
+        let freeBoosters = s.freeBoosters;
+        let nextAt = s.nextFreeBoosterAt;
+        while (freeBoosters < FREE_BOOSTER_MAX && now >= nextAt) {
+          freeBoosters += 1;
+          nextAt += FREE_BOOSTER_INTERVAL_MS;
+        }
+        set({ freeBoosters, nextFreeBoosterAt: freeBoosters >= FREE_BOOSTER_MAX ? null : nextAt });
+      },
+
+      claimFreeBooster: () => {
+        const s = get();
+        if (s.freeBoosters <= 0) return;
+        set({ freeBoosters: s.freeBoosters - 1, nextFreeBoosterAt: s.nextFreeBoosterAt ?? Date.now() + FREE_BOOSTER_INTERVAL_MS });
+        beginTear(get, set, packByKey(FREE_BOOSTER_PACK), 'free_hourly');
       },
 
       nextReveal: () => {
@@ -306,26 +367,15 @@ export const useStore = create<Store>()(
         if (!s.flipped) {
           set({ flipped: true });
           playSfx('flip');
-          // La fanfare arrive quand la carte est réellement face visible —
-          // même décalage que le hook useRevealed, sinon elle annonce la
-          // rareté pendant que le dos est encore face au joueur.
           clearTimeout(revealTimer);
           revealTimer = setTimeout(() => playSfx(revealSfx(s.pull[s.pullIndex]?.rarity ?? 1)), 520);
           return;
         }
         if (s.pullIndex < s.pull.length - 1) {
-          // Flip the current card face-down first. Only swap in the next
-          // card's art once it's fully hidden (after the flip transition),
-          // so the next card is never visible before its own flip-up —
-          // otherwise the new card's front face flashes for a frame while
-          // still facing the viewer, spoiling the reveal. It then stays
-          // face-down (no auto-flip) until tapped/swiped again.
           set({ flipped: false, dragX: 0 });
           playSfx('flip');
           clearTimeout(advanceTimer);
-          advanceTimer = setTimeout(() => {
-            set({ pullIndex: get().pullIndex + 1 });
-          }, FLIP_TRANSITION_MS);
+          advanceTimer = setTimeout(() => set({ pullIndex: get().pullIndex + 1 }), FLIP_TRANSITION_MS);
         } else {
           set({ packState: 'summary', dragX: 0 });
         }
@@ -368,33 +418,75 @@ export const useStore = create<Store>()(
         set({ toast: msg });
         toastTimer = setTimeout(() => set({ toast: null }), TOAST_MS);
       },
+
+      // ── compte ──
+      bootAuth: async () => {
+        const token = getToken();
+        if (!token) {
+          set({ authReady: true });
+          return;
+        }
+        try {
+          // On a besoin du pseudo pour l'affichage — la réponse de /state ne
+          // le porte pas, donc on ne connaît le compte que par la présence
+          // d'un jeton valide ; le pseudo réel arrive au prochain login. On
+          // le retrouve simplement en le gardant côté client (voir login/
+          // register qui l'écrivent) : s'il manque après un refresh (nouvel
+          // onglet), on retombe sur "Éleveur" générique plutôt que de
+          // bloquer l'app.
+          const res = await apiFetchState();
+          set({ ...mergeServer(get(), res.state), account: get().account ?? 'Éleveur', authReady: true });
+        } catch {
+          setToken(null);
+          set({ authReady: true });
+        }
+      },
+
+      login: async (username, pin) => {
+        const res = await apiLogin(username, pin);
+        setToken(res.token);
+        set({ ...mergeServer(get(), res.state), account: res.username });
+      },
+
+      register: async (username, pin) => {
+        const legacy = readLegacyLocalSave();
+        const res = await apiRegister(username, pin, legacy ?? persistedSlice(get()));
+        setToken(res.token);
+        set({ ...mergeServer(get(), res.state), account: res.username });
+      },
+
+      logout: () => {
+        setToken(null);
+        set({ account: null });
+      },
     }),
     {
       name: 'grouin-save-v1',
-      partialize: (s) => ({
-        owned: s.owned,
-        glands: s.glands,
-        stock: s.stock,
-        openedCount: s.openedCount,
-        nextDailyGrantAt: s.nextDailyGrantAt,
-        cardBack: s.cardBack,
-        unlockedBacks: s.unlockedBacks,
-        gridCols: s.gridCols,
-        animPref: s.animPref,
-        soundOn: s.soundOn,
-      }),
-      // Les saves antérieurs au système de dos n'ont ni `cardBack` ni
-      // `unlockedBacks` : on les remet sur le dos par défaut plutôt que sur
-      // `undefined`, sinon la face cachée ne rend plus rien.
+      partialize: (s) => ({ ...persistedSlice(s), account: s.account }),
       merge: (persisted, current) => {
-        const p = (persisted ?? {}) as Partial<PersistedState>;
-        const unlocked = p.unlockedBacks?.length ? p.unlockedBacks : [DEFAULT_CARD_BACK];
-        const back = p.cardBack && unlocked.includes(p.cardBack) ? p.cardBack : DEFAULT_CARD_BACK;
-        return { ...current, ...p, unlockedBacks: unlocked, cardBack: back, gridCols: p.gridCols ?? 3, animPref: p.animPref ?? 'on', soundOn: p.soundOn ?? true };
+        const p = (persisted ?? {}) as Partial<PersistedState> & { account?: string | null };
+        const merged = mergeServer(current, p);
+        return { ...current, ...merged, account: p.account ?? null };
       },
     },
   ),
 );
+
+/** Pousse l'état persistable au compte, avec un léger débounce — évite un
+ *  appel réseau à chaque frame pendant, par ex., le glissement d'une carte
+ *  (`dragX` change à chaque pointermove, mais n'est pas un champ persisté :
+ *  seul un changement de `persistedSlice` déclenche un envoi). */
+let lastPushed = '';
+useStore.subscribe((state) => {
+  if (!state.account) return;
+  const snap = JSON.stringify(persistedSlice(state));
+  if (snap === lastPushed) return;
+  lastPushed = snap;
+  clearTimeout(syncTimer);
+  syncTimer = setTimeout(() => {
+    apiPushState(JSON.parse(snap)).catch(() => {});
+  }, SYNC_DEBOUNCE_MS);
+});
 
 export function activePack(state: Pick<Store, 'activePack'>) {
   return packByKey(state.activePack);
@@ -402,7 +494,6 @@ export function activePack(state: Pick<Store, 'activePack'>) {
 
 export const PACK_LIST = PACKS;
 
-/** Le skin de dos actif, résolu — pratique pour les écrans. */
 export function activeCardBack(state: Pick<Store, 'cardBack'>) {
   return cardBackByKey(state.cardBack);
 }
