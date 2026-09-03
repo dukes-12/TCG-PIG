@@ -1,12 +1,15 @@
 import type { PointerEvent as ReactPointerEvent } from 'react';
 import { useNavigate } from 'react-router-dom';
+import CardBack from '../components/CardBack';
 import PackPicker from '../components/PackPicker';
 import PigCard from '../components/PigCard';
+import RarePullFx from '../components/RarePullFx';
 import Snout from '../components/Snout';
 import { CARDS, RARITIES, packByKey, rarityById } from '../data/catalog';
 import { RARITY_VISUALS } from '../data/rarityVisuals';
 import { PACK_VISUALS } from '../data/packVisuals';
 import { usePrefersReducedMotion } from '../lib/usePrefersReducedMotion';
+import { useRevealed } from '../lib/useRevealed';
 import { useStore } from '../state/store';
 import type { RarityId } from '../types';
 
@@ -39,7 +42,17 @@ const ghostBtnStyle = {
 };
 
 /** Ported from the "OUVERTURE" block in Grouin - TCG Cochons.dc.html —
- *  the idle → tearing → reveal → summary state machine. */
+ *  the idle → tearing → reveal → summary state machine.
+ *
+ *  Deux points importants sur la révélation :
+ *
+ *  - La face cachée est le **dos choisi par le joueur** (`CardBack`), plus
+ *    un dos en dur.
+ *  - Tous les effets de rareté (halo coloré, gerbe d'éclats, sursaut) sont
+ *    branchés sur `revealed`, pas sur `flipped`. `flipped` passe à `true` au
+ *    *début* du flip, qui dure 620 ms : les effets se jouaient donc pendant
+ *    que le dos était encore face au joueur, ce qui spoilait la rareté avant
+ *    même de voir la carte. */
 export default function OpenScreen() {
   const activePackKey = useStore((s) => s.activePack);
   const packState = useStore((s) => s.packState);
@@ -51,7 +64,7 @@ export default function OpenScreen() {
   const dragging = useStore((s) => s.dragging);
   const isNew = useStore((s) => s.isNew);
   const owned = useStore((s) => s.owned);
-  const cardStyle = useStore((s) => s.cardStyle);
+  const cardBack = useStore((s) => s.cardBack);
   const startTear = useStore((s) => s.startTear);
   const nextReveal = useStore((s) => s.nextReveal);
   const dragStart = useStore((s) => s.dragStart);
@@ -60,6 +73,9 @@ export default function OpenScreen() {
   const openDetail = useStore((s) => s.openDetail);
   const holoAnim = !usePrefersReducedMotion();
   const navigate = useNavigate();
+
+  // true seulement quand la carte est réellement face visible.
+  const revealed = useRevealed(flipped);
 
   const pack = packByKey(activePackKey);
   const visual = PACK_VISUALS[pack.key];
@@ -116,7 +132,7 @@ export default function OpenScreen() {
                 }}
               />
               <Snout width={98} height={80} nostrilWidth={15} nostrilHeight={24} gap={15} boxShadow="inset 0 -7px 14px rgba(140,73,26,.35)" />
-              <div style={{ fontFamily: 'var(--font-heading)', fontSize: 27, color: '#fff6ef', marginTop: 18, textAlign: 'center', lineHeight: 1 }}>GROUIN</div>
+              <div style={{ fontFamily: 'var(--font-heading)', fontSize: 27, color: '#fff6ef', marginTop: 18, textAlign: 'center', lineHeight: 1 }}>CHIPO</div>
               <div style={{ fontSize: 9, letterSpacing: '.26em', textTransform: 'uppercase', color: '#ffd2b4', marginTop: 9 }}>{pack.subtitle}</div>
               <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, height: 46, background: 'linear-gradient(0deg,rgba(64,35,16,.45),transparent)' }} />
             </div>
@@ -177,6 +193,7 @@ export default function OpenScreen() {
         const onDown = (e: ReactPointerEvent) => dragStart(e.clientX);
         const onMove = (e: ReactPointerEvent) => dragMove(e.clientX);
         const onUp = () => dragEnd();
+        const isRare = card.rarity >= 4;
         return (
           <div
             onClick={nextReveal}
@@ -196,6 +213,8 @@ export default function OpenScreen() {
               userSelect: 'none',
             }}
           >
+            {/* Halo de rareté — sur `revealed`, sinon il colore le dos et
+                annonce la rareté avant le retournement. */}
             <div
               style={{
                 position: 'absolute',
@@ -203,8 +222,8 @@ export default function OpenScreen() {
                 height: 320,
                 borderRadius: '50%',
                 background: `radial-gradient(circle,${glow},transparent 68%)`,
-                animation: flipped && card.rarity >= 3 ? 'pigGlow 2.6s ease-in-out infinite' : 'none',
-                opacity: flipped ? (card.rarity >= 3 ? 1 : 0.35) : 0,
+                animation: revealed && card.rarity >= 3 ? 'pigGlow 2.6s ease-in-out infinite' : 'none',
+                opacity: revealed ? (card.rarity >= 3 ? 1 : 0.35) : 0,
                 transition: 'opacity .5s ease',
                 pointerEvents: 'none',
               }}
@@ -225,6 +244,7 @@ export default function OpenScreen() {
               ))}
             </div>
             <div
+              key={pullIndex}
               style={{
                 width: 238,
                 height: 332,
@@ -233,6 +253,7 @@ export default function OpenScreen() {
                 transition: dragging ? 'none' : 'transform .3s ease',
                 position: 'relative',
                 zIndex: 2,
+                animation: revealed && isRare && holoAnim ? 'pigRareKick .5s ease-out both' : undefined,
               }}
             >
               <div
@@ -251,35 +272,31 @@ export default function OpenScreen() {
                     inset: 0,
                     backfaceVisibility: 'hidden',
                     transform: 'rotateY(180deg)',
-                    borderRadius: 26,
-                    background: 'linear-gradient(160deg,#8c491a,#402310)',
-                    boxShadow: 'var(--shadow-lg)',
-                    display: 'flex',
-                    flexDirection: 'column',
-                    alignItems: 'center',
-                    justifyContent: 'center',
                   }}
                 >
-                  <Snout width={64} height={52} nostrilWidth={10} nostrilHeight={16} gap={10} boxShadow="inset 0 -5px 10px rgba(140,73,26,.35)" />
-                  <div style={{ fontFamily: 'var(--font-heading)', fontSize: 20, color: '#ffe1d0', marginTop: 14 }}>GROUIN</div>
+                  <CardBack skin={cardBack} width={238} height={332} style={{ boxShadow: 'var(--shadow-lg)' }} />
                 </div>
                 <div style={{ position: 'absolute', inset: 0, backfaceVisibility: 'hidden' }}>
-                  <PigCard card={card} big forceOwned style={cardStyle} holoAnim={holoAnim} />
+                  <PigCard card={card} big forceOwned holoAnim={holoAnim} />
                 </div>
               </div>
             </div>
+
+            {/* Gerbe d'éclats — remontée à chaque carte grâce à la key. */}
+            <RarePullFx key={`fx-${pullIndex}`} rarity={card.rarity} active={revealed} enabled={holoAnim} />
+
             <div
               style={{
                 marginTop: 22,
                 fontFamily: 'var(--font-heading)',
                 fontSize: 15,
-                opacity: flipped ? 1 : 0.45,
+                opacity: revealed ? 1 : 0.45,
                 transition: 'opacity .3s ease',
                 position: 'relative',
                 zIndex: 2,
               }}
             >
-              {flipped ? `${rarity.name} · ${card.type}` : `Carte ${pullIndex + 1} sur ${pull.length}`}
+              {revealed ? `${rarity.name} · ${card.type}` : `Carte ${pullIndex + 1} sur ${pull.length}`}
             </div>
             <div style={{ fontSize: 11, opacity: 0.4, marginTop: 7 }}>
               {flipped ? (pullIndex < pull.length - 1 ? 'Glisse ou touche pour la suivante' : 'Glisse pour voir le butin') : 'Touche pour retourner'}
@@ -297,7 +314,7 @@ export default function OpenScreen() {
             <p style={{ fontSize: 13, opacity: 0.6, margin: '10px 0 18px' }}>
               {pull.length} cartes · {newCount} nouvelle{newCount !== 1 ? 's' : ''} · meilleure : {rarityById(bestRarity).name}
             </p>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 10 }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,minmax(0,1fr))', gap: 10 }}>
               {pull.map((card, i) => {
                 const count = owned[card.id] || 0;
                 return (
@@ -305,15 +322,17 @@ export default function OpenScreen() {
                     key={`${card.id}-${i}`}
                     className="pressable"
                     onClick={() => openDetail(card.id)}
-                    style={{ position: 'relative', aspectRatio: '0.72', cursor: 'pointer' }}
+                    style={{ position: 'relative', aspectRatio: '0.72', cursor: 'pointer', minWidth: 0 }}
                   >
-                    <PigCard card={card} style={cardStyle} holoAnim={holoAnim} ownedCount={count} />
+                    <PigCard card={card} holoAnim={holoAnim} ownedCount={count} />
+                    {/* Badges posés *dans* la carte : en débord ils étaient
+                        rognés par overflow-x: hidden sur .screen. */}
                     {isNew[card.id] && (
                       <span
                         style={{
                           position: 'absolute',
-                          top: -6,
-                          left: -4,
+                          top: 5,
+                          left: 5,
                           background: 'var(--color-accent)',
                           color: 'var(--color-bg)',
                           fontSize: 7.5,
@@ -331,13 +350,13 @@ export default function OpenScreen() {
                       <span
                         style={{
                           position: 'absolute',
-                          top: -5,
-                          right: -4,
+                          top: 5,
+                          right: 5,
                           background: 'var(--color-neutral-900)',
                           color: 'var(--color-bg)',
                           fontSize: 9.5,
                           fontWeight: 700,
-                          padding: '2px 7px',
+                          padding: '2px 6px',
                           borderRadius: 999,
                           boxShadow: 'var(--shadow-sm)',
                         }}

@@ -5,21 +5,27 @@ import { CARDS, RARITIES, TOTAL_CARDS, TYPES } from '../data/catalog';
 import { RARITY_VISUALS } from '../data/rarityVisuals';
 import { usePrefersReducedMotion } from '../lib/usePrefersReducedMotion';
 import { useStore } from '../state/store';
-import type { Card, RarityId } from '../types';
+import type { Card, GridCols, RarityId } from '../types';
 
-/** Ported from the "COLLECTION" block in Grouin - TCG Cochons.dc.html. */
+/** Ported from the "COLLECTION" block in Grouin - TCG Cochons.dc.html.
+ *  Deux ajouts par rapport au portage initial : la densité de grille est
+ *  réglable (2, 3 ou 4 cartes de front, persistée), et le badge de doublon
+ *  est posé *dans* la carte — en débord il était rogné par
+ *  `overflow-x: hidden` sur `.screen`, ce qui donnait des cartes visuellement
+ *  tronquées sur la colonne de droite. */
 export default function CollectionScreen() {
   const owned = useStore((s) => s.owned);
-  const cardStyle = useStore((s) => s.cardStyle);
   const sort = useStore((s) => s.sort);
   const rarityFilter = useStore((s) => s.rarityFilter);
   const typeFilter = useStore((s) => s.typeFilter);
   const query = useStore((s) => s.query);
   const ownedOnly = useStore((s) => s.ownedOnly);
+  const gridCols = useStore((s) => s.gridCols);
   const setSort = useStore((s) => s.setSort);
   const setRarityFilter = useStore((s) => s.setRarityFilter);
   const setTypeFilter = useStore((s) => s.setTypeFilter);
   const setQuery = useStore((s) => s.setQuery);
+  const setGridCols = useStore((s) => s.setGridCols);
   const toggleOwnedOnly = useStore((s) => s.toggleOwnedOnly);
   const openDetail = useStore((s) => s.openDetail);
   const holoAnim = !usePrefersReducedMotion();
@@ -43,6 +49,10 @@ export default function CollectionScreen() {
     if (sort === 'nb') l.sort((a, b) => (owned[b.id] || 0) - (owned[a.id] || 0) || b.rarity - a.rarity);
     return l;
   }, [query, rarityFilter, typeFilter, ownedOnly, owned, sort]);
+
+  // En 4 de front la carte fait ~90 px : on resserre la gouttière pour ne pas
+  // rogner davantage, et on garde le grand format pour 2 de front.
+  const gap = gridCols === 4 ? 7 : gridCols === 3 ? 10 : 14;
 
   return (
     <div className="screen">
@@ -73,7 +83,7 @@ export default function CollectionScreen() {
           return (
             <div
               key={r.id}
-              style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4, padding: '9px 2px', borderRadius: 18, background: 'var(--color-surface)' }}
+              style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4, padding: '9px 2px', borderRadius: 18, background: 'var(--color-surface)' }}
             >
               <i style={{ display: 'block', width: 7, height: 7, borderRadius: '50%', background: RARITY_VISUALS[r.id as RarityId].ink }} />
               <span style={{ fontSize: 7.2, letterSpacing: '.02em', textTransform: 'uppercase', opacity: 0.55, fontWeight: 700, textAlign: 'center', lineHeight: 1.1, whiteSpace: 'nowrap' }}>
@@ -93,7 +103,7 @@ export default function CollectionScreen() {
           placeholder="Chercher un cochon…"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
-          style={{ flex: 1, background: 'var(--color-neutral-100)' }}
+          style={{ flex: 1, minWidth: 0, background: 'var(--color-neutral-100)' }}
         />
         <button
           className="pressable"
@@ -129,6 +139,13 @@ export default function CollectionScreen() {
           ))}
         </div>
 
+        <div className="section-label" style={{ margin: '13px 0 7px' }}>Affichage</div>
+        <div className="chip-row">
+          {([2, 3, 4] as GridCols[]).map((n) => (
+            <Chip key={n} label={`${n} de front`} active={gridCols === n} onClick={() => setGridCols(n)} />
+          ))}
+        </div>
+
         <div className="section-label" style={{ margin: '13px 0 7px' }}>Rareté</div>
         <div className="chip-row">
           <Chip label="Toutes" active={rarityFilter === 'all'} onClick={() => setRarityFilter('all')} />
@@ -146,7 +163,14 @@ export default function CollectionScreen() {
         </div>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 10, padding: '20px 18px 0' }}>
+      <div
+        style={{
+          display: 'grid',
+          gridTemplateColumns: `repeat(${gridCols},minmax(0,1fr))`,
+          gap,
+          padding: '20px 18px 0',
+        }}
+      >
         {list.map((card: Card) => {
           const count = owned[card.id] || 0;
           return (
@@ -154,20 +178,22 @@ export default function CollectionScreen() {
               key={card.id}
               className="pressable"
               onClick={() => openDetail(card.id)}
-              style={{ position: 'relative', aspectRatio: '0.72', cursor: 'pointer' }}
+              style={{ position: 'relative', aspectRatio: '0.72', cursor: 'pointer', minWidth: 0 }}
             >
-              <PigCard card={card} style={cardStyle} holoAnim={holoAnim} ownedCount={count} />
+              <PigCard card={card} holoAnim={holoAnim} ownedCount={count} />
               {count > 1 && (
                 <span
                   style={{
+                    // Badge *à l'intérieur* de la carte : en débord (top:-5,
+                    // right:-4) il se faisait rogner par overflow-x: hidden.
                     position: 'absolute',
-                    top: -5,
-                    right: -4,
+                    top: 5,
+                    right: 5,
                     background: 'var(--color-neutral-900)',
                     color: 'var(--color-bg)',
-                    fontSize: 9.5,
+                    fontSize: gridCols === 4 ? 8.5 : 9.5,
                     fontWeight: 700,
-                    padding: '2px 7px',
+                    padding: '2px 6px',
                     borderRadius: 999,
                     boxShadow: 'var(--shadow-sm)',
                   }}

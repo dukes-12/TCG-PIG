@@ -53,6 +53,9 @@ export interface CardCatalog {
  *  défaut, les trois autres s'achètent en glands. */
 export type CardBackKey = 'sceau' | 'souille' | 'deco' | 'nuit';
 
+/** Nombre de cartes par ligne dans la collection. */
+export type GridCols = 2 | 3 | 4;
+
 export type SortKey = 'rarete' | 'nom' | 'type' | 'nb';
 
 export type TabKey = 'collection' | 'shop' | 'open' | 'dupes' | 'profile';

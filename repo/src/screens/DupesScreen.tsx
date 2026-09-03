@@ -4,11 +4,11 @@ import { CARDS, rarityById } from '../data/catalog';
 import { usePrefersReducedMotion } from '../lib/usePrefersReducedMotion';
 import { useStore } from '../state/store';
 
-/** Ported from the "DOUBLONS" block in Grouin - TCG Cochons.dc.html. */
+/** Ported from the "DOUBLONS" block in Grouin - TCG Cochons.dc.html.
+ *  Une seule direction visuelle (Collector foil) : plus de prop `style`. */
 export default function DupesScreen() {
   const owned = useStore((s) => s.owned);
   const glands = useStore((s) => s.glands);
-  const cardStyle = useStore((s) => s.cardStyle);
   const openDetail = useStore((s) => s.openDetail);
   const recycle = useStore((s) => s.recycle);
   const holoAnim = !usePrefersReducedMotion();
@@ -36,7 +36,7 @@ export default function DupesScreen() {
             return (
               <div key={card.id} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 12px', borderRadius: 26, background: 'var(--color-surface)' }}>
                 <div className="pressable" onClick={() => openDetail(card.id)} style={{ width: 60, height: 84, flex: 'none', cursor: 'pointer' }}>
-                  <PigCard card={card} style={cardStyle} holoAnim={holoAnim} ownedCount={n} />
+                  <PigCard card={card} holoAnim={holoAnim} ownedCount={n} />
                 </div>
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={{ fontFamily: 'var(--font-heading)', fontSize: 15, lineHeight: 1.15 }}>{card.name}</div>
