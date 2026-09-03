@@ -1,7 +1,6 @@
 /** Tab bar icons — Lucide `layout-grid` / `shopping-bag` / `package` /
- *  `copy` / `user` at stroke-width 2.75, inlined verbatim from the
- *  handoff's Grouin - TCG Cochons.dc.html so no extra icon dependency
- *  is needed. */
+ *  `copy` / `repeat` / `user` at stroke-width 2.75, inlined verbatim (pas de
+ *  dépendance d'icônes). */
 
 const common = {
   width: 20,
@@ -50,6 +49,17 @@ export function DupesIcon() {
     <svg {...common}>
       <rect x="9" y="9" width="13" height="13" rx="2.5" />
       <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+    </svg>
+  );
+}
+
+export function TradeIcon() {
+  return (
+    <svg {...common}>
+      <path d="m17 2 4 4-4 4" />
+      <path d="M3 11v-1a4 4 0 0 1 4-4h14" />
+      <path d="m7 22-4-4 4-4" />
+      <path d="M21 13v1a4 4 0 0 1-4 4H3" />
     </svg>
   );
 }
