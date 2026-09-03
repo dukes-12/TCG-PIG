@@ -1,5 +1,6 @@
 import { useNavigate } from 'react-router-dom';
 import DailyBoosterBanner from '../components/DailyBoosterBanner';
+import FreeBoosterBanner from '../components/FreeBoosterBanner';
 import GlandsPill from '../components/GlandsPill';
 import Snout from '../components/Snout';
 import { PACKS } from '../data/catalog';
@@ -17,7 +18,9 @@ const smallBtn = (bg: string, col: string) => ({
   color: col,
 });
 
-/** Ported from the "BOUTIQUE" block in Grouin - TCG Cochons.dc.html. */
+/** Ported from the "BOUTIQUE" block in Grouin - TCG Cochons.dc.html.
+ *  Deux bandeaux de sachets gratuits, cumulatifs : le versement quotidien
+ *  (+3, directement dans le stock) et le sac horaire (réserve à part). */
 export default function ShopScreen() {
   const glands = useStore((s) => s.glands);
   const stock = useStore((s) => s.stock);
@@ -36,8 +39,9 @@ export default function ShopScreen() {
         Les glands se gagnent en recyclant tes doublons.
       </p>
 
-      <div style={{ padding: '20px 18px 0' }}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 10, padding: '20px 18px 0' }}>
         <DailyBoosterBanner />
+        <FreeBoosterBanner />
       </div>
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: 12, padding: '13px 18px 0' }}>
