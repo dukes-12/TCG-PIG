@@ -11,16 +11,18 @@ import ShopScreen from './screens/ShopScreen';
 import { useStore } from './state/store';
 
 export default function App() {
-  // Free-booster clock: catch up once on load (covers time elapsed while the
-  // app was closed), then recheck every second so a stacked slot appears
-  // live if the app is left open across the hour mark. Cheap — it only
-  // touches the store (and thus localStorage) when a grant actually happens.
-  const reconcileFreeBoosters = useStore((s) => s.reconcileFreeBoosters);
+  // Versement quotidien : on rattrape une fois au chargement (ce qui couvre
+  // le temps passé app fermée), puis on revérifie chaque minute pour que les
+  // sachets tombent en direct si l'app reste ouverte au passage de minuit.
+  // Une minute suffit — inutile de sonder chaque seconde pour une échéance
+  // quotidienne. Le store n'est touché (et localStorage écrit) que lorsqu'un
+  // versement a réellement lieu.
+  const reconcileDailyGrant = useStore((s) => s.reconcileDailyGrant);
   useEffect(() => {
-    reconcileFreeBoosters();
-    const id = setInterval(reconcileFreeBoosters, 1000);
+    reconcileDailyGrant();
+    const id = setInterval(reconcileDailyGrant, 60 * 1000);
     return () => clearInterval(id);
-  }, [reconcileFreeBoosters]);
+  }, [reconcileDailyGrant]);
 
   return (
     <div className="app-shell">

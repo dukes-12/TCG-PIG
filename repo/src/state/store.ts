@@ -3,6 +3,7 @@ import { persist } from 'zustand/middleware';
 import { CARDS, PACKS, packByKey, rarityById } from '../data/catalog';
 import { CARD_BACKS, DEFAULT_CARD_BACK, cardBackByKey } from '../data/cardBacks';
 import { openPack } from '../lib/draw';
+import { playSfx, revealSfx, setSfxEnabled } from '../lib/sfx';
 import type {
   AnimationPref,
   Card,
@@ -26,21 +27,28 @@ const FLIP_TRANSITION_MS = 620; // matches OpenScreen's flipInner CSS transition
 const TOAST_MS = 1700;
 const SWIPE_THRESHOLD = 70;
 
-/** One free `basic` pack every hour, stacking up to 3 — the timer pauses
- *  once 3 are stacked and resumes as soon as one is opened. Timestamp-based
- *  (not a running counter) so it catches up correctly across app restarts,
- *  including several elapsed hours at once, capped at the max either way. */
-export const FREE_BOOSTER_INTERVAL_MS = 60 * 60 * 1000;
-export const FREE_BOOSTER_MAX = 3;
-const FREE_BOOSTER_PACK: PackKey = 'basic';
+/** Trois sachets offerts chaque jour, versés directement dans la poche.
+ *
+ *  L'horloge est un horodatage (`nextDailyGrantAt`), pas un compteur qui
+ *  tourne : au lancement on rattrape tous les jours écoulés d'un coup, ce qui
+ *  marche même si l'app est restée fermée une semaine. Le rattrapage est
+ *  plafonné à `DAILY_GRANT_CATCHUP_MAX` jours — revenir après trois mois ne
+ *  doit pas déverser 270 sachets. */
+export const DAILY_GRANT_INTERVAL_MS = 24 * 60 * 60 * 1000;
+export const DAILY_GRANT_AMOUNT = 3;
+export const DAILY_GRANT_CATCHUP_MAX = 7;
+const DAILY_GRANT_PACK: PackKey = 'basic';
+
+/** Sachets offerts au tout premier lancement. */
+export const STARTER_PACKS = 5;
 
 interface PersistedState {
   owned: Record<number, number>;
   glands: number;
   stock: Record<PackKey, number>;
   openedCount: number;
-  freeBoosters: number;
-  nextFreeBoosterAt: number | null;
+  /** Prochain versement quotidien. `null` = jamais initialisé (premier lancement). */
+  nextDailyGrantAt: number | null;
   /** Dos de carte actif. */
   cardBack: CardBackKey;
   /** Dos débloqués — `sceau` l'est d'office. */
@@ -49,6 +57,8 @@ interface PersistedState {
   gridCols: GridCols;
   /** Animations décoratives : auto (système) / on / off. */
   animPref: AnimationPref;
+  /** Effets sonores (synthétisés, voir lib/sfx.ts). */
+  soundOn: boolean;
 }
 
 interface UiState {
@@ -80,13 +90,13 @@ interface Actions {
   setCardBack: (key: CardBackKey) => void;
   setGridCols: (n: GridCols) => void;
   setAnimPref: (p: AnimationPref) => void;
+  setSoundOn: (on: boolean) => void;
   buyCardBack: (key: CardBackKey) => void;
 
   buyPack: (key: PackKey) => void;
   selectPackForOpening: (key: PackKey) => void;
   startTear: () => void;
-  reconcileFreeBoosters: () => void;
-  claimFreeBooster: () => void;
+  reconcileDailyGrant: () => void;
   nextReveal: () => void;
   dragStart: (clientX: number) => void;
   dragMove: (clientX: number) => void;
@@ -103,12 +113,12 @@ export type Store = PersistedState & UiState & Actions;
 let tearTimer: ReturnType<typeof setTimeout> | undefined;
 let advanceTimer: ReturnType<typeof setTimeout> | undefined;
 let toastTimer: ReturnType<typeof setTimeout> | undefined;
+let revealTimer: ReturnType<typeof setTimeout> | undefined;
 let dragStartX = 0;
 
 /** Draws the pull, credits the collection, and kicks off the tear→reveal
- *  transition. Shared by `startTear` (stock-backed) and `claimFreeBooster`
- *  (free-boosters-pool-backed) — the only difference between the two is
- *  which counter they check and decrement before calling this. */
+ *  transition. Appelé par `startTear`, qui vérifie et décrémente la poche
+ *  avant de déléguer ici. */
 function beginTear(get: () => Store, set: (partial: Partial<Store>) => void, pack: Pack) {
   const s = get();
   const pull = openPack(pack, PACK_SIZE);
@@ -129,6 +139,7 @@ function beginTear(get: () => Store, set: (partial: Partial<Store>) => void, pac
     openedCount: s.openedCount + 1,
     dragX: 0,
   });
+  playSfx('tear');
   clearTimeout(tearTimer);
   clearTimeout(advanceTimer);
   // The first card lands face-down (flipped: false, set above) and stays
@@ -143,14 +154,14 @@ export const useStore = create<Store>()(
       // ── persisted ──
       owned: {},
       glands: 0,
-      stock: { basic: 3, foire: 0, doree: 0 },
+      stock: { basic: STARTER_PACKS, foire: 0, doree: 0 },
       openedCount: 0,
-      freeBoosters: 0,
-      nextFreeBoosterAt: null,
+      nextDailyGrantAt: null,
       cardBack: DEFAULT_CARD_BACK,
       unlockedBacks: [DEFAULT_CARD_BACK],
       gridCols: 3,
       animPref: 'on',
+      soundOn: true,
 
       // ── ui / session ──
       sort: 'rarete',
@@ -178,6 +189,10 @@ export const useStore = create<Store>()(
       openDetail: (id) => set({ detail: id }),
       setGridCols: (gridCols) => set({ gridCols }),
       setAnimPref: (animPref) => set({ animPref }),
+      setSoundOn: (soundOn) => {
+        setSfxEnabled(soundOn);
+        set({ soundOn });
+      },
       closeDetail: () => set({ detail: null }),
 
       /** Ne change le dos que s'il est débloqué (garde-fou : un save trafiqué
@@ -205,6 +220,7 @@ export const useStore = create<Store>()(
           unlockedBacks: [...s.unlockedBacks, key],
           cardBack: key,
         });
+        playSfx('coin');
         s.say(`Dos « ${skin.name} » débloqué`);
       },
 
@@ -220,6 +236,7 @@ export const useStore = create<Store>()(
           stock: { ...s.stock, [key]: (s.stock[key] || 0) + 1 },
           activePack: key,
         });
+        playSfx('coin');
         s.say(`${p.name} ajouté·e`);
       },
 
@@ -236,38 +253,34 @@ export const useStore = create<Store>()(
         beginTear(get, set, p);
       },
 
-      reconcileFreeBoosters: () => {
+      reconcileDailyGrant: () => {
         const s = get();
-        if (s.freeBoosters >= FREE_BOOSTER_MAX) {
-          if (s.nextFreeBoosterAt !== null) set({ nextFreeBoosterAt: null });
-          return;
-        }
         const now = Date.now();
-        if (s.nextFreeBoosterAt == null) {
-          // Not running (fresh save, or just resumed after being capped) — start the clock.
-          set({ nextFreeBoosterAt: now + FREE_BOOSTER_INTERVAL_MS });
+
+        // Premier lancement : la poche a déjà ses STARTER_PACKS, on amorce
+        // simplement l'horloge sans rien verser.
+        if (s.nextDailyGrantAt == null) {
+          set({ nextDailyGrantAt: now + DAILY_GRANT_INTERVAL_MS });
           return;
         }
-        if (now < s.nextFreeBoosterAt) return;
-        let freeBoosters = s.freeBoosters;
-        let nextAt = s.nextFreeBoosterAt;
-        while (freeBoosters < FREE_BOOSTER_MAX && now >= nextAt) {
-          freeBoosters += 1;
-          nextAt += FREE_BOOSTER_INTERVAL_MS;
-        }
-        set({ freeBoosters, nextFreeBoosterAt: freeBoosters >= FREE_BOOSTER_MAX ? null : nextAt });
-      },
+        if (now < s.nextDailyGrantAt) return;
 
-      claimFreeBooster: () => {
-        const s = get();
-        if (s.freeBoosters <= 0) return;
+        let days = 0;
+        let nextAt = s.nextDailyGrantAt;
+        while (now >= nextAt && days < DAILY_GRANT_CATCHUP_MAX) {
+          days += 1;
+          nextAt += DAILY_GRANT_INTERVAL_MS;
+        }
+        // Absence longue : on repart d'un cycle plein à partir de maintenant
+        // plutôt que de traîner une dette de versements.
+        if (now >= nextAt) nextAt = now + DAILY_GRANT_INTERVAL_MS;
+
+        const granted = days * DAILY_GRANT_AMOUNT;
         set({
-          freeBoosters: s.freeBoosters - 1,
-          // Resume the clock if it had stopped (we were sitting at the cap);
-          // if it's still running, leave it exactly as-is.
-          nextFreeBoosterAt: s.nextFreeBoosterAt ?? Date.now() + FREE_BOOSTER_INTERVAL_MS,
+          stock: { ...s.stock, [DAILY_GRANT_PACK]: (s.stock[DAILY_GRANT_PACK] || 0) + granted },
+          nextDailyGrantAt: nextAt,
         });
-        beginTear(get, set, packByKey(FREE_BOOSTER_PACK));
+        s.say(`+${granted} sachet${granted > 1 ? 's' : ''} du jour`);
       },
 
       nextReveal: () => {
@@ -275,6 +288,12 @@ export const useStore = create<Store>()(
         if (s.packState !== 'reveal') return;
         if (!s.flipped) {
           set({ flipped: true });
+          playSfx('flip');
+          // La fanfare arrive quand la carte est réellement face visible —
+          // même décalage que le hook useRevealed, sinon elle annonce la
+          // rareté pendant que le dos est encore face au joueur.
+          clearTimeout(revealTimer);
+          revealTimer = setTimeout(() => playSfx(revealSfx(s.pull[s.pullIndex]?.rarity ?? 1)), 520);
           return;
         }
         if (s.pullIndex < s.pull.length - 1) {
@@ -285,6 +304,7 @@ export const useStore = create<Store>()(
           // still facing the viewer, spoiling the reveal. It then stays
           // face-down (no auto-flip) until tapped/swiped again.
           set({ flipped: false, dragX: 0 });
+          playSfx('flip');
           clearTimeout(advanceTimer);
           advanceTimer = setTimeout(() => {
             set({ pullIndex: get().pullIndex + 1 });
@@ -321,6 +341,7 @@ export const useStore = create<Store>()(
         if (!card || count < 2) return;
         const gain = rarityById(card.rarity).recycleValue * (count - 1);
         set({ owned: { ...s.owned, [cardId]: 1 }, glands: s.glands + gain });
+        playSfx('recycle');
         s.say(`+${gain} glands`);
       },
 
@@ -337,12 +358,12 @@ export const useStore = create<Store>()(
         glands: s.glands,
         stock: s.stock,
         openedCount: s.openedCount,
-        freeBoosters: s.freeBoosters,
-        nextFreeBoosterAt: s.nextFreeBoosterAt,
+        nextDailyGrantAt: s.nextDailyGrantAt,
         cardBack: s.cardBack,
         unlockedBacks: s.unlockedBacks,
         gridCols: s.gridCols,
         animPref: s.animPref,
+        soundOn: s.soundOn,
       }),
       // Les saves antérieurs au système de dos n'ont ni `cardBack` ni
       // `unlockedBacks` : on les remet sur le dos par défaut plutôt que sur
@@ -351,7 +372,7 @@ export const useStore = create<Store>()(
         const p = (persisted ?? {}) as Partial<PersistedState>;
         const unlocked = p.unlockedBacks?.length ? p.unlockedBacks : [DEFAULT_CARD_BACK];
         const back = p.cardBack && unlocked.includes(p.cardBack) ? p.cardBack : DEFAULT_CARD_BACK;
-        return { ...current, ...p, unlockedBacks: unlocked, cardBack: back, gridCols: p.gridCols ?? 3, animPref: p.animPref ?? 'on' };
+        return { ...current, ...p, unlockedBacks: unlocked, cardBack: back, gridCols: p.gridCols ?? 3, animPref: p.animPref ?? 'on', soundOn: p.soundOn ?? true };
       },
     },
   ),

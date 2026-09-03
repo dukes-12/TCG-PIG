@@ -1,6 +1,7 @@
 import { useMemo } from 'react';
 import AnimationPicker from '../components/AnimationPicker';
 import CardBackPicker from '../components/CardBackPicker';
+import SoundToggle from '../components/SoundToggle';
 import PigCard from '../components/PigCard';
 import Snout from '../components/Snout';
 import { CARDS, RARITIES, TOTAL_CARDS, rarityById } from '../data/catalog';
@@ -63,6 +64,8 @@ export default function ProfileScreen() {
       <CardBackPicker />
 
       <AnimationPicker />
+
+      <SoundToggle />
 
       <div className="screen-inner" style={{ paddingTop: 20 }}>
         <div className="section-label" style={{ marginBottom: 11 }}>Complétion par rareté</div>
