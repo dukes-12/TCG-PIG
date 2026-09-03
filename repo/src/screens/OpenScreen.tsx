@@ -261,6 +261,34 @@ export default function OpenScreen() {
                 />
               ))}
             </div>
+            {/* Hauteur fixe toujours présente : la pastille elle-même
+                n'apparaît qu'au retournement (`revealed`), mais réserver
+                l'espace tout du long évite que la carte ne saute d'une
+                position à l'autre au moment où elle apparaît/disparaît. */}
+            <div style={{ height: 30, marginBottom: 12, position: 'relative', zIndex: 2, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              {revealed && (
+                <div
+                  key={`newbadge-${pullIndex}`}
+                  style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: 5,
+                    padding: '7px 15px',
+                    borderRadius: 999,
+                    fontFamily: 'var(--font-heading)',
+                    fontSize: 12,
+                    letterSpacing: '.03em',
+                    animation: 'pigPop .4s ease both',
+                    ...(isNew[card.id]
+                      ? { background: 'var(--color-accent)', color: 'var(--color-bg)', boxShadow: '0 4px 16px rgba(220,120,60,.4)' }
+                      : { background: 'var(--color-neutral-300)', color: 'var(--color-neutral-700)' }),
+                  }}
+                >
+                  {isNew[card.id] ? '✦ Nouvelle carte' : 'Doublon'}
+                </div>
+              )}
+            </div>
+
             <div
               key={pullIndex}
               style={{
