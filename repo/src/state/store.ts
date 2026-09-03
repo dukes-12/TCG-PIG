@@ -1,9 +1,11 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { CARDS, PACKS, packByKey, rarityById } from '../data/catalog';
+import { CARD_BACKS, DEFAULT_CARD_BACK, cardBackByKey } from '../data/cardBacks';
 import { openPack } from '../lib/draw';
 import type {
   Card,
+  CardBackKey,
   CardStyle,
   CardType,
   Pack,
@@ -39,6 +41,10 @@ interface PersistedState {
   cardStyle: CardStyle;
   freeBoosters: number;
   nextFreeBoosterAt: number | null;
+  /** Dos de carte actif. */
+  cardBack: CardBackKey;
+  /** Dos débloqués — `sceau` l'est d'office. */
+  unlockedBacks: CardBackKey[];
 }
 
 interface UiState {
@@ -68,6 +74,8 @@ interface Actions {
   openDetail: (id: number) => void;
   closeDetail: () => void;
   setCardStyle: (style: CardStyle) => void;
+  setCardBack: (key: CardBackKey) => void;
+  buyCardBack: (key: CardBackKey) => void;
 
   buyPack: (key: PackKey) => void;
   selectPackForOpening: (key: PackKey) => void;
@@ -135,6 +143,8 @@ export const useStore = create<Store>()(
       cardStyle: 'Sticker cartoon',
       freeBoosters: 0,
       nextFreeBoosterAt: null,
+      cardBack: DEFAULT_CARD_BACK,
+      unlockedBacks: [DEFAULT_CARD_BACK],
 
       // ── ui / session ──
       sort: 'rarete',
@@ -162,6 +172,34 @@ export const useStore = create<Store>()(
       openDetail: (id) => set({ detail: id }),
       closeDetail: () => set({ detail: null }),
       setCardStyle: (cardStyle) => set({ cardStyle }),
+
+      /** Ne change le dos que s'il est débloqué (garde-fou : un save trafiqué
+       *  ou un skin retiré du catalogue ne doit pas casser la révélation). */
+      setCardBack: (key) => {
+        const s = get();
+        if (!s.unlockedBacks.includes(key)) return;
+        set({ cardBack: key });
+      },
+
+      buyCardBack: (key) => {
+        const s = get();
+        const skin = CARD_BACKS.find((b) => b.key === key);
+        if (!skin) return;
+        if (s.unlockedBacks.includes(key)) {
+          set({ cardBack: key });
+          return;
+        }
+        if (s.glands < skin.price) {
+          s.say(`Pas assez de glands (${skin.price} requis).`);
+          return;
+        }
+        set({
+          glands: s.glands - skin.price,
+          unlockedBacks: [...s.unlockedBacks, key],
+          cardBack: key,
+        });
+        s.say(`Dos « ${skin.name} » débloqué`);
+      },
 
       buyPack: (key) => {
         const s = get();
@@ -295,7 +333,18 @@ export const useStore = create<Store>()(
         cardStyle: s.cardStyle,
         freeBoosters: s.freeBoosters,
         nextFreeBoosterAt: s.nextFreeBoosterAt,
+        cardBack: s.cardBack,
+        unlockedBacks: s.unlockedBacks,
       }),
+      // Les saves antérieurs au système de dos n'ont ni `cardBack` ni
+      // `unlockedBacks` : on les remet sur le dos par défaut plutôt que sur
+      // `undefined`, sinon la face cachée ne rend plus rien.
+      merge: (persisted, current) => {
+        const p = (persisted ?? {}) as Partial<PersistedState>;
+        const unlocked = p.unlockedBacks?.length ? p.unlockedBacks : [DEFAULT_CARD_BACK];
+        const back = p.cardBack && unlocked.includes(p.cardBack) ? p.cardBack : DEFAULT_CARD_BACK;
+        return { ...current, ...p, unlockedBacks: unlocked, cardBack: back };
+      },
     },
   ),
 );
@@ -305,3 +354,8 @@ export function activePack(state: Pick<Store, 'activePack'>) {
 }
 
 export const PACK_LIST = PACKS;
+
+/** Le skin de dos actif, résolu — pratique pour les écrans. */
+export function activeCardBack(state: Pick<Store, 'cardBack'>) {
+  return cardBackByKey(state.cardBack);
+}

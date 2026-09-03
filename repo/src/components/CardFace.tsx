@@ -1,6 +1,7 @@
-import { rarityById, type Rarity } from './rarities';
-import type { Card } from './cards';
-import './cards.css';
+import { rarityById, type Rarity } from '../data/rarities';
+import type { Card } from '../types';
+// Les keyframes vivent dans src/styles/animations.css, déjà importé par
+// main.tsx — pas d'import CSS local ici.
 
 /**
  * Une carte Chipo. Trois habillages, six raretés, deux échelles.
@@ -36,7 +37,7 @@ const px = (n: number) => `${n}px`;
 
 function holo(r: Rarity, animate: boolean): React.CSSProperties {
   return r.holo && animate
-    ? { backgroundSize: '300% 100%', animation: 'chipoHolo 5s linear infinite' }
+    ? { backgroundSize: '300% 100%', animation: 'pigHolo 5s linear infinite' }
     : {};
 }
 
@@ -65,7 +66,7 @@ function Sheen({ r }: { r: Rarity }) {
       style={{
         position: 'absolute', top: '-20%', left: 0, width: '55%', height: '140%', pointerEvents: 'none',
         background: `linear-gradient(100deg,transparent,rgba(255,255,255,${r.id === 6 ? 0.38 : 0.45}),transparent)`,
-        animation: `chipoShine ${r.id >= 5 ? 3.1 : 4.6}s ease-in-out infinite`
+        animation: `pigShine ${r.id >= 5 ? 3.1 : 4.6}s ease-in-out infinite`
       }}
     />
   );
@@ -81,7 +82,7 @@ function Sparks({ r, animate, bottom }: { r: Rarity; animate: boolean; bottom: s
           style={{
             position: 'absolute', left: `${18 + k * 28}%`, bottom, width: 6, height: 6, borderRadius: '50%',
             background: r.spark, opacity: 0.6,
-            animation: animate ? `chipoFloat ${2.4 + k * 0.6}s ease-in-out infinite` : 'none'
+            animation: animate ? `pigFloat ${2.4 + k * 0.6}s ease-in-out infinite` : 'none'
           }}
         />
       ))}
@@ -184,7 +185,7 @@ export function CardFace({
   if (variant === 'medallion') {
     return (
       <div
-        className={['chipo-card', className].filter(Boolean).join(' ')}
+        className={['pig-card', className].filter(Boolean).join(' ')}
         style={{
           position: 'relative', width: '100%', height: '100%', boxSizing: 'border-box',
           borderRadius: px(s.r1 + 6), overflow: 'hidden',
@@ -219,7 +220,7 @@ export function CardFace({
     const bw = r.id >= 5 ? 4 : r.id >= 3 ? 3.5 : 3;
     return (
       <div
-        className={['chipo-card', className].filter(Boolean).join(' ')}
+        className={['pig-card', className].filter(Boolean).join(' ')}
         style={{
           position: 'relative', width: '100%', height: '100%', boxSizing: 'border-box',
           padding: px(s.pad + 3), borderRadius: px(s.r1 + 15), background: '#fffaf2',
@@ -257,7 +258,7 @@ export function CardFace({
   // ── foil (défaut) : le cadre porte la rareté ──
   return (
     <div
-      className={['chipo-card', className].filter(Boolean).join(' ')}
+      className={['pig-card', className].filter(Boolean).join(' ')}
       style={{
         position: 'relative', width: '100%', height: '100%', boxSizing: 'border-box',
         padding: px(2.6 + r.id * 0.4), borderRadius: px(s.r1), background: r.frame,

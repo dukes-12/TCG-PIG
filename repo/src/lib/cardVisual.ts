@@ -5,7 +5,11 @@ import type { Card, CardStyle } from '../types';
  *  (Collector foil / Sticker cartoon). Ported field-for-field from the
  *  `build()` method in Grouin - TCG Cochons.dc.html — see the handoff
  *  README's "Anatomie d'une carte" section for the written spec. Dead
- *  branches for the abandoned "Rétro 90s" direction were dropped. */
+ *  branches for the abandoned "Rétro 90s" direction were dropped.
+ *
+ *  Palette (validée) : Rare = bleu, Épique = violet, Mythique = noir + or
+ *  + violet. Les valeurs sont les mêmes que `frame`/`surf`/`art`/`ink` dans
+ *  `src/data/rarities.ts` — garder les deux en phase. */
 
 interface Skin {
   p: number;
@@ -14,19 +18,26 @@ interface Skin {
   art: string;
   txt: string;
   sh: string;
+  /** Bordure d'encre de la direction Sticker cartoon. */
+  toonInk: string;
   sheen?: boolean;
   /** Animated multi-stop foil background + floating particles (Légendaire, Mythique). */
   holoFoil?: boolean;
+  /** Couleur des particules flottantes. */
+  spark?: string;
 }
 
 const SKIN: Skin[] = [
-  { p: 1, bg: 'var(--color-neutral-400)', inner: 'var(--color-neutral-100)', art: 'var(--color-neutral-200)', txt: 'var(--color-text)', sh: 'none' },
-  { p: 2, bg: 'linear-gradient(180deg,var(--color-accent-2-400),var(--color-accent-2-700))', inner: 'linear-gradient(180deg,#f4fce9,#e1eecc)', art: '#ccdbb2', txt: 'var(--color-accent-2-900)', sh: 'var(--shadow-sm)' },
-  { p: 2.5, bg: 'linear-gradient(150deg,#f6a06b,#ffeacb 42%,#c67139)', inner: 'linear-gradient(180deg,#fff6ef,#ffe1d0)', art: '#ffc6a5', txt: 'var(--color-accent-900)', sh: '0 2px 12px rgba(198,113,57,.35)' },
-  { p: 3, bg: 'linear-gradient(200deg,#8fa073,#2e2b25 46%,#56633f)', inner: 'radial-gradient(120% 80% at 50% 0%,#474238,#201e1d)', art: '#2e2b25', txt: '#f5ead8', sh: 'var(--shadow-md)', sheen: true },
-  { p: 3.5, bg: 'linear-gradient(100deg,#f6a06b,#ffe1d0,#aebf92,#ffc6a5,#f6a06b)', inner: 'radial-gradient(130% 90% at 50% 0%,#5a3016,#201e1d 72%)', art: '#402310', txt: '#ffe1d0', sh: '0 6px 22px rgba(214,127,72,.5)', sheen: true, holoFoil: true },
-  { p: 4, bg: 'linear-gradient(115deg,#8c6318,#ffe9b0 28%,#c99a3a 52%,#fff6d8 74%,#8c6318)', inner: 'radial-gradient(140% 100% at 50% 0%,#3a2c10,#141210 74%)', art: '#221b0e', txt: '#ffe9b0', sh: '0 8px 30px rgba(201,154,58,.6)', sheen: true, holoFoil: true },
+  { p: 1, bg: 'var(--color-neutral-400)', inner: 'var(--color-neutral-100)', art: 'var(--color-neutral-200)', txt: 'var(--color-text)', sh: 'none', toonInk: '#82796a' },
+  { p: 2, bg: 'linear-gradient(180deg,var(--color-accent-2-400),var(--color-accent-2-700))', inner: 'linear-gradient(180deg,#f4fce9,#e1eecc)', art: '#ccdbb2', txt: 'var(--color-accent-2-900)', sh: 'var(--shadow-sm)', toonInk: '#56633f' },
+  { p: 2.5, bg: 'linear-gradient(150deg,#5b8fd6,#d9ecff 45%,#2f5c9e)', inner: 'linear-gradient(180deg,#f2f8ff,#d8e8fb)', art: '#b6d2f0', txt: '#1c3866', sh: '0 2px 12px rgba(47,92,158,.35)', toonInk: '#2f5c9e' },
+  { p: 3, bg: 'linear-gradient(200deg,#a678d8,#2a1145 48%,#6c3fa0)', inner: 'radial-gradient(120% 85% at 50% 0%,#4a2673,#1e0c33)', art: '#33184f', txt: '#e8d4ff', sh: '0 4px 16px rgba(59,29,94,.45)', toonInk: '#3b1d5e', sheen: true },
+  { p: 3.5, bg: 'linear-gradient(115deg,#8c6318,#ffe9b0 26%,#c99a3a 52%,#fff6d8 76%,#8c6318)', inner: 'linear-gradient(180deg,#fff8e2,#f0d9a0)', art: '#e9c877', txt: '#4a3410', sh: '0 6px 22px rgba(201,154,58,.5)', toonInk: '#8c6318', sheen: true, holoFoil: true, spark: '#8c6318' },
+  { p: 4, bg: 'linear-gradient(115deg,#0d0b12,#6c3fa0 18%,#ffd98a 42%,#3b1d5e 64%,#c99a3a 82%,#0d0b12)', inner: 'radial-gradient(130% 95% at 50% 0%,#2c1745,#0b0910 78%)', art: '#180f26', txt: '#ffd98a', sh: '0 8px 30px rgba(108,63,160,.6)', toonInk: '#43206d', sheen: true, holoFoil: true, spark: '#ffd98a' },
 ];
+
+/** Rareté à surface sombre → texte clair, ombres portées plus profondes. */
+const isDark = (rarity: number) => rarity === 4 || rarity === 6;
 
 export interface CardVisual {
   name: string;
@@ -64,6 +75,7 @@ export function buildCardVisual(card: Card, opts: BuildCardOptions = {}): CardVi
   const holoAnim = opts.holoAnim ?? true;
   const owned = opts.forceOwned || (opts.ownedCount ?? 0) > 0;
   const skin = SKIN[card.rarity - 1];
+  const dark = isDark(card.rarity);
 
   const s = big
     ? { pad: 8, name: 18, type: 10, pip: 7 }
@@ -71,16 +83,22 @@ export function buildCardVisual(card: Card, opts: BuildCardOptions = {}): CardVi
 
   const toon = style === 'Sticker cartoon';
   const R1 = toon ? (big ? 30 : 18) : big ? 26 : 15;
-  const R2 = R1 - (big ? 7 : 4);
 
-  let outerPad: number = skin.p;
+  // Épaisseur du cadre. `skin.p` (1 → 4) était appliqué tel quel aux deux
+  // échelles : en grand format un liseré de 1 à 4 px se perdait, et surtout
+  // le rayon intérieur était calculé indépendamment (R1 - 7 / R1 - 4), donc
+  // l'anneau paraissait beaucoup plus fin dans les coins que sur les côtés.
+  // On épaissit le cadre en grand format et on dérive le rayon intérieur du
+  // padding — seule façon d'obtenir un anneau d'épaisseur constante.
+  let outerPad: number = big ? Math.round(skin.p * 2.4) : Math.max(2, Math.round(skin.p * 1.2));
   let outerBg: string = skin.bg;
   let shellShadow: string = skin.sh;
   if (toon) {
     outerPad = big ? 7 : 4;
     outerBg = '#fffaf2';
-    shellShadow = `0 ${big ? 8 : 4}px 0 ${card.rarity >= 4 ? 'rgba(46,43,37,.55)' : 'rgba(140,73,26,.35)'}`;
+    shellShadow = `0 ${big ? 8 : 4}px 0 ${dark || card.rarity === 5 ? 'rgba(32,30,29,.5)' : 'rgba(140,73,26,.32)'}`;
   }
+  const R2 = Math.max(4, R1 - outerPad);
 
   const shell: CSSProperties = {
     position: 'relative',
@@ -93,7 +111,7 @@ export function buildCardVisual(card: Card, opts: BuildCardOptions = {}): CardVi
     boxShadow: shellShadow,
   };
   if (toon) {
-    shell.border = `${big ? 3 : 2}px solid ${card.rarity >= 4 ? '#201e1d' : 'var(--color-accent-800)'}`;
+    shell.border = `${big ? 3 : 2}px solid ${skin.toonInk}`;
   }
   if (skin.holoFoil && holoAnim && owned) {
     shell.backgroundSize = '300% 100%';
@@ -125,7 +143,7 @@ export function buildCardVisual(card: Card, opts: BuildCardOptions = {}): CardVi
     flex: 1,
     overflow: 'hidden',
     background: skin.art,
-    borderRadius: toon ? R2 - (big ? 6 : 3) : R2 - (big ? 8 : 4),
+    borderRadius: Math.max(3, toon ? R2 - (big ? 6 : 3) : R2 - (big ? 8 : 4)),
   };
   if (toon) artWrap.boxShadow = `inset 0 0 0 ${big ? 3 : 2}px #fffaf2`;
 
@@ -137,7 +155,7 @@ export function buildCardVisual(card: Card, opts: BuildCardOptions = {}): CardVi
     padding: big ? '2px 4px 0' : '1px 2px 0',
     color: skin.txt,
     overflow: 'hidden',
-    textShadow: card.rarity >= 4 ? '0 1px 6px rgba(0,0,0,.5)' : 'none',
+    textShadow: dark ? '0 1px 6px rgba(0,0,0,.5)' : 'none',
   };
 
   const metaRow: CSSProperties = {
@@ -182,7 +200,7 @@ export function buildCardVisual(card: Card, opts: BuildCardOptions = {}): CardVi
             width: big ? 6 : 3.5,
             height: big ? 6 : 3.5,
             borderRadius: '50%',
-            background: card.rarity === 6 ? '#ffe9b0' : '#ffe1d0',
+            background: skin.spark ?? '#ffe1d0',
             animation: holoAnim ? `pigFloat ${2.4 + k * 0.6}s ease-in-out infinite` : 'none',
             opacity: 0.6,
           } as CSSProperties,
@@ -197,7 +215,7 @@ export function buildCardVisual(card: Card, opts: BuildCardOptions = {}): CardVi
     width: '55%',
     height: '140%',
     pointerEvents: 'none',
-    background: 'linear-gradient(100deg,transparent,rgba(255,255,255,.45),transparent)',
+    background: `linear-gradient(100deg,transparent,rgba(255,255,255,${card.rarity === 6 ? 0.38 : 0.45}),transparent)`,
     animation: `pigShine ${card.rarity >= 5 ? 3.1 : 4.6}s ease-in-out infinite`,
   };
 
