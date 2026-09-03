@@ -264,6 +264,7 @@ export default function OpenScreen() {
                   transformStyle: 'preserve-3d',
                   transform: flipped ? 'rotateY(0deg)' : 'rotateY(180deg)',
                   transition: 'transform .62s cubic-bezier(.3,.7,.2,1)',
+                  willChange: 'transform',
                 }}
               >
                 <div
@@ -271,13 +272,35 @@ export default function OpenScreen() {
                     position: 'absolute',
                     inset: 0,
                     backfaceVisibility: 'hidden',
-                    transform: 'rotateY(180deg)',
+                    // translateZ sépare physiquement les deux faces : le tri
+                    // de profondeur ne repose plus sur le seul backface-culling,
+                    // que Chrome rate quand une face contient des couches
+                    // promues (le foil animé de la Mythique) — sa lueur
+                    // traversait alors le dos.
+                    transform: 'rotateY(180deg) translateZ(1px)',
+                    transformStyle: 'flat',
+                    isolation: 'isolate',
+                    borderRadius: 26,
+                    overflow: 'hidden',
                   }}
                 >
                   <CardBack skin={cardBack} width={238} height={332} style={{ boxShadow: 'var(--shadow-lg)' }} />
                 </div>
-                <div style={{ position: 'absolute', inset: 0, backfaceVisibility: 'hidden' }}>
-                  <PigCard card={card} big forceOwned holoAnim={holoAnim} />
+                <div
+                  style={{
+                    position: 'absolute',
+                    inset: 0,
+                    backfaceVisibility: 'hidden',
+                    transform: 'translateZ(1px)',
+                    transformStyle: 'flat',
+                    isolation: 'isolate',
+                    borderRadius: 26,
+                    overflow: 'hidden',
+                  }}
+                >
+                  {/* holoAnim conditionné à `revealed` : face cachée, le foil
+                      et le reflet ne tournent pas — rien à laisser filtrer. */}
+                  <PigCard card={card} big forceOwned holoAnim={holoAnim && revealed} />
                 </div>
               </div>
             </div>

@@ -33,9 +33,18 @@ function ensureCtx(): AudioContext | null {
     const Ctor = window.AudioContext || (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
     if (!Ctor) return null;
     ctx = new Ctor();
+    // Un compresseur en sortie tient lieu de limiteur : on peut donc pousser
+    // le master sans craindre la saturation quand plusieurs voix se
+    // superposent (la fanfare Mythique en empile six).
+    const comp = ctx.createDynamicsCompressor();
+    comp.threshold.value = -12;
+    comp.knee.value = 12;
+    comp.ratio.value = 6;
+    comp.attack.value = 0.004;
+    comp.release.value = 0.15;
     master = ctx.createGain();
-    master.gain.value = 0.5; // marge : les sons sont mixés bas individuellement
-    master.connect(ctx.destination);
+    master.gain.value = 1;
+    master.connect(comp).connect(ctx.destination);
   }
   return ctx;
 }
@@ -105,7 +114,7 @@ function noise(start: number, dur: number, gain: number, from: number, to: numbe
 function arpeggio(start: number, notes: number[], step: number, dur: number, gain: number, type: OscillatorType = 'triangle') {
   notes.forEach((f, i) => {
     tone(f, start + i * step, dur, gain, type);
-    if (gain > 0.06) tone(f * 2, start + i * step, dur * 0.7, gain * 0.3, 'sine'); // octave, un peu de brillance
+    if (gain > 0.22) tone(f * 2, start + i * step, dur * 0.7, gain * 0.3, 'sine'); // octave, un peu de brillance
   });
 }
 
@@ -114,50 +123,50 @@ function arpeggio(start: number, notes: number[], step: number, dur: number, gai
 const RECIPES: Record<SfxName, (t: number) => void> = {
   // Papier qu'on arrache : bruit large qui descend, avec un petit à-coup.
   tear: (t) => {
-    noise(t, 0.34, 0.16, 2600, 700, 0.7);
-    noise(t + 0.05, 0.2, 0.09, 1400, 400, 1.2);
-    tone(150, t + 0.02, 0.14, 0.05, 'sawtooth', 70);
+    noise(t, 0.34, 0.55, 2600, 700, 0.7);
+    noise(t + 0.05, 0.2, 0.34, 1400, 400, 1.2);
+    tone(150, t + 0.02, 0.14, 0.2, 'sawtooth', 70);
   },
 
   // Carte qu'on retourne : souffle très court + clic mat.
   flip: (t) => {
-    noise(t, 0.12, 0.08, 1800, 5200, 1.4);
-    tone(320, t, 0.06, 0.04, 'square', 180);
+    noise(t, 0.12, 0.3, 1800, 5200, 1.4);
+    tone(320, t, 0.06, 0.16, 'square', 180);
   },
 
   // Commune → Rare : deux notes, discret, ne doit pas fatiguer.
-  common: (t) => arpeggio(t, [523.25, 659.25], 0.07, 0.16, 0.05),
+  common: (t) => arpeggio(t, [523.25, 659.25], 0.07, 0.16, 0.2),
 
   // Épique : quatre notes montantes, timbre plus corsé.
   epic: (t) => {
-    arpeggio(t, [440, 554.37, 659.25, 880], 0.075, 0.28, 0.07);
-    noise(t, 0.3, 0.04, 3000, 900, 0.8);
+    arpeggio(t, [440, 554.37, 659.25, 880], 0.075, 0.28, 0.26);
+    noise(t, 0.3, 0.16, 3000, 900, 0.8);
   },
 
   // Légendaire : accord majeur complet + traîne brillante.
   legendary: (t) => {
-    arpeggio(t, [523.25, 659.25, 783.99, 1046.5], 0.085, 0.42, 0.085);
-    tone(1567.98, t + 0.34, 0.7, 0.05, 'sine');
-    noise(t, 0.5, 0.05, 4000, 1200, 0.9);
+    arpeggio(t, [523.25, 659.25, 783.99, 1046.5], 0.085, 0.42, 0.3);
+    tone(1567.98, t + 0.34, 0.7, 0.18, 'sine');
+    noise(t, 0.5, 0.18, 4000, 1200, 0.9);
   },
 
   // Mythique : la seule vraie fanfare — cloche grave, montée large, nappe.
   mythic: (t) => {
-    tone(130.81, t, 1.4, 0.09, 'sine');
-    arpeggio(t + 0.06, [392, 523.25, 659.25, 783.99, 1046.5], 0.095, 0.55, 0.09, 'triangle');
-    tone(1975.53, t + 0.55, 1.1, 0.055, 'sine');
-    tone(2637.02, t + 0.62, 0.9, 0.035, 'sine');
-    noise(t + 0.04, 0.9, 0.055, 5200, 1400, 0.7);
+    tone(130.81, t, 1.4, 0.32, 'sine');
+    arpeggio(t + 0.06, [392, 523.25, 659.25, 783.99, 1046.5], 0.095, 0.55, 0.32, 'triangle');
+    tone(1975.53, t + 0.55, 1.1, 0.2, 'sine');
+    tone(2637.02, t + 0.62, 0.9, 0.13, 'sine');
+    noise(t + 0.04, 0.9, 0.2, 5200, 1400, 0.7);
   },
 
   // Achat : deux pièces qui s'entrechoquent.
   coin: (t) => {
-    tone(1046.5, t, 0.1, 0.06, 'square');
-    tone(1396.91, t + 0.055, 0.14, 0.05, 'square');
+    tone(1046.5, t, 0.1, 0.22, 'square');
+    tone(1396.91, t + 0.055, 0.14, 0.19, 'square');
   },
 
   // Recyclage : petite cascade descendante.
-  recycle: (t) => arpeggio(t, [880, 698.46, 587.33], 0.055, 0.14, 0.05, 'sine'),
+  recycle: (t) => arpeggio(t, [880, 698.46, 587.33], 0.055, 0.14, 0.2, 'sine'),
 };
 
 /** Rareté (1-6) → son de révélation. */
@@ -178,5 +187,17 @@ export function playSfx(name: SfxName) {
 }
 
 if (typeof window !== 'undefined') {
-  window.addEventListener('pointerdown', unlockSfx, { once: true, passive: true });
+  // Pas de `once` : selon le navigateur, le tout premier geste peut arriver
+  // avant que le contexte existe, ou le contexte peut être re-suspendu
+  // (onglet en arrière-plan, changement de sortie audio). On retente donc à
+  // chaque geste tant qu'il n'est pas en `running` — no-op une fois débloqué.
+  const onGesture = () => {
+    unlockSfx();
+    if (ctx && ctx.state === 'running') {
+      window.removeEventListener('pointerdown', onGesture);
+      window.removeEventListener('keydown', onGesture);
+    }
+  };
+  window.addEventListener('pointerdown', onGesture, { passive: true });
+  window.addEventListener('keydown', onGesture);
 }
