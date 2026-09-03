@@ -55,6 +55,6 @@ export function trackPackOpened(packKey: string, source: 'stock' | 'free_hourly'
 export function trackGlandsEarned(amount: number, source: 'recycle' | 'daily_grant') {
   send('glands_earned', { value: amount, source });
 }
-export function trackGlandsSpent(amount: number, item: 'pack' | 'card_back', key: string) {
+export function trackGlandsSpent(amount: number, item: 'pack' | 'card_back' | 'lottery', key: string) {
   send('glands_spent', { value: amount, item, key });
 }

@@ -2,6 +2,7 @@ import { useNavigate } from 'react-router-dom';
 import DailyBoosterBanner from '../components/DailyBoosterBanner';
 import FreeBoosterBanner from '../components/FreeBoosterBanner';
 import GlandsPill from '../components/GlandsPill';
+import LotteryBanner from '../components/LotteryBanner';
 import Snout from '../components/Snout';
 import { PACKS } from '../data/catalog';
 import { PACK_VISUALS } from '../data/packVisuals';
@@ -113,6 +114,10 @@ export default function ShopScreen() {
             </div>
           );
         })}
+      </div>
+
+      <div style={{ padding: '13px 18px 20px' }}>
+        <LotteryBanner />
       </div>
     </div>
   );

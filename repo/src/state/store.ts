@@ -2,7 +2,7 @@ import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { CARDS, PACKS, packByKey, rarityById } from '../data/catalog';
 import { CARD_BACKS, DEFAULT_CARD_BACK, cardBackByKey } from '../data/cardBacks';
-import { openPack } from '../lib/draw';
+import { openPack, roll } from '../lib/draw';
 import { playSfx, revealSfx, setSfxEnabled } from '../lib/sfx';
 import { trackCardPulled, trackGlandsEarned, trackGlandsSpent, trackPackOpened } from '../lib/analytics';
 import { apiFetchState, apiLogin, apiPushState, apiRegister, getToken, setToken } from '../lib/api';
@@ -42,6 +42,12 @@ export const FREE_BOOSTER_INTERVAL_MS = 60 * 60 * 1000;
 export const FREE_BOOSTER_MAX = 3;
 const FREE_BOOSTER_PACK: PackKey = 'basic';
 
+/** Loterie de la boutique : une carte garantie Épique ou mieux, effet carte
+ *  qui tourne pour le suspense (voir LotteryOverlay). */
+export const LOTTERY_PRICE = 1000;
+export const LOTTERY_FLOOR: RarityId = 4;
+const LOTTERY_SPIN_MS = 1800;
+
 /** Sachets offerts au tout premier lancement. */
 export const STARTER_PACKS = 5;
 
@@ -78,6 +84,9 @@ interface UiState {
   dragX: number;
   dragging: boolean;
   toast: string | null;
+  lotteryState: 'idle' | 'spinning' | 'result';
+  lotteryCard: Card | null;
+  lotteryIsNew: boolean;
 }
 
 interface Actions {
@@ -109,6 +118,9 @@ interface Actions {
   recycle: (cardId: number) => void;
   say: (msg: string) => void;
 
+  buyLottery: () => void;
+  closeLottery: () => void;
+
   login: (username: string, pin: string) => Promise<void>;
   register: (username: string, pin: string) => Promise<void>;
   logout: () => void;
@@ -122,6 +134,7 @@ let advanceTimer: ReturnType<typeof setTimeout> | undefined;
 let toastTimer: ReturnType<typeof setTimeout> | undefined;
 let revealTimer: ReturnType<typeof setTimeout> | undefined;
 let syncTimer: ReturnType<typeof setTimeout> | undefined;
+let lotteryTimer: ReturnType<typeof setTimeout> | undefined;
 let dragStartX = 0;
 
 /** Les seuls champs qu'on synchronise avec le compte — la même forme que
@@ -240,6 +253,9 @@ export const useStore = create<Store>()(
       dragX: 0,
       dragging: false,
       toast: null,
+      lotteryState: 'idle',
+      lotteryCard: null,
+      lotteryIsNew: false,
 
       // ── actions ──
       setSort: (sort) => set({ sort }),
@@ -417,6 +433,33 @@ export const useStore = create<Store>()(
         clearTimeout(toastTimer);
         set({ toast: msg });
         toastTimer = setTimeout(() => set({ toast: null }), TOAST_MS);
+      },
+
+      // ── loterie ──
+      buyLottery: () => {
+        const s = get();
+        if (s.glands < LOTTERY_PRICE) {
+          s.say(`Pas assez de glands (${LOTTERY_PRICE} requis).`);
+          return;
+        }
+        set({ glands: s.glands - LOTTERY_PRICE, lotteryState: 'spinning', lotteryCard: null, lotteryIsNew: false });
+        trackGlandsSpent(LOTTERY_PRICE, 'lottery', 'lottery');
+        playSfx('coin');
+        clearTimeout(lotteryTimer);
+        lotteryTimer = setTimeout(() => {
+          const s2 = get();
+          const card = roll(LOTTERY_FLOOR);
+          const wasOwned = !!s2.owned[card.id];
+          const owned = { ...s2.owned, [card.id]: (s2.owned[card.id] || 0) + 1 };
+          set({ owned, lotteryCard: card, lotteryIsNew: !wasOwned, lotteryState: 'result', openedCount: s2.openedCount + 1 });
+          trackCardPulled(card, 'lottery');
+          playSfx(revealSfx(card.rarity));
+        }, LOTTERY_SPIN_MS);
+      },
+
+      closeLottery: () => {
+        clearTimeout(lotteryTimer);
+        set({ lotteryState: 'idle', lotteryCard: null, lotteryIsNew: false });
       },
 
       // ── compte ──
