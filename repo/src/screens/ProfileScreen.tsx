@@ -8,7 +8,7 @@ import MailboxButton from '../components/MailboxButton';
 import MailboxOverlay from '../components/MailboxOverlay';
 import SoundToggle from '../components/SoundToggle';
 import PigCard from '../components/PigCard';
-import { CARDS, RARITIES, TOTAL_CARDS, rarityById } from '../data/catalog';
+import { CARDS, RARITIES, SECRET_CARD, TOTAL_CARDS, rarityById } from '../data/catalog';
 import { RARITY_VISUALS } from '../data/rarityVisuals';
 import { useAnimations } from '../lib/useAnimations';
 import { useStore } from '../state/store';
@@ -32,9 +32,14 @@ export default function ProfileScreen() {
   const [mailboxOpen, setMailboxOpen] = useState(false);
 
   const ownedIds = useMemo(() => Object.keys(owned).filter((k) => owned[Number(k)] > 0).map(Number), [owned]);
-  const uniq = ownedIds.length;
+  // Complétion : la carte secrète ne compte pas dedans (comme TOTAL_CARDS),
+  // sinon "uniq/TOTAL_CARDS" peut dépasser 100 % pour qui l'a trouvée.
+  const uniq = useMemo(() => ownedIds.filter((id) => id !== SECRET_CARD?.id).length, [ownedIds]);
 
   const best = useMemo(() => {
+    // Ici en revanche on la laisse concourir — "meilleure trouvaille" sur
+    // son propre profil, personne d'autre ne le voit, c'est le bon endroit
+    // pour s'en vanter.
     const candidates = ownedIds.map((id) => CARDS.find((c) => c.id === id)!).sort((a, b) => b.rarity - a.rarity);
     return candidates[0] || CARDS[0];
   }, [ownedIds]);

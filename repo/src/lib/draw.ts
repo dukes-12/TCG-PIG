@@ -1,10 +1,22 @@
-import { CARDS, RARITIES } from '../data/catalog';
+import { CARDS, RARITIES, SECRET_CARD } from '../data/catalog';
 import type { Card, RarityId, Pack } from '../types';
+
+/** 1 chance sur 6 000 000, sur *chaque* carte tirée n'importe où dans le
+ *  jeu (sacs, Loterie, sacs offerts…) — pas une case de plus dans la table
+ *  pondérée normale (qui reste calée sur les raretés 1-6), un jet
+ *  totalement indépendant vérifié avant elle. C'est délibéré : ça garde le
+ *  système de rareté habituel intact, et ça laisse la carte secrète
+ *  atteignable depuis absolument n'importe quel tirage, garantie floor
+ *  compris (7 ≥ n'importe quel floor, donc un tirage secret compte aussi
+ *  comme "qualifiant" dans openPack). */
+export const SECRET_CHANCE = 1 / 6_000_000;
 
 /** Draws one card: rolls a rarity by weight, then a uniformly random card
  *  within that rarity's pool. `floor` forces a minimum rarity (used for a
  *  pack's guaranteed-rarity slot). */
 export function roll(floor: RarityId | 0 = 0): Card {
+  if (SECRET_CARD && Math.random() < SECRET_CHANCE) return SECRET_CARD;
+
   const x = Math.random() * 100;
   let acc = 0;
   let rarity: RarityId = 1;

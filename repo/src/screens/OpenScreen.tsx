@@ -5,8 +5,9 @@ import PackPicker from '../components/PackPicker';
 import PigCard from '../components/PigCard';
 import QtyPicker from '../components/QtyPicker';
 import RarePullFx from '../components/RarePullFx';
+import SecretRevealFx from '../components/SecretRevealFx';
 import Snout from '../components/Snout';
-import { CARDS, RARITIES, packByKey, rarityById } from '../data/catalog';
+import { CARDS, RARITIES, SECRET_RARITY_ID, packByKey, rarityById } from '../data/catalog';
 import { RARITY_VISUALS } from '../data/rarityVisuals';
 import { PACK_VISUALS } from '../data/packVisuals';
 import { useAnimations } from '../lib/useAnimations';
@@ -150,7 +151,11 @@ export default function OpenScreen() {
 
           <div style={{ marginTop: 16, padding: '14px 18px', borderRadius: 26, background: 'var(--color-surface)' }}>
             <div className="section-label" style={{ marginBottom: 9 }}>Chances par carte</div>
-            {RARITIES.map((r) => (
+            {/* La carte secrète (poids 0) n'est pas dans cette table pondérée —
+                elle a son propre jet indépendant (voir SECRET_CHANCE), pas
+                une ligne "0 %" ici qui donnerait l'impression, à tort,
+                qu'elle est totalement impossible à tirer. */}
+            {RARITIES.filter((r) => r.weight > 0).map((r) => (
               <div key={r.id} style={{ display: 'flex', alignItems: 'center', gap: 9, padding: '3px 0' }}>
                 <i style={{ display: 'block', width: 9, height: 9, borderRadius: '50%', background: RARITY_VISUALS[r.id as RarityId].ink }} />
                 <span style={{ fontSize: 12, flex: 1 }}>{r.name}</span>
@@ -195,7 +200,8 @@ export default function OpenScreen() {
       {packState === 'reveal' && (() => {
         const card = pull[pullIndex] || CARDS[0];
         const rarity = rarityById(card.rarity);
-        const glow = RARITY_VISUALS[card.rarity as RarityId].glow;
+        const isSecret = card.rarity === SECRET_RARITY_ID;
+        const glow = isSecret ? 'rgba(255,138,217,.75)' : RARITY_VISUALS[card.rarity as RarityId].glow;
         const onDown = (e: ReactPointerEvent) => dragStart(e.clientX);
         const onMove = (e: ReactPointerEvent) => dragMove(e.clientX);
         const onUp = () => dragEnd();
@@ -224,11 +230,17 @@ export default function OpenScreen() {
             <div
               style={{
                 position: 'absolute',
-                width: 320,
-                height: 320,
+                width: isSecret ? 420 : 320,
+                height: isSecret ? 420 : 320,
                 borderRadius: '50%',
                 background: `radial-gradient(circle,${glow},transparent 68%)`,
-                animation: revealed && card.rarity >= 3 ? 'pigGlow 2.6s ease-in-out infinite' : 'none',
+                animation: revealed
+                  ? isSecret
+                    ? 'pigSecretHalo 2.6s ease-in-out infinite, pigSecretRainbow 4s linear infinite'
+                    : card.rarity >= 3
+                      ? 'pigGlow 2.6s ease-in-out infinite'
+                      : 'none'
+                  : 'none',
                 opacity: revealed ? (card.rarity >= 3 ? 1 : 0.35) : 0,
                 transition: 'opacity .5s ease',
                 pointerEvents: 'none',
@@ -311,8 +323,13 @@ export default function OpenScreen() {
               </div>
             </div>
 
-            {/* Gerbe d'éclats — remontée à chaque carte grâce à la key. */}
-            <RarePullFx key={`fx-${pullIndex}`} rarity={card.rarity} active={revealed} enabled={holoAnim} />
+            {/* Gerbe d'éclats — remontée à chaque carte grâce à la key. La
+                carte secrète a sa propre mise en scène (SecretRevealFx),
+                donc on désactive celle-ci pour ne pas jouer les deux à la
+                fois : `active` retombe à false plutôt que de laisser
+                RarePullFx se fier seul à son test `rarity < 4`. */}
+            <RarePullFx key={`fx-${pullIndex}`} rarity={card.rarity} active={revealed && !isSecret} enabled={holoAnim} />
+            <SecretRevealFx key={`sfx-${pullIndex}`} active={revealed && isSecret} enabled={holoAnim} />
 
             <div
               style={{

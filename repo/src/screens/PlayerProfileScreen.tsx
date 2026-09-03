@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import Avatar from '../components/Avatar';
 import PigCard from '../components/PigCard';
-import { CARDS, TOTAL_CARDS } from '../data/catalog';
+import { CARDS, SECRET_RARITY_ID, TOTAL_CARDS } from '../data/catalog';
 import { apiFetchProfile } from '../lib/api';
 import { useAnimations } from '../lib/useAnimations';
 import { useStore } from '../state/store';
@@ -62,7 +62,12 @@ export default function PlayerProfileScreen() {
             Repère les cartes qu'{username} a et que tu n'as pas — de bonnes candidates pour un échange.
           </p>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,minmax(0,1fr))', gap: 10, padding: '12px 18px 0' }}>
-            {CARDS.slice()
+            {/* La carte secrète n'apparaît jamais ici, même comme case
+                verrouillée — le serveur ne la renvoie déjà pas dans `owned`
+                (voir functions/api/profile/[username].ts), mais l'exclure
+                aussi de l'itération évite qu'une case en trop, toujours
+                verrouillée, ne trahisse son existence. */}
+            {CARDS.filter((c) => c.rarity !== SECRET_RARITY_ID)
               .sort((a, b) => b.rarity - a.rarity || a.name.localeCompare(b.name))
               .map((card) => {
                 const theirCount = owned[String(card.id)] || 0;

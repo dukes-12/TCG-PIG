@@ -22,7 +22,8 @@
     "Film",
     "Série",
     "Eléments chimique",
-    "Hors catégorie"
+    "Hors catégorie",
+    "Mystère"
   ],
   "rarities": [
     {
@@ -66,6 +67,13 @@
       "name": "Mythique",
       "weight": 0.2,
       "recycleValue": 2750
+    },
+    {
+      "id": 7,
+      "key": "secrete",
+      "name": "Secrète",
+      "weight": 0,
+      "recycleValue": 0
     }
   ],
   "packs": [
@@ -1561,6 +1569,14 @@
       "rarity": 4,
       "image": "assets/cards/183.jpg",
       "slotId": "art-183"
+    },
+    {
+      "id": 184,
+      "name": "Chipo Oméga",
+      "type": "Mystère",
+      "rarity": 7,
+      "image": "",
+      "slotId": "secret-omega"
     }
   ]
 }

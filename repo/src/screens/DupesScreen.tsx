@@ -1,6 +1,6 @@
 import GlandsPill from '../components/GlandsPill';
 import PigCard from '../components/PigCard';
-import { CARDS, rarityById } from '../data/catalog';
+import { CARDS, SECRET_RARITY_ID, rarityById } from '../data/catalog';
 import { useAnimations } from '../lib/useAnimations';
 import { useStore } from '../state/store';
 
@@ -13,7 +13,11 @@ export default function DupesScreen() {
   const recycle = useStore((s) => s.recycle);
   const holoAnim = useAnimations();
 
-  const dupeList = CARDS.filter((c) => (owned[c.id] || 0) > 1).sort((a, b) => b.rarity - a.rarity);
+  // La carte secrète ne se recycle jamais, même en cas de double exemplaire
+  // (1 chance sur 6 000 000 deux fois — en pratique jamais, mais on ne
+  // laisse pas la possibilité) : c'est une pièce unique à garder, pas une
+  // source de glands.
+  const dupeList = CARDS.filter((c) => c.rarity !== SECRET_RARITY_ID && (owned[c.id] || 0) > 1).sort((a, b) => b.rarity - a.rarity);
 
   return (
     <div className="screen">

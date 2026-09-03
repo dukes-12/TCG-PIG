@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Avatar from '../components/Avatar';
 import PigCard from '../components/PigCard';
-import { cardById } from '../data/catalog';
+import { SECRET_CARD, cardById } from '../data/catalog';
 import { apiFetchFriends, apiFetchProfile, apiFetchTrades, apiProposeTrade, apiRespondTrade, type Trade } from '../lib/api';
 import { useAnimations } from '../lib/useAnimations';
 import { useStore } from '../state/store';
@@ -73,7 +73,13 @@ export default function TradesScreen() {
   }, [target]);
 
   const targetFriend = friends.find((f) => f.username === target);
-  const myDupes = useMemo(() => Object.entries(owned).filter(([, n]) => n > 1).map(([id]) => Number(id)), [owned]);
+  // La carte secrète n'est jamais proposable — `theirOwned` vient déjà
+  // filtrée du serveur (voir functions/api/profile/[username].ts), mais
+  // `owned` est notre état local complet : on l'exclut ici aussi.
+  const myDupes = useMemo(
+    () => Object.entries(owned).filter(([id, n]) => n > 1 && Number(id) !== SECRET_CARD?.id).map(([id]) => Number(id)),
+    [owned],
+  );
   const theirDupes = useMemo(
     () => (theirOwned ? Object.entries(theirOwned).filter(([, n]) => n > 1).map(([id]) => Number(id)) : []),
     [theirOwned],

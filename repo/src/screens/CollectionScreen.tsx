@@ -1,7 +1,7 @@
 import { useMemo } from 'react';
 import Chip from '../components/Chip';
 import PigCard from '../components/PigCard';
-import { CARDS, RARITIES, TOTAL_CARDS, TYPES } from '../data/catalog';
+import { CARDS, RARITIES, SECRET_CARD, SECRET_RARITY_ID, TOTAL_CARDS, TYPES } from '../data/catalog';
 import { RARITY_VISUALS } from '../data/rarityVisuals';
 import { useAnimations } from '../lib/useAnimations';
 import { useStore } from '../state/store';
@@ -30,7 +30,12 @@ export default function CollectionScreen() {
   const openDetail = useStore((s) => s.openDetail);
   const holoAnim = useAnimations();
 
-  const ownedIds = useMemo(() => Object.keys(owned).filter((k) => owned[Number(k)] > 0), [owned]);
+  // La carte secrète ne compte pas dans "cartes uniques" — comme
+  // TOTAL_CARDS, c'est un bonus caché, pas un objectif de complétion.
+  const ownedIds = useMemo(
+    () => Object.keys(owned).filter((k) => owned[Number(k)] > 0 && Number(k) !== SECRET_CARD?.id),
+    [owned],
+  );
   const uniq = ownedIds.length;
 
   const list = useMemo(() => {
@@ -47,6 +52,12 @@ export default function CollectionScreen() {
     if (sort === 'nom') l.sort((a, b) => a.name.localeCompare(b.name));
     if (sort === 'type') l.sort((a, b) => a.type.localeCompare(b.type) || b.rarity - a.rarity);
     if (sort === 'nb') l.sort((a, b) => (owned[b.id] || 0) - (owned[a.id] || 0) || b.rarity - a.rarity);
+
+    // Toujours en dernier, quel que soit le tri — jamais mêlée aux autres
+    // cartes même quand elle est possédée.
+    const secretIdx = l.findIndex((c) => c.rarity === SECRET_RARITY_ID);
+    if (secretIdx !== -1) l.push(...l.splice(secretIdx, 1));
+
     return l;
   }, [query, rarityFilter, typeFilter, ownedOnly, owned, sort]);
 
