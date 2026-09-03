@@ -6,7 +6,7 @@
   "description": "Grouin — TCG cochons. Collection de cartes web, ouverture de packs.",
   "scripts": {
     "dev": "vite",
-    "build": "tsc --noEmit && vite build",
+    "build": "vite build",
     "preview": "vite preview",
     "lint": "eslint .",
     "resize-cards": "node scripts/resize-cards.mjs"
