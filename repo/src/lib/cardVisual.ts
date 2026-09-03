@@ -214,7 +214,11 @@ export function buildCardVisual(card: Card, opts: BuildCardOptions = {}): CardVi
   };
 
   return {
-    name: card.name,
+    // Cochon jamais trouvé → le nom reste un mystère, comme l'illustration
+    // (déjà masquée par `owned` ci-dessus, voir artWrap dans PigCard.tsx).
+    // Vaut aussi bien dans notre collection que dans celle d'un ami
+    // (PlayerProfileScreen réutilise ce même composant).
+    name: owned ? card.name : '???',
     type: card.type,
     image: card.image,
     owned,

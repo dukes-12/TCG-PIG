@@ -80,6 +80,20 @@
   100% { transform: scale(1); }
 }
 
+/* Loterie — la carte tourne sur elle-même pendant le tirage (suspense).
+   Utilisée par src/components/LotteryOverlay.tsx. */
+@keyframes pigSpin {
+  0% { transform: rotateY(0deg); }
+  100% { transform: rotateY(360deg); }
+}
+
+/* Roue de la chance — rotation à plat, contrairement à pigSpin (Y).
+   Utilisée par src/components/WheelOverlay.tsx. */
+@keyframes pigWheelSpin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
 /* Respect reduced-motion: freeze decorative loops, keep functional transitions.
    Le sélecteur exclut `html.anim-forced` : quand le joueur choisit
    « Animations : activées » dans Profil, cette règle ne doit pas gagner —

@@ -1,10 +1,13 @@
 import { useEffect } from 'react';
 import { Navigate, Route, Routes } from 'react-router-dom';
 import CardDetailOverlay from './components/CardDetailOverlay';
+import LotteryOverlay from './components/LotteryOverlay';
+import WheelOverlay from './components/WheelOverlay';
 import TabBar from './components/TabBar';
 import Toast from './components/Toast';
 import CollectionScreen from './screens/CollectionScreen';
 import DupesScreen from './screens/DupesScreen';
+import FriendsScreen from './screens/FriendsScreen';
 import OpenScreen from './screens/OpenScreen';
 import PlayerProfileScreen from './screens/PlayerProfileScreen';
 import ProfileScreen from './screens/ProfileScreen';
@@ -22,6 +25,7 @@ export default function App() {
   const bootAuth = useStore((s) => s.bootAuth);
   const reconcileDailyGrant = useStore((s) => s.reconcileDailyGrant);
   const reconcileFreeBoosters = useStore((s) => s.reconcileFreeBoosters);
+  const reconcileWheel = useStore((s) => s.reconcileWheel);
 
   useEffect(() => {
     bootAuth();
@@ -37,6 +41,11 @@ export default function App() {
     const id = setInterval(reconcileFreeBoosters, 1000);
     return () => clearInterval(id);
   }, [reconcileFreeBoosters]);
+  useEffect(() => {
+    reconcileWheel();
+    const id = setInterval(reconcileWheel, 60 * 1000);
+    return () => clearInterval(id);
+  }, [reconcileWheel]);
 
   // Échanges et vue "profil d'un ami" supposent un compte — sans, on renvoie
   // simplement vers Profil, où se trouve désormais la connexion/inscription.
@@ -49,6 +58,7 @@ export default function App() {
         <Route path="/open" element={<OpenScreen />} />
         <Route path="/dupes" element={<DupesScreen />} />
         <Route path="/trades" element={account ? <TradesScreen /> : <Navigate to="/profile" replace />} />
+        <Route path="/friends" element={<FriendsScreen />} />
         <Route path="/profile" element={<ProfileScreen />} />
         <Route path="/players/:username" element={account ? <PlayerProfileScreen /> : <Navigate to="/profile" replace />} />
         <Route path="*" element={<Navigate to="/collection" replace />} />
@@ -56,6 +66,8 @@ export default function App() {
 
       <TabBar />
       <CardDetailOverlay />
+      <LotteryOverlay />
+      <WheelOverlay />
       <Toast />
     </div>
   );

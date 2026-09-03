@@ -2,7 +2,9 @@ import { useNavigate } from 'react-router-dom';
 import DailyBoosterBanner from '../components/DailyBoosterBanner';
 import FreeBoosterBanner from '../components/FreeBoosterBanner';
 import GlandsPill from '../components/GlandsPill';
+import LotteryBanner from '../components/LotteryBanner';
 import Snout from '../components/Snout';
+import WheelBanner from '../components/WheelBanner';
 import { PACKS } from '../data/catalog';
 import { PACK_VISUALS } from '../data/packVisuals';
 import { useStore } from '../state/store';
@@ -42,6 +44,7 @@ export default function ShopScreen() {
       <div style={{ display: 'flex', flexDirection: 'column', gap: 10, padding: '20px 18px 0' }}>
         <DailyBoosterBanner />
         <FreeBoosterBanner />
+        <WheelBanner />
       </div>
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: 12, padding: '13px 18px 0' }}>
@@ -113,6 +116,10 @@ export default function ShopScreen() {
             </div>
           );
         })}
+      </div>
+
+      <div style={{ padding: '13px 18px 20px' }}>
+        <LotteryBanner />
       </div>
     </div>
   );

@@ -2,12 +2,14 @@ import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { CARDS, PACKS, packByKey, rarityById } from '../data/catalog';
 import { CARD_BACKS, DEFAULT_CARD_BACK, cardBackByKey } from '../data/cardBacks';
-import { openPack } from '../lib/draw';
+import { DEFAULT_AVATAR } from '../data/avatars';
+import { openPack, roll } from '../lib/draw';
 import { playSfx, revealSfx, setSfxEnabled } from '../lib/sfx';
 import { trackCardPulled, trackGlandsEarned, trackGlandsSpent, trackPackOpened } from '../lib/analytics';
 import { apiFetchState, apiLogin, apiPushState, apiRegister, getToken, setToken } from '../lib/api';
 import type {
   AnimationPref,
+  AvatarKey,
   Card,
   CardBackKey,
   CardType,
@@ -17,6 +19,7 @@ import type {
   PackState,
   RarityId,
   SortKey,
+  WheelState,
 } from '../types';
 
 // Note: which screen is visible is owned by the router (see App.tsx), not
@@ -42,6 +45,21 @@ export const FREE_BOOSTER_INTERVAL_MS = 60 * 60 * 1000;
 export const FREE_BOOSTER_MAX = 3;
 const FREE_BOOSTER_PACK: PackKey = 'basic';
 
+/** Loterie de la boutique : une carte garantie Épique ou mieux, effet carte
+ *  qui tourne pour le suspense (voir LotteryOverlay). */
+export const LOTTERY_PRICE = 1000;
+export const LOTTERY_FLOOR: RarityId = 4;
+const LOTTERY_SPIN_MS = 1800;
+
+/** Roue de la chance : 3 essais gratuits, rechargés toutes les 24 h. Une
+ *  victoire (1 chance sur 3) ajoute un Sac de glands en poche ; une défaite
+ *  n'affiche qu'un message pour la peine. */
+export const WHEEL_SPINS_MAX = 3;
+export const WHEEL_RESET_INTERVAL_MS = 24 * 60 * 60 * 1000;
+const WHEEL_WIN_CHANCE = 1 / 3;
+const WHEEL_SPIN_MS = 1800;
+const WHEEL_PACK: PackKey = 'basic';
+
 /** Sachets offerts au tout premier lancement. */
 export const STARTER_PACKS = 5;
 
@@ -55,9 +73,12 @@ interface PersistedState {
   nextFreeBoosterAt: number | null;
   cardBack: CardBackKey;
   unlockedBacks: CardBackKey[];
+  avatar: AvatarKey;
   gridCols: GridCols;
   animPref: AnimationPref;
   soundOn: boolean;
+  wheelSpins: number;
+  nextWheelResetAt: number | null;
 }
 
 interface UiState {
@@ -78,6 +99,11 @@ interface UiState {
   dragX: number;
   dragging: boolean;
   toast: string | null;
+  lotteryState: 'idle' | 'spinning' | 'result';
+  lotteryCard: Card | null;
+  lotteryIsNew: boolean;
+  wheelState: WheelState;
+  wheelWon: boolean;
 }
 
 interface Actions {
@@ -89,6 +115,7 @@ interface Actions {
   openDetail: (id: number) => void;
   closeDetail: () => void;
   setCardBack: (key: CardBackKey) => void;
+  setAvatar: (key: AvatarKey) => void;
   setGridCols: (n: GridCols) => void;
   setAnimPref: (p: AnimationPref) => void;
   setSoundOn: (on: boolean) => void;
@@ -109,6 +136,13 @@ interface Actions {
   recycle: (cardId: number) => void;
   say: (msg: string) => void;
 
+  buyLottery: () => void;
+  closeLottery: () => void;
+
+  spinWheel: () => void;
+  closeWheel: () => void;
+  reconcileWheel: () => void;
+
   login: (username: string, pin: string) => Promise<void>;
   register: (username: string, pin: string) => Promise<void>;
   logout: () => void;
@@ -122,6 +156,8 @@ let advanceTimer: ReturnType<typeof setTimeout> | undefined;
 let toastTimer: ReturnType<typeof setTimeout> | undefined;
 let revealTimer: ReturnType<typeof setTimeout> | undefined;
 let syncTimer: ReturnType<typeof setTimeout> | undefined;
+let lotteryTimer: ReturnType<typeof setTimeout> | undefined;
+let wheelTimer: ReturnType<typeof setTimeout> | undefined;
 let dragStartX = 0;
 
 /** Les seuls champs qu'on synchronise avec le compte — la même forme que
@@ -139,9 +175,12 @@ function persistedSlice(s: Store): PersistedState {
     nextFreeBoosterAt: s.nextFreeBoosterAt,
     cardBack: s.cardBack,
     unlockedBacks: s.unlockedBacks,
+    avatar: s.avatar,
     gridCols: s.gridCols,
     animPref: s.animPref,
     soundOn: s.soundOn,
+    wheelSpins: s.wheelSpins,
+    nextWheelResetAt: s.nextWheelResetAt,
   };
 }
 
@@ -154,11 +193,14 @@ function mergeServer(current: Store, incoming: Partial<PersistedState>): Partial
     ...incoming,
     unlockedBacks: unlocked,
     cardBack: back,
+    avatar: incoming.avatar ?? current.avatar,
     gridCols: incoming.gridCols ?? current.gridCols,
     animPref: incoming.animPref ?? current.animPref,
     soundOn: incoming.soundOn ?? current.soundOn,
     stock: incoming.stock ?? current.stock,
     owned: incoming.owned ?? current.owned,
+    wheelSpins: incoming.wheelSpins ?? current.wheelSpins,
+    nextWheelResetAt: incoming.nextWheelResetAt ?? current.nextWheelResetAt,
   };
 }
 
@@ -218,9 +260,12 @@ export const useStore = create<Store>()(
       nextFreeBoosterAt: null,
       cardBack: DEFAULT_CARD_BACK,
       unlockedBacks: [DEFAULT_CARD_BACK],
+      avatar: DEFAULT_AVATAR,
       gridCols: 3,
       animPref: 'on',
       soundOn: true,
+      wheelSpins: WHEEL_SPINS_MAX,
+      nextWheelResetAt: null,
 
       // ── ui / session ──
       account: null,
@@ -240,6 +285,11 @@ export const useStore = create<Store>()(
       dragX: 0,
       dragging: false,
       toast: null,
+      lotteryState: 'idle',
+      lotteryCard: null,
+      lotteryIsNew: false,
+      wheelState: 'idle',
+      wheelWon: false,
 
       // ── actions ──
       setSort: (sort) => set({ sort }),
@@ -261,6 +311,8 @@ export const useStore = create<Store>()(
         if (!s.unlockedBacks.includes(key)) return;
         set({ cardBack: key });
       },
+
+      setAvatar: (avatar) => set({ avatar }),
 
       buyCardBack: (key) => {
         const s = get();
@@ -417,6 +469,77 @@ export const useStore = create<Store>()(
         clearTimeout(toastTimer);
         set({ toast: msg });
         toastTimer = setTimeout(() => set({ toast: null }), TOAST_MS);
+      },
+
+      // ── loterie ──
+      buyLottery: () => {
+        const s = get();
+        if (s.glands < LOTTERY_PRICE) {
+          s.say(`Pas assez de glands (${LOTTERY_PRICE} requis).`);
+          return;
+        }
+        set({ glands: s.glands - LOTTERY_PRICE, lotteryState: 'spinning', lotteryCard: null, lotteryIsNew: false });
+        trackGlandsSpent(LOTTERY_PRICE, 'lottery', 'lottery');
+        playSfx('coin');
+        clearTimeout(lotteryTimer);
+        lotteryTimer = setTimeout(() => {
+          const s2 = get();
+          const card = roll(LOTTERY_FLOOR);
+          const wasOwned = !!s2.owned[card.id];
+          const owned = { ...s2.owned, [card.id]: (s2.owned[card.id] || 0) + 1 };
+          set({ owned, lotteryCard: card, lotteryIsNew: !wasOwned, lotteryState: 'result', openedCount: s2.openedCount + 1 });
+          trackCardPulled(card, 'lottery');
+          playSfx(revealSfx(card.rarity));
+        }, LOTTERY_SPIN_MS);
+      },
+
+      closeLottery: () => {
+        clearTimeout(lotteryTimer);
+        set({ lotteryState: 'idle', lotteryCard: null, lotteryIsNew: false });
+      },
+
+      // ── roue de la chance ──
+      spinWheel: () => {
+        const s = get();
+        if (s.wheelSpins <= 0) {
+          s.say('Plus d’essai — reviens demain.');
+          return;
+        }
+        const remaining = s.wheelSpins - 1;
+        set({
+          wheelSpins: remaining,
+          // Le compte à rebours ne démarre qu'au dernier essai consommé —
+          // les essais suivants dans la même fenêtre ne le repoussent pas.
+          nextWheelResetAt: remaining <= 0 ? Date.now() + WHEEL_RESET_INTERVAL_MS : s.nextWheelResetAt,
+          wheelState: 'spinning',
+        });
+        playSfx('flip');
+        clearTimeout(wheelTimer);
+        wheelTimer = setTimeout(() => {
+          const won = Math.random() < WHEEL_WIN_CHANCE;
+          if (won) {
+            const s2 = get();
+            const p = packByKey(WHEEL_PACK);
+            set({ stock: { ...s2.stock, [WHEEL_PACK]: (s2.stock[WHEEL_PACK] || 0) + 1 }, wheelWon: true, wheelState: 'result' });
+            playSfx('coin');
+            get().say(`${p.name} gagné·e !`);
+          } else {
+            set({ wheelWon: false, wheelState: 'result' });
+            playSfx('recycle');
+          }
+        }, WHEEL_SPIN_MS);
+      },
+
+      closeWheel: () => {
+        clearTimeout(wheelTimer);
+        set({ wheelState: 'idle' });
+      },
+
+      reconcileWheel: () => {
+        const s = get();
+        if (s.nextWheelResetAt == null) return;
+        if (Date.now() < s.nextWheelResetAt) return;
+        set({ wheelSpins: WHEEL_SPINS_MAX, nextWheelResetAt: null });
       },
 
       // ── compte ──
