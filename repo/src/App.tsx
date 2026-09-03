@@ -27,6 +27,7 @@ export default function App() {
   const reconcileFreeBoosters = useStore((s) => s.reconcileFreeBoosters);
   const reconcileWheel = useStore((s) => s.reconcileWheel);
   const fetchMailbox = useStore((s) => s.fetchMailbox);
+  const fetchTradesUnread = useStore((s) => s.fetchTradesUnread);
 
   useEffect(() => {
     bootAuth();
@@ -53,6 +54,12 @@ export default function App() {
     const id = setInterval(fetchMailbox, 30 * 1000);
     return () => clearInterval(id);
   }, [account, fetchMailbox]);
+  useEffect(() => {
+    if (!account) return;
+    fetchTradesUnread();
+    const id = setInterval(fetchTradesUnread, 30 * 1000);
+    return () => clearInterval(id);
+  }, [account, fetchTradesUnread]);
 
   // Échanges et vue "profil d'un ami" supposent un compte — sans, on renvoie
   // simplement vers Profil, où se trouve désormais la connexion/inscription.

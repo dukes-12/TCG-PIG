@@ -24,6 +24,7 @@ export default function ProfileScreen() {
   const glands = useStore((s) => s.glands);
   const openedCount = useStore((s) => s.openedCount);
   const avatar = useStore((s) => s.avatar);
+  const avatarPhoto = useStore((s) => s.avatarPhoto);
   const mailboxUnread = useStore((s) => s.mailboxUnread);
   const openDetail = useStore((s) => s.openDetail);
   const logout = useStore((s) => s.logout);
@@ -67,7 +68,7 @@ export default function ProfileScreen() {
       {mailboxOpen && <MailboxOverlay onClose={() => setMailboxOpen(false)} />}
 
       <div className="screen-inner" style={{ paddingTop: 18, display: 'flex', alignItems: 'center', gap: 14 }}>
-        <Avatar avatar={avatar} size={74} />
+        <Avatar avatar={avatar} photo={avatarPhoto} size={74} />
         <div>
           <div style={{ fontFamily: 'var(--font-heading)', fontSize: 22, lineHeight: 1.1 }}>{account ?? 'Éleveur Grouik'}</div>
           <div style={{ fontSize: 11.5, opacity: 0.6, marginTop: 4 }}>{account ? rank : 'Pas encore connecté'}</div>

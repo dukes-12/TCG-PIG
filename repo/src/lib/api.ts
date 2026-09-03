@@ -53,10 +53,10 @@ export function apiFetchPlayers() {
   return call<{ players: string[] }>('/players');
 }
 export function apiFetchFriends() {
-  return call<{ players: { username: string; avatar: string }[] }>('/friends');
+  return call<{ players: { username: string; avatar: string; avatarPhoto: string | null }[] }>('/friends');
 }
 export function apiFetchProfile(username: string) {
-  return call<{ username: string; owned: Record<string, number>; openedCount: number; avatar: string }>(
+  return call<{ username: string; owned: Record<string, number>; openedCount: number; avatar: string; avatarPhoto: string | null }>(
     `/profile/${encodeURIComponent(username)}`,
   );
 }

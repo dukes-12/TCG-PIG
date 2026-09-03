@@ -35,6 +35,10 @@ export interface Pack {
   price: number;
   cards: number;
   guaranteedFloor: RarityId | null;
+  /** Combien de cartes du sac doivent atteindre `guaranteedFloor` — au
+   *  moins, pas exactement (un tirage naturel peut en donner plus). Absent
+   *  ou 0 : pas de garantie, `guaranteedFloor` est alors ignoré. */
+  guaranteedCount?: number;
   subtitle: string;
 }
 

@@ -6,7 +6,18 @@ import { DEFAULT_AVATAR } from '../data/avatars';
 import { openPack, roll } from '../lib/draw';
 import { playSfx, revealSfx, setSfxEnabled } from '../lib/sfx';
 import { trackCardPulled, trackGlandsEarned, trackGlandsSpent, trackPackOpened } from '../lib/analytics';
-import { apiFetchMailbox, apiFetchState, apiLogin, apiMarkMailboxRead, apiPushState, apiRegister, getToken, setToken, type MailboxMessage } from '../lib/api';
+import {
+  apiFetchMailbox,
+  apiFetchState,
+  apiFetchTrades,
+  apiLogin,
+  apiMarkMailboxRead,
+  apiPushState,
+  apiRegister,
+  getToken,
+  setToken,
+  type MailboxMessage,
+} from '../lib/api';
 import type {
   AnimationPref,
   AvatarKey,
@@ -26,7 +37,9 @@ import type {
 // this store — screens that need to switch tabs call `navigate()` alongside
 // the relevant store action.
 
-const PACK_SIZE = 5; // fixed in production (the prototype exposed 3–8 as a design-time tweak)
+// Le nombre de cartes est désormais lu sur chaque pack (`pack.cards`) —
+// jusqu'ici toujours 5 pour les trois, la rareté et le nombre de cartes
+// garanties variaient sans que la taille du sac suive. Voir cards.json.
 /** Ouverture groupée : jusqu'à MAX_OPEN_QTY sacs du même type d'un coup.
  *  Plafonné pour que la rangée de pastilles de progression pendant la
  *  révélation (une par carte, voir OpenScreen) reste lisible sur mobile. */
@@ -78,6 +91,10 @@ interface PersistedState {
   cardBack: CardBackKey;
   unlockedBacks: CardBackKey[];
   avatar: AvatarKey;
+  /** Photo de profil choisie dans la galerie de l'appareil — data URI JPEG
+   *  déjà compressée (voir lib/photo.ts), prioritaire sur `avatar` quand
+   *  elle est définie. `null` = pas de photo, on retombe sur le préréglage. */
+  avatarPhoto: string | null;
   gridCols: GridCols;
   animPref: AnimationPref;
   soundOn: boolean;
@@ -111,6 +128,9 @@ interface UiState {
   wheelWon: boolean;
   mailbox: MailboxMessage[];
   mailboxUnread: number;
+  /** Propositions d'échange entrantes en attente — voir TradesScreen et la
+   *  pastille sur l'onglet Échanges de TabBar. */
+  tradesUnread: number;
 }
 
 interface Actions {
@@ -123,6 +143,7 @@ interface Actions {
   closeDetail: () => void;
   setCardBack: (key: CardBackKey) => void;
   setAvatar: (key: AvatarKey) => void;
+  setAvatarPhoto: (dataUri: string | null) => void;
   setGridCols: (n: GridCols) => void;
   setAnimPref: (p: AnimationPref) => void;
   setSoundOn: (on: boolean) => void;
@@ -154,6 +175,9 @@ interface Actions {
 
   fetchMailbox: () => Promise<void>;
   markMailboxRead: (ids: number[]) => Promise<void>;
+
+  setTradesUnread: (n: number) => void;
+  fetchTradesUnread: () => Promise<void>;
 
   login: (username: string, pin: string) => Promise<void>;
   register: (username: string, pin: string) => Promise<void>;
@@ -188,6 +212,7 @@ function persistedSlice(s: Store): PersistedState {
     cardBack: s.cardBack,
     unlockedBacks: s.unlockedBacks,
     avatar: s.avatar,
+    avatarPhoto: s.avatarPhoto,
     gridCols: s.gridCols,
     animPref: s.animPref,
     soundOn: s.soundOn,
@@ -206,6 +231,12 @@ function mergeServer(current: Store, incoming: Partial<PersistedState>): Partial
     unlockedBacks: unlocked,
     cardBack: back,
     avatar: incoming.avatar ?? current.avatar,
+    // `??` ne convient pas ici : `null` est une valeur légitime ("pas de
+    // photo", volontairement effacée) à distinguer du champ simplement
+    // absent (compte créé avant cet ajout) — d'où le test explicite sur la
+    // présence de la clé plutôt qu'un `?? current...` qui écraserait un
+    // retrait de photo volontaire par l'ancienne valeur locale.
+    avatarPhoto: 'avatarPhoto' in incoming ? (incoming.avatarPhoto ?? null) : current.avatarPhoto,
     gridCols: incoming.gridCols ?? current.gridCols,
     animPref: incoming.animPref ?? current.animPref,
     soundOn: incoming.soundOn ?? current.soundOn,
@@ -236,7 +267,7 @@ function beginTear(get: () => Store, set: (partial: Partial<Store>) => void, pac
   // Chaque sac tire son propre `openPack()` — sa garantie éventuelle
   // (guaranteedFloor) s'applique donc à *chaque* sac du lot, pas une seule
   // fois pour tout le paquet groupé.
-  const pull = Array.from({ length: qty }, () => openPack(pack, PACK_SIZE)).flat();
+  const pull = Array.from({ length: qty }, () => openPack(pack, pack.cards)).flat();
   const owned = { ...s.owned };
   const isNew: Record<number, true> = {};
   pull.forEach((c) => {
@@ -276,6 +307,7 @@ export const useStore = create<Store>()(
       cardBack: DEFAULT_CARD_BACK,
       unlockedBacks: [DEFAULT_CARD_BACK],
       avatar: DEFAULT_AVATAR,
+      avatarPhoto: null,
       gridCols: 3,
       animPref: 'on',
       soundOn: true,
@@ -308,6 +340,7 @@ export const useStore = create<Store>()(
       wheelWon: false,
       mailbox: [],
       mailboxUnread: 0,
+      tradesUnread: 0,
 
       // ── actions ──
       setSort: (sort) => set({ sort }),
@@ -331,6 +364,7 @@ export const useStore = create<Store>()(
       },
 
       setAvatar: (avatar) => set({ avatar }),
+      setAvatarPhoto: (avatarPhoto) => set({ avatarPhoto }),
 
       buyCardBack: (key) => {
         const s = get();
@@ -607,6 +641,19 @@ export const useStore = create<Store>()(
         }
       },
 
+      // ── échanges (juste la pastille — le reste vit dans TradesScreen) ──
+      setTradesUnread: (tradesUnread) => set({ tradesUnread }),
+
+      fetchTradesUnread: async () => {
+        if (!get().account) return;
+        try {
+          const res = await apiFetchTrades();
+          set({ tradesUnread: res.trades.filter((t) => t.direction === 'incoming' && t.status === 'pending').length });
+        } catch {
+          // Sondage périodique — échec silencieux, comme fetchMailbox.
+        }
+      },
+
       // ── compte ──
       bootAuth: async () => {
         const token = getToken();
@@ -645,7 +692,7 @@ export const useStore = create<Store>()(
 
       logout: () => {
         setToken(null);
-        set({ account: null, mailbox: [], mailboxUnread: 0 });
+        set({ account: null, mailbox: [], mailboxUnread: 0, tradesUnread: 0 });
       },
     }),
     {

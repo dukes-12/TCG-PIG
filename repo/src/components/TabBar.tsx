@@ -12,10 +12,39 @@ const TABS = [
   { to: '/profile', label: 'Profil', Icon: ProfileIcon },
 ];
 
+function Badge({ count }: { count: number }) {
+  if (count <= 0) return null;
+  return (
+    <span
+      style={{
+        position: 'absolute',
+        top: -4,
+        right: -6,
+        minWidth: 13,
+        height: 13,
+        borderRadius: 999,
+        background: 'var(--color-accent)',
+        color: 'var(--color-bg)',
+        fontSize: 8,
+        fontWeight: 700,
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        padding: '0 2px',
+      }}
+    >
+      {count > 9 ? '9+' : count}
+    </span>
+  );
+}
+
 export default function TabBar() {
-  // Pastille sur Profil : visible sans y entrer, comme MailboxButton dedans —
-  // même compteur, deux endroits pour le voir.
+  // Pastilles visibles sans entrer dans l'onglet, comme MailboxButton dans
+  // Profil (même compteur, deux endroits pour le voir) : messages non lus
+  // sur Profil, propositions d'échange entrantes en attente sur Échanges.
   const mailboxUnread = useStore((s) => s.mailboxUnread);
+  const tradesUnread = useStore((s) => s.tradesUnread);
+  const badges: Partial<Record<string, number>> = { '/profile': mailboxUnread, '/trades': tradesUnread };
 
   return (
     <nav className="tab-bar">
@@ -32,28 +61,7 @@ export default function TabBar() {
         >
           <span style={{ position: 'relative' }}>
             <Icon />
-            {to === '/profile' && mailboxUnread > 0 && (
-              <span
-                style={{
-                  position: 'absolute',
-                  top: -4,
-                  right: -6,
-                  minWidth: 13,
-                  height: 13,
-                  borderRadius: 999,
-                  background: 'var(--color-accent)',
-                  color: 'var(--color-bg)',
-                  fontSize: 8,
-                  fontWeight: 700,
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  padding: '0 2px',
-                }}
-              >
-                {mailboxUnread > 9 ? '9+' : mailboxUnread}
-              </span>
-            )}
+            <Badge count={badges[to] ?? 0} />
           </span>
           <span>{label}</span>
         </NavLink>
