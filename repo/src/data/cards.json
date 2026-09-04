@@ -36,7 +36,7 @@
       "id": 1,
       "key": "commune",
       "name": "Commune",
-      "weight": 49,
+      "weight": 44.8,
       "recycleValue": 8
     },
     {
@@ -57,7 +57,7 @@
       "id": 4,
       "key": "epique",
       "name": "Épique",
-      "weight": 3.8,
+      "weight": 8,
       "recycleValue": 200
     },
     {
