@@ -55,6 +55,9 @@ export interface CardVisual {
   chrome: boolean;
   chromeStyle: CSSProperties;
   chromeTopStyle: CSSProperties;
+  /** Paillettes — réservées à la version holo, voir plus bas. */
+  glitter: boolean;
+  glitterStyle: CSSProperties;
   lockStyle: CSSProperties;
 }
 
@@ -231,6 +234,36 @@ export function buildCardVisual(card: Card, opts: BuildCardOptions = {}): CardVi
     opacity: chromeOpacity,
   };
 
+  // Paillettes — inspiré de la carte "CSS Holo card effect" de nycos62
+  // (codepen.io/nycos62/pen/PoaKZjL, inaccessible depuis cet environnement
+  // — codepen.io est bloqué comme précédemment, réimplémenté depuis la
+  // famille de techniques "holo card CSS" à laquelle ce genre de pen
+  // appartient généralement : une texture de points tuilée, teintée par le
+  // dégradé arc-en-ciel via `background-blend-mode`, plutôt que des points
+  // qui flottent individuellement — cette dernière approche (les "3 points
+  // qui bougent") a déjà été retirée ailleurs, pas question d'y revenir
+  // sous une autre forme. Suit le pointeur (--mx/--my, posées par
+  // TiltCard ; repli à 50%/50% hors contexte interactif) pour un vrai
+  // miroitement qui répond au geste, comme les cartes holo qu'on penche
+  // sous la lumière. Réservé à la version holo — le chrome neutre
+  // d'Épique+ n'a pas de paillettes.
+  const glitter = holo && owned && holoAnim;
+  const glitterStyle: CSSProperties = {
+    position: 'absolute',
+    inset: 0,
+    pointerEvents: 'none',
+    borderRadius: R2,
+    backgroundImage: [
+      'radial-gradient(circle at 1px 1px,rgba(255,255,255,.95) 1px,transparent 0)',
+      'linear-gradient(115deg,#ff5f6d,#ffc93c 16%,#5cf29a 33%,#4fc3ff 50%,#a06bff 66%,#ff5fc7 83%,#ff5f6d)',
+    ].join(','),
+    backgroundSize: '6px 6px, 250% 250%',
+    backgroundBlendMode: 'overlay',
+    backgroundPosition: 'var(--mx, 50%) var(--my, 50%), var(--mx, 50%) var(--my, 50%)',
+    mixBlendMode: 'color-dodge',
+    opacity: 0.3,
+  } as CSSProperties;
+
   const lockStyle: CSSProperties = {
     position: 'absolute',
     inset: 0,
@@ -266,6 +299,8 @@ export function buildCardVisual(card: Card, opts: BuildCardOptions = {}): CardVi
     chrome,
     chromeStyle,
     chromeTopStyle,
+    glitter,
+    glitterStyle,
     lockStyle,
   };
 }
