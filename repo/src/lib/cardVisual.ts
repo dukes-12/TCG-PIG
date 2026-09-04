@@ -201,25 +201,26 @@ export function buildCardVisual(card: Card, opts: BuildCardOptions = {}): CardVi
   // proche du noir. Un second calque, fixe, imite le reflet du haut d'une
   // vraie surface chromée.
   //
-  // Deux teintes du même mécanisme : Épique+ reçoit un chrome neutre
-  // (marine → gris → argent), la version holo reçoit un chrome *coloré* —
-  // l'idée n'est pas de remplacer l'aspect holographique par du métal plat,
-  // mais de garder le còté holographique (les couleurs qui tournent) tout
-  // en lui donnant ce même fini métallique/brillant plutôt que l'ancien
-  // reflet blanc plat. Le pic clair (quasi blanc) au centre du dégradé
-  // holo est ce qui lui donne son còté "brillant", les teintes de part et
-  // d'autre restent la palette arc-en-ciel de la carte holo.
+  // Même teinte neutre (marine → gris → argent) pour Épique+ ET la version
+  // holo — un essai précédent teintait le chrome lui-même en arc-en-ciel
+  // pour les holos, mais l'effet holographique doit rester sur la carte
+  // (le cadre, déjà en dégradé arc-en-ciel animé plus haut), pas sur ce
+  // voile : le chrome n'est qu'une fine touche de brillance par-dessus.
+  // D'où une opacité nettement plus basse sur les holos — sinon le métal
+  // neutre écrase les couleurs du cadre au lieu de simplement les faire
+  // briller.
   const chrome = (!!skin.sheen || holo) && owned && holoAnim;
+  const chromeOpacity = holo ? 0.22 : 1;
   const chromeStyle: CSSProperties = {
     position: 'absolute',
     inset: 0,
     pointerEvents: 'none',
     borderRadius: R2,
-    backgroundImage: holo
-      ? 'linear-gradient(115deg,rgba(255,95,109,.18) 0%,rgba(255,201,60,.4) 16%,rgba(92,242,154,.55) 33%,rgba(255,255,255,.6) 50%,rgba(79,195,255,.55) 66%,rgba(160,107,255,.4) 83%,rgba(255,95,109,.18) 100%)'
-      : 'linear-gradient(135deg,rgba(20,20,40,.15) 0%,rgba(130,130,160,.25) 20%,rgba(255,255,255,.42) 40%,rgba(130,130,160,.25) 60%,rgba(20,20,40,.15) 80%,rgba(130,130,160,.25) 100%)',
+    backgroundImage:
+      'linear-gradient(135deg,rgba(20,20,40,.15) 0%,rgba(130,130,160,.25) 20%,rgba(255,255,255,.42) 40%,rgba(130,130,160,.25) 60%,rgba(20,20,40,.15) 80%,rgba(130,130,160,.25) 100%)',
     backgroundSize: '200% 200%',
     animation: 'pigChrome 3s ease infinite',
+    opacity: chromeOpacity,
   };
   const chromeTopStyle: CSSProperties = {
     position: 'absolute',
@@ -227,6 +228,7 @@ export function buildCardVisual(card: Card, opts: BuildCardOptions = {}): CardVi
     pointerEvents: 'none',
     borderRadius: Math.max(2, R2 - 2),
     background: 'linear-gradient(180deg,rgba(255,255,255,.25) 0%,transparent 50%)',
+    opacity: chromeOpacity,
   };
 
   const lockStyle: CSSProperties = {
