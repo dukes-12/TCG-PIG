@@ -16,17 +16,20 @@ interface Skin {
   art: string;
   txt: string;
   sh: string;
-  /** Épique et plus : reçoit le voile holo (shine + glare), voir plus bas. */
-  shine?: boolean;
+  sheen?: boolean;
+  /** Animated multi-stop foil background + floating particles (Légendaire, Mythique). */
+  holoFoil?: boolean;
+  /** Couleur des particules flottantes. */
+  spark?: string;
 }
 
 const SKIN: Skin[] = [
   { p: 1, bg: 'var(--color-neutral-400)', inner: 'var(--color-neutral-100)', art: 'var(--color-neutral-200)', txt: 'var(--color-text)', sh: 'none' },
   { p: 2, bg: 'linear-gradient(180deg,var(--color-accent-2-400),var(--color-accent-2-700))', inner: 'linear-gradient(180deg,#f4fce9,#e1eecc)', art: '#ccdbb2', txt: 'var(--color-accent-2-900)', sh: 'var(--shadow-sm)' },
   { p: 2.5, bg: 'linear-gradient(150deg,#5b8fd6,#d9ecff 45%,#2f5c9e)', inner: 'linear-gradient(180deg,#f2f8ff,#d8e8fb)', art: '#b6d2f0', txt: '#1c3866', sh: '0 2px 12px rgba(47,92,158,.35)' },
-  { p: 3, bg: 'linear-gradient(200deg,#a678d8,#2a1145 48%,#6c3fa0)', inner: 'radial-gradient(120% 85% at 50% 0%,#4a2673,#1e0c33)', art: '#33184f', txt: '#e8d4ff', sh: '0 4px 16px rgba(59,29,94,.45)', shine: true },
-  { p: 3.5, bg: 'linear-gradient(115deg,#8c6318,#ffe9b0 26%,#c99a3a 52%,#fff6d8 76%,#8c6318)', inner: 'linear-gradient(180deg,#fff8e2,#f0d9a0)', art: '#e9c877', txt: '#4a3410', sh: '0 6px 22px rgba(201,154,58,.5)', shine: true },
-  { p: 4, bg: 'linear-gradient(115deg,#0d0b12,#6c3fa0 18%,#ffd98a 42%,#3b1d5e 64%,#c99a3a 82%,#0d0b12)', inner: 'radial-gradient(130% 95% at 50% 0%,#2c1745,#0b0910 78%)', art: '#180f26', txt: '#ffd98a', sh: '0 8px 30px rgba(108,63,160,.6)', shine: true },
+  { p: 3, bg: 'linear-gradient(200deg,#a678d8,#2a1145 48%,#6c3fa0)', inner: 'radial-gradient(120% 85% at 50% 0%,#4a2673,#1e0c33)', art: '#33184f', txt: '#e8d4ff', sh: '0 4px 16px rgba(59,29,94,.45)', sheen: true },
+  { p: 3.5, bg: 'linear-gradient(115deg,#8c6318,#ffe9b0 26%,#c99a3a 52%,#fff6d8 76%,#8c6318)', inner: 'linear-gradient(180deg,#fff8e2,#f0d9a0)', art: '#e9c877', txt: '#4a3410', sh: '0 6px 22px rgba(201,154,58,.5)', sheen: true, holoFoil: true, spark: '#8c6318' },
+  { p: 4, bg: 'linear-gradient(115deg,#0d0b12,#6c3fa0 18%,#ffd98a 42%,#3b1d5e 64%,#c99a3a 82%,#0d0b12)', inner: 'radial-gradient(130% 95% at 50% 0%,#2c1745,#0b0910 78%)', art: '#180f26', txt: '#ffd98a', sh: '0 8px 30px rgba(108,63,160,.6)', sheen: true, holoFoil: true, spark: '#ffd98a' },
 ];
 
 /** Rareté à surface sombre → texte clair, ombres portées plus profondes. */
@@ -40,8 +43,6 @@ export interface CardVisual {
   locked: boolean;
   mini: boolean;
   holo: boolean;
-  /** Épique+ (skin.shine) ou version holo : reçoit les calques shine/glare. */
-  holoFx: boolean;
   shell: CSSProperties;
   inner: CSSProperties;
   artWrap: CSSProperties;
@@ -50,12 +51,9 @@ export interface CardVisual {
   typeStyle: CSSProperties;
   pipWrap: CSSProperties;
   pips: { style: CSSProperties }[];
-  /** Voile arc-en-ciel en `mix-blend-mode: color-dodge` — invisible au repos
-   *  (voir --card-opacity), révélé par TiltCard pendant l'inclinaison. */
-  shine: CSSProperties;
-  /** Reflet spéculaire radial qui suit le pointeur, en `mix-blend-mode:
-   *  overlay` — même mécanisme que `shine`. */
-  glare: CSSProperties;
+  dots: { style: CSSProperties }[];
+  sheen: boolean;
+  sheenStyle: CSSProperties;
   lockStyle: CSSProperties;
 }
 
@@ -66,9 +64,10 @@ export interface BuildCardOptions {
   forceOwned?: boolean;
   ownedCount?: number;
   /** Version holo de cette carte (voir HOLO_CHANCE dans state/store.ts) —
-   *  cadre en dégradé arc-en-ciel statique quelle que soit la rareté, et
-   *  reçoit le même voile shine/glare que les raretés Épique+. N'a d'effet
-   *  que si la carte est possédée. */
+   *  remplace le fond de la rareté par un dégradé arc-en-ciel animé, quelle
+   *  que soit la rareté, et force les mêmes ornements (points flottants,
+   *  reflet) que les skins déjà "holoFoil". N'a d'effet que si la carte est
+   *  possédée. */
   isHolo?: boolean;
 }
 
@@ -105,17 +104,24 @@ export function buildCardVisual(card: Card, opts: BuildCardOptions = {}): CardVi
     background: skin.bg,
     boxShadow: skin.sh,
   };
+  if (skin.holoFoil && holoAnim && owned) {
+    shell.backgroundSize = '300% 100%';
+    shell.animation = 'pigHolo 5s linear infinite';
+  }
   // La version holo l'emporte sur le skin de base, quelle que soit la
-  // rareté — même une carte Commune holo a le cadre arc-en-ciel. Statique
-  // (pas d'animation en boucle) : c'est le voile shine/glare plus bas, posé
-  // par-dessus au survol/à l'inclinaison, qui fait le travail de "ça
-  // scintille" — pas le cadre lui-même.
+  // rareté — même une carte Commune holo tourne en arc-en-ciel. Réutilise
+  // le même mécanisme (`background-position` + `pigHolo`) que le foil des
+  // raretés hautes, avec un dégradé bien plus large et saturé pour rester
+  // reconnaissable même sans l'animation (holoAnim coupé).
   if (holo) {
     shell.background = 'linear-gradient(115deg,#ff5f6d,#ffc93c 16%,#5cf29a 33%,#4fc3ff 50%,#a06bff 66%,#ff5fc7 83%,#ff5f6d)';
+    shell.backgroundSize = '300% 100%';
+    if (holoAnim) shell.animation = 'pigHolo 3.2s linear infinite';
   }
   if (!owned) {
     shell.filter = 'grayscale(1)';
     shell.opacity = 0.4;
+    shell.animation = 'none';
     shell.boxShadow = 'none';
   }
 
@@ -184,55 +190,35 @@ export function buildCardVisual(card: Card, opts: BuildCardOptions = {}): CardVi
     };
   });
 
-  // Voile holo — repris de la technique "carte Pokémon holographique CSS"
-  // (poke-holo.simey.me / github.com/simeydotme/pokemon-cards-css,
-  // public/css/cards/base.css + regular-holo.css) : deux calques,
-  // `shine` (bandes arc-en-ciel en repeating-linear-gradient, fondues en
-  // `mix-blend-mode: color-dodge`) et `glare` (reflet radial blanc qui
-  // suit le pointeur, en `overlay`). Tous deux lisent `--pointer-x`/
-  // `--pointer-y`/`--card-opacity`, posées par TiltCard sur un ancêtre
-  // (héritées sans prop drilling) — invisibles par défaut (opacity 0 de
-  // repli) tant que rien ne les définit, exactement comme la référence :
-  // une carte holo est plate/imprimée au repos, elle ne scintille qu'à
-  // l'inclinaison. `color-dodge` sur un fond blanc pur ne change rien
-  // (division par un facteur ≤1 sur 255 sature à blanc) — le voile
-  // s'efface donc de lui-même sur la plaquette de nom, pas besoin de le
-  // masquer manuellement pour garder le texte lisible.
-  const holoFx = (skin.shine || holo) && owned && holoAnim;
-  const shine: CSSProperties = {
+  const HOLO_SPARKS = ['#ff5f6d', '#5cf29a', '#a06bff'];
+  const dots =
+    (skin.holoFoil || holo) && owned
+      ? [0, 1, 2].map((k) => ({
+          style: {
+            position: 'absolute',
+            left: `${18 + k * 28}%`,
+            bottom: '12%',
+            width: big ? 6 : 3.5,
+            height: big ? 6 : 3.5,
+            borderRadius: '50%',
+            background: holo ? HOLO_SPARKS[k] : (skin.spark ?? '#ffe1d0'),
+            animation: holoAnim ? `pigFloat ${2.4 + k * 0.6}s ease-in-out infinite` : 'none',
+            opacity: 0.6,
+          } as CSSProperties,
+        }))
+      : [];
+
+  const sheen = (skin.sheen || holo) && owned && holoAnim;
+  const sheenStyle: CSSProperties = {
     position: 'absolute',
-    inset: 0,
+    top: '-20%',
+    left: 0,
+    width: '55%',
+    height: '140%',
     pointerEvents: 'none',
-    borderRadius: R2,
-    // Deux images composées via `background-blend-mode: overlay` avant le
-    // `mix-blend-mode: color-dodge` final — comme la référence : sans les
-    // fines rayures sombres qui cassent l'arc-en-ciel, le color-dodge brûle
-    // tout en blanc dès qu'on s'approche du bord. C'est cette texture
-    // (pas juste "un dégradé") qui donne l'aspect foil plutôt qu'un aplat.
-    backgroundImage: [
-      'repeating-linear-gradient(110deg,#f80e35,#eedf10,#21e985,#0dbde9,#c929f1,#f80e35,#eedf10,#21e985,#0dbde9,#c929f1)',
-      'repeating-linear-gradient(90deg,black 0px,black 1px,#666 1px,#666 2px)',
-    ].join(','),
-    backgroundBlendMode: 'overlay',
-    backgroundSize: '250% 250%, cover',
-    backgroundPosition: 'var(--pointer-x, 50%) var(--pointer-y, 50%), center center',
-    mixBlendMode: 'color-dodge',
-    filter: 'brightness(.85) contrast(1.8) saturate(.9)',
-    opacity: 'var(--card-opacity, 0)',
-  } as CSSProperties;
-  const glare: CSSProperties = {
-    position: 'absolute',
-    inset: 0,
-    pointerEvents: 'none',
-    borderRadius: R2,
-    backgroundImage:
-      'radial-gradient(farthest-corner circle at var(--pointer-x, 50%) var(--pointer-y, 50%),hsla(0,0%,100%,.7) 5%,hsla(0,0%,100%,.3) 28%,hsla(0,0%,0%,.35) 100%)',
-    mixBlendMode: 'overlay',
-    filter: 'brightness(.85) contrast(1.4)',
-    // Plafonné à .7 (comme la référence, ×.8) : à pleine opacité le glare
-    // blanc écrase l'illustration au lieu de courir dessus.
-    opacity: 'calc(var(--card-opacity, 0) * 0.7)',
-  } as CSSProperties;
+    background: `linear-gradient(100deg,transparent,rgba(255,255,255,${card.rarity === 6 ? 0.38 : 0.45}),transparent)`,
+    animation: `pigShine ${card.rarity >= 5 ? 3.1 : 4.6}s ease-in-out infinite`,
+  };
 
   const lockStyle: CSSProperties = {
     position: 'absolute',
@@ -258,7 +244,6 @@ export function buildCardVisual(card: Card, opts: BuildCardOptions = {}): CardVi
     locked: !owned,
     mini: !big,
     holo,
-    holoFx,
     shell,
     inner,
     artWrap,
@@ -267,8 +252,9 @@ export function buildCardVisual(card: Card, opts: BuildCardOptions = {}): CardVi
     typeStyle,
     pipWrap,
     pips,
-    shine,
-    glare,
+    dots,
+    sheen,
+    sheenStyle,
     lockStyle,
   };
 }

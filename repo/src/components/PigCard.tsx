@@ -4,12 +4,11 @@ import type { Card } from '../types';
 import CardArt from './CardArt';
 import SecretCard from './SecretCard';
 
-/** Renders one card: shell (rarity identity — gradient/shadow) → inner
- *  (surface) → artWrap / namePlate / metaRow, plus le voile holo
- *  (shine + glare, Épique+ et version holo — voir cardVisual.ts) posé en
- *  dernier pour peindre par-dessus tout le reste. Une seule direction
- *  visuelle (Collector foil) : la prop `style` a disparu avec le retrait de
- *  la direction cartoon.
+/** Renders one card: shell (rarity identity — gradient/shadow/animation)
+ *  → inner (surface) → artWrap / namePlate / metaRow, plus optional
+ *  ornaments (sheen, floating particles). Une seule direction visuelle
+ *  (Collector foil) : la prop `style` a disparu avec le retrait de la
+ *  direction cartoon.
  *
  *  La carte secrète (rareté 7) n'a pas de skin dans buildCardVisual — la
  *  table `SKIN` n'a que 6 entrées (raretés 1-6), y indexer avec 7
@@ -43,7 +42,12 @@ export default function PigCard({
   return (
     <div style={d.shell}>
       <div style={d.inner}>
-        <div style={d.artWrap}>{d.owned ? <CardArt card={card} mini={!big} /> : <div style={d.lockStyle}>?</div>}</div>
+        <div style={d.artWrap}>
+          {d.owned ? <CardArt card={card} mini={!big} /> : <div style={d.lockStyle}>?</div>}
+          {d.dots.map((dot, i) => (
+            <i key={i} style={dot.style} />
+          ))}
+        </div>
         <div style={d.namePlate}>{d.name}</div>
         <div style={d.metaRow}>
           <span style={d.typeStyle}>{d.holo ? '✨ ' : ''}{d.type}</span>
@@ -53,13 +57,8 @@ export default function PigCard({
             ))}
           </span>
         </div>
+        {d.sheen && <div style={d.sheenStyle} />}
       </div>
-      {d.holoFx && (
-        <>
-          <div style={d.shine} />
-          <div style={d.glare} />
-        </>
-      )}
     </div>
   );
 }
