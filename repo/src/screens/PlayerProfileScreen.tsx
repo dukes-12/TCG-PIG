@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { useParams } from 'react-router-dom';
+import { useNavigate, useParams } from 'react-router-dom';
 import Avatar from '../components/Avatar';
 import Chip from '../components/Chip';
 import PigCard from '../components/PigCard';
@@ -28,6 +28,7 @@ type Tab = 'classique' | 'holo';
  *  d'échange possible pour cette carte-là. */
 export default function PlayerProfileScreen() {
   const { username } = useParams<{ username: string }>();
+  const navigate = useNavigate();
   const myOwned = useStore((s) => s.owned);
   const myOwnedHolo = useStore((s) => s.ownedHolo);
   const holoAnim = useAnimations();
@@ -78,6 +79,25 @@ export default function PlayerProfileScreen() {
 
       {owned && (
         <>
+          <div className="screen-inner" style={{ paddingTop: 12 }}>
+            <button
+              className="pressable"
+              onClick={() => navigate(`/battles?vs=${encodeURIComponent(username ?? '')}`)}
+              style={{
+                cursor: 'pointer',
+                border: 0,
+                fontFamily: 'var(--font-heading)',
+                fontSize: 12,
+                padding: '9px 16px',
+                borderRadius: 999,
+                background: 'var(--color-accent)',
+                color: 'var(--color-bg)',
+              }}
+            >
+              ⚔️ Défier
+            </button>
+          </div>
+
           <div className="screen-inner" style={{ paddingTop: 14 }}>
             <div className="chip-row">
               <Chip label="Classique" active={tab === 'classique'} onClick={() => setTab('classique')} />

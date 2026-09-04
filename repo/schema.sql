@@ -38,6 +38,28 @@ CREATE TABLE IF NOT EXISTS trades (
 CREATE INDEX IF NOT EXISTS idx_trades_from ON trades(from_user_id);
 CREATE INDEX IF NOT EXISTS idx_trades_to ON trades(to_user_id);
 
+-- Combats — voir IDEES_AMIS_COMBAT.md pour la conception et
+-- functions/_lib/battle.ts pour le calcul de puissance/résolution.
+-- Asynchrone, même forme que `trades` : le défieur propose son équipe,
+-- l'adversaire compose la sienne pour répondre, le résultat est calculé et
+-- figé au moment où il valide.
+CREATE TABLE IF NOT EXISTS battles (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  challenger_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  opponent_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  -- [{ "cardId": n, "holo": bool }] × 5, dans l'ordre choisi par chaque
+  -- joueur (l'ordre fixe les duels slot à slot). `opponent_team_json` et
+  -- `result_json` restent NULL tant que l'adversaire n'a pas répondu.
+  challenger_team_json TEXT NOT NULL,
+  opponent_team_json TEXT,
+  result_json TEXT,
+  status TEXT NOT NULL DEFAULT 'pending', -- pending | completed | declined | cancelled
+  created_at INTEGER NOT NULL,
+  resolved_at INTEGER
+);
+CREATE INDEX IF NOT EXISTS idx_battles_challenger ON battles(challenger_id);
+CREATE INDEX IF NOT EXISTS idx_battles_opponent ON battles(opponent_id);
+
 -- Boîte aux lettres : notifications lues côté joueur dans Profil. Pensée pour
 -- les cadeaux manuels via la console D1 (voir ADMIN.md) — quand tu crédites
 -- des glands à la main, le joueur voit désormais *pourquoi* son solde a

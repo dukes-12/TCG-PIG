@@ -102,6 +102,57 @@ export function apiMarkMailboxRead(ids: number[]) {
   return call<{ ok: true }>('/mailbox', { method: 'POST', body: JSON.stringify({ ids }) });
 }
 
+/** Combats — voir IDEES_AMIS_COMBAT.md pour la conception et
+ *  functions/_lib/battle.ts pour le calcul (côté serveur, jamais côté
+ *  client — le résultat n'est jamais fait confiance s'il venait d'ici). */
+export interface TeamSlot {
+  cardId: number;
+  holo: boolean;
+}
+
+export interface DuelResult {
+  slot: number;
+  challengerCardId: number;
+  opponentCardId: number;
+  challengerPower: number;
+  opponentPower: number;
+  winner: 'challenger' | 'opponent' | 'tie';
+}
+
+export interface BattleResult {
+  duels: DuelResult[];
+  challengerRoundsWon: number;
+  opponentRoundsWon: number;
+  challengerTotalPower: number;
+  opponentTotalPower: number;
+  challengerSynergyBonus: number;
+  opponentSynergyBonus: number;
+  winner: 'challenger' | 'opponent' | 'tie';
+}
+
+export interface Battle {
+  id: number;
+  challengerUsername: string;
+  opponentUsername: string;
+  challengerTeam: TeamSlot[];
+  opponentTeam: TeamSlot[] | null;
+  result: BattleResult | null;
+  status: 'pending' | 'completed' | 'declined' | 'cancelled';
+  createdAt: number;
+  resolvedAt: number | null;
+  direction: 'incoming' | 'outgoing';
+}
+
+export function apiFetchBattles() {
+  return call<{ battles: Battle[] }>('/battles');
+}
+export function apiCreateBattle(opponentUsername: string, team: TeamSlot[]) {
+  return call<{ id: number }>('/battles', { method: 'POST', body: JSON.stringify({ opponentUsername, team }) });
+}
+export function apiRespondBattle(id: number, action: 'respond' | 'decline' | 'cancel', team?: TeamSlot[]) {
+  return call<{ ok: true; result?: BattleResult }>(`/battles/${id}`, { method: 'POST', body: JSON.stringify({ action, team }) });
+}
+
 /** Requêtes SQL d'administration — voir functions/api/admin/queries et
  *  ADMIN.md. Réservées côté serveur au compte "Dukes" (requireAdmin) ;
  *  ces routes répondent 403 pour tout autre compte, il ne faut donc

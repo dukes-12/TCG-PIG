@@ -67,6 +67,13 @@ export default function ProfileScreen() {
         <h1 style={{ fontSize: 30, margin: 0, lineHeight: 1 }}>Profil</h1>
         {account && (
           <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 14 }}>
+            <button
+              onClick={() => navigate('/battles')}
+              aria-label="Combats"
+              style={{ border: 0, background: 'none', cursor: 'pointer', fontSize: 19, opacity: 0.75, padding: 4, lineHeight: 1 }}
+            >
+              ⚔️
+            </button>
             <MailboxButton unread={mailboxUnread} onClick={() => setMailboxOpen(true)} />
             <button
               onClick={logout}

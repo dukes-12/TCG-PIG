@@ -5,6 +5,7 @@ import LotteryOverlay from './components/LotteryOverlay';
 import WheelOverlay from './components/WheelOverlay';
 import TabBar from './components/TabBar';
 import Toast from './components/Toast';
+import BattlesScreen from './screens/BattlesScreen';
 import CollectionScreen from './screens/CollectionScreen';
 import DupesScreen from './screens/DupesScreen';
 import FriendsScreen from './screens/FriendsScreen';
@@ -74,6 +75,7 @@ export default function App() {
         <Route path="/open" element={<OpenScreen />} />
         <Route path="/dupes" element={<DupesScreen />} />
         <Route path="/trades" element={account ? <TradesScreen /> : <Navigate to="/profile" replace />} />
+        <Route path="/battles" element={account ? <BattlesScreen /> : <Navigate to="/profile" replace />} />
         <Route path="/friends" element={<FriendsScreen />} />
         <Route path="/profile" element={<ProfileScreen />} />
         <Route path="/players/:username" element={account ? <PlayerProfileScreen /> : <Navigate to="/profile" replace />} />

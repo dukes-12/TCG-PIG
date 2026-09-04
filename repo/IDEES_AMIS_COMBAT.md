@@ -1,9 +1,37 @@
 # Amis & combat — proposition de conception
 
-Document de conception, **pas encore implémenté**. Objectif : poser le plan
-(modèle de données, écrans, règles) avant de partir coder quoi que ce soit,
-puisque ça change la nature de l'app — de 100 % locale/hors-ligne à un vrai
-backend avec comptes utilisateurs.
+Document de conception original. Objectif : poser le plan (modèle de
+données, écrans, règles) avant de partir coder quoi que ce soit, puisque ça
+change la nature de l'app — de 100 % locale/hors-ligne à un vrai backend
+avec comptes utilisateurs.
+
+> **Statut** : Comptes et amis (section 1 et une bonne partie de la 2) sont
+> en place depuis un moment. **Le combat (section 3) est maintenant
+> implémenté** — écran `/battles` (`BattlesScreen.tsx`), résolution côté
+> serveur dans `functions/_lib/battle.ts`, table `battles` (`schema.sql`).
+> Version retenue, "Niveau 1 amélioré" par rapport à ce que décrit ce
+> document plus bas :
+> - Puissance par rareté doublée à chaque palier (Commune=1 … Mythique=32),
+>   **+50% si la carte est en holo** (mécanique ajoutée après ce document,
+>   voir `HOLO_CHANCE`) — pas dans le barème d'origine ci-dessous.
+> - **Bonus de synergie** : 3+ cartes de la même catégorie dans l'équipe →
+>   +15% de puissance totale — pas dans la proposition d'origine, ajouté
+>   pour récompenser une équipe "à thème" plutôt qu'un calcul froid.
+> - Résolution en **5 duels slot à slot** (pas une simple somme comparée) :
+>   chaque camp choisit l'ordre de ses 5 cartes, un peu de variance (±10%)
+>   par duel tirée d'une graine liée à l'id du combat (reproductible,
+>   calculée côté serveur), le camp qui gagne le plus de manches l'emporte
+>   (égalité de manches → puissance totale qui départage).
+> - **Asynchrone**, exactement le schéma envisagé plus bas (table dédiée,
+>   même modèle que `trades`) — pas de temps réel.
+> - Question ouverte tranchée : l'équipe adverse n'est **pas** montrée avant
+>   de composer la sienne — connue seulement après résolution.
+> - Carte secrète explicitement exclue des équipes.
+>
+> Le reste de ce document (schéma Postgres/Supabase, phasage, questions
+> restées ouvertes) garde sa valeur de référence historique mais ne
+> correspond plus à l'implémentation réelle (Cloudflare D1, pas Supabase —
+> voir la note plus bas, déjà présente avant ce statut).
 
 > **Note d'adaptation à cette branche** : ce document a été écrit à l'origine
 > sur une base sans backend, d'où la recommandation Supabase. Cette branche a
