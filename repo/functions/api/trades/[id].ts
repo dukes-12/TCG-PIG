@@ -41,27 +41,23 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env, params }
 
   const fromRow = await env.DB.prepare('SELECT state_json FROM users WHERE id = ?').bind(trade.from_user_id).first<{ state_json: string }>();
   const toRow = await env.DB.prepare('SELECT state_json FROM users WHERE id = ?').bind(trade.to_user_id).first<{ state_json: string }>();
-  const fromState = JSON.parse(fromRow?.state_json || '{}') as { owned?: Record<string, number>; ownedHolo?: Record<string, number> };
-  const toState = JSON.parse(toRow?.state_json || '{}') as { owned?: Record<string, number>; ownedHolo?: Record<string, number> };
+  const fromState = JSON.parse(fromRow?.state_json || '{}') as { owned?: Record<string, number> };
+  const toState = JSON.parse(toRow?.state_json || '{}') as { owned?: Record<string, number> };
   fromState.owned ??= {};
   toState.owned ??= {};
-  fromState.ownedHolo ??= {};
-  toState.ownedHolo ??= {};
 
   const offer = JSON.parse(trade.offer_json) as Record<string, number>;
   const wanted = JSON.parse(trade.request_json) as Record<string, number>;
 
-  // Même plancher protégé qu'à la proposition (voir index.ts) — revérifié
-  // ici aussi : la collection a pu changer depuis (recyclage, autre
-  // échange…), donc un exemplaire devenu "le seul holo" entre-temps ne doit
-  // pas passer.
+  // `owned` et `ownedHolo` sont deux collections indépendantes (voir
+  // HOLO_CHANCE dans state/store.ts) — les échanges ne portent que sur
+  // `owned`. Revérifié ici (comme à la proposition) : la collection a pu
+  // changer depuis (recyclage, autre échange…).
   for (const [cid, qty] of Object.entries(offer)) {
-    const keep = Math.max(1, fromState.ownedHolo[cid] || 0);
-    if ((fromState.owned[cid] || 0) - qty < keep) return json({ error: "Le proposant n'a plus ce doublon." }, 409);
+    if ((fromState.owned[cid] || 0) < qty + 1) return json({ error: "Le proposant n'a plus ce doublon." }, 409);
   }
   for (const [cid, qty] of Object.entries(wanted)) {
-    const keep = Math.max(1, toState.ownedHolo[cid] || 0);
-    if ((toState.owned[cid] || 0) - qty < keep) return json({ error: "Tu n'as plus ce doublon." }, 409);
+    if ((toState.owned[cid] || 0) < qty + 1) return json({ error: "Tu n'as plus ce doublon." }, 409);
   }
 
   for (const [cid, qty] of Object.entries(offer)) {

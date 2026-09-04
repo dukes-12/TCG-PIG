@@ -28,13 +28,21 @@ export default function CardDetailOverlay() {
   const visual = RARITY_VISUALS[card.rarity];
   const count = owned[card.id] || 0;
   const holoCount = ownedHolo[card.id] || 0;
+  // Deux collections indépendantes (voir HOLO_CHANCE dans state/store.ts) :
+  // la carte est révélée dès qu'un exemplaire existe dans l'une OU l'autre,
+  // et les deux comptes s'affichent côte à côte plutôt que l'un "dans"
+  // l'autre.
+  const revealed = count > 0 || holoCount > 0;
   const isSecret = card.rarity === SECRET_RARITY_ID;
+  const parts: string[] = [];
+  if (count > 0) parts.push(`${count} classique${count > 1 ? 's' : ''}`);
+  if (holoCount > 0) parts.push(`${holoCount} holo`);
   const meta = isSecret
     ? count > 0
       ? '1 sur 1 — pièce unique, ne se recycle pas'
       : 'Existe quelque part. 1 chance sur 6 000 000 par carte tirée.'
-    : count > 0
-      ? `${card.type} · ${count} exemplaire${count > 1 ? 's' : ''}${holoCount > 0 ? ` (dont ${holoCount} holo)` : ''} · ${rarity.recycleValue} glands`
+    : revealed
+      ? `${card.type} · ${parts.join(' · ')} · ${rarity.recycleValue} glands`
       : `${card.type} · pas encore trouvée`;
 
   return (
@@ -52,12 +60,12 @@ export default function CardDetailOverlay() {
       />
       <div style={{ width: 238, height: 332, animation: 'pigPop .3s ease both', position: 'relative', zIndex: 2 }}>
         <TiltCard>
-          <PigCard card={card} big holoAnim={holoAnim} ownedCount={count} isHolo={holoCount > 0} />
+          <PigCard card={card} big holoAnim={holoAnim} ownedCount={count + holoCount} isHolo={holoCount > 0} />
         </TiltCard>
       </div>
       <div style={{ marginTop: 22, textAlign: 'center', color: 'var(--color-bg)', position: 'relative', zIndex: 2 }}>
         <div style={{ fontSize: 9, letterSpacing: '.2em', textTransform: 'uppercase', opacity: 0.7 }}>{rarity.name}</div>
-        <h2 style={{ fontSize: 25, margin: '7px 0 0', color: 'var(--color-bg)', textWrap: 'balance' as const }}>{count > 0 ? card.name : '???'}</h2>
+        <h2 style={{ fontSize: 25, margin: '7px 0 0', color: 'var(--color-bg)', textWrap: 'balance' as const }}>{revealed ? card.name : '???'}</h2>
         <div style={{ fontSize: 12, opacity: 0.7, marginTop: 7 }}>{meta}</div>
       </div>
       <button

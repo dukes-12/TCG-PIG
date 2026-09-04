@@ -191,28 +191,33 @@ export function buildCardVisual(card: Card, opts: BuildCardOptions = {}): CardVi
   });
 
   // Voile métallique — remplace l'ancien reflet qui balayait les cartes
-  // Épique/Légendaire/Mythique et la version holo (« pas très beau »,
-  // sur toutes les cartes qui l'avaient — la version holo gardait encore
-  // l'ancien reflet diagonal après le premier passage, corrigé ici). Un
-  // dégradé large dont on anime la position (marine → gris → argent →
-  // gris → marine), plutôt qu'une bande qui traverse : ça se lit comme du
-  // chrome brossé qui ondule, pas comme un flash qui passe. L'alpha est
-  // directement dans les arrêts du dégradé (pas d'opacité globale ni de
-  // mix-blend-mode) : un premier essai en `mix-blend-mode: overlay`
-  // disparaissait presque sur les fonds très sombres (Mythique) — l'overlay
-  // écrase vers le noir sur un fond déjà proche du noir. Ici le sommet
-  // argenté reste bien visible partout, et les creux marine restent
-  // translucides pour laisser transparaître la couleur propre à chaque
-  // rareté (ou le cadre arc-en-ciel pour la version holo). Un second
-  // calque, fixe, imite le reflet du haut d'une vraie surface chromée.
+  // Épique/Légendaire/Mythique et la version holo (« pas très beau »). Un
+  // dégradé large dont on anime la position, plutôt qu'une bande qui
+  // traverse : ça se lit comme du métal brossé qui ondule, pas comme un
+  // flash qui passe. L'alpha est directement dans les arrêts du dégradé
+  // (pas d'opacité globale ni de mix-blend-mode) : un premier essai en
+  // `mix-blend-mode: overlay` disparaissait presque sur les fonds très
+  // sombres (Mythique) — l'overlay écrase vers le noir sur un fond déjà
+  // proche du noir. Un second calque, fixe, imite le reflet du haut d'une
+  // vraie surface chromée.
+  //
+  // Deux teintes du même mécanisme : Épique+ reçoit un chrome neutre
+  // (marine → gris → argent), la version holo reçoit un chrome *coloré* —
+  // l'idée n'est pas de remplacer l'aspect holographique par du métal plat,
+  // mais de garder le còté holographique (les couleurs qui tournent) tout
+  // en lui donnant ce même fini métallique/brillant plutôt que l'ancien
+  // reflet blanc plat. Le pic clair (quasi blanc) au centre du dégradé
+  // holo est ce qui lui donne son còté "brillant", les teintes de part et
+  // d'autre restent la palette arc-en-ciel de la carte holo.
   const chrome = (!!skin.sheen || holo) && owned && holoAnim;
   const chromeStyle: CSSProperties = {
     position: 'absolute',
     inset: 0,
     pointerEvents: 'none',
     borderRadius: R2,
-    backgroundImage:
-      'linear-gradient(135deg,rgba(20,20,40,.15) 0%,rgba(130,130,160,.25) 20%,rgba(255,255,255,.42) 40%,rgba(130,130,160,.25) 60%,rgba(20,20,40,.15) 80%,rgba(130,130,160,.25) 100%)',
+    backgroundImage: holo
+      ? 'linear-gradient(115deg,rgba(255,95,109,.18) 0%,rgba(255,201,60,.4) 16%,rgba(92,242,154,.55) 33%,rgba(255,255,255,.6) 50%,rgba(79,195,255,.55) 66%,rgba(160,107,255,.4) 83%,rgba(255,95,109,.18) 100%)'
+      : 'linear-gradient(135deg,rgba(20,20,40,.15) 0%,rgba(130,130,160,.25) 20%,rgba(255,255,255,.42) 40%,rgba(130,130,160,.25) 60%,rgba(20,20,40,.15) 80%,rgba(130,130,160,.25) 100%)',
     backgroundSize: '200% 200%',
     animation: 'pigChrome 3s ease infinite',
   };

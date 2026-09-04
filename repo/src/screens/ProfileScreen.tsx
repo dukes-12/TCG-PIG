@@ -22,7 +22,6 @@ import type { RarityId } from '../types';
 export default function ProfileScreen() {
   const account = useStore((s) => s.account);
   const owned = useStore((s) => s.owned);
-  const ownedHolo = useStore((s) => s.ownedHolo);
   const glands = useStore((s) => s.glands);
   const openedCount = useStore((s) => s.openedCount);
   const avatar = useStore((s) => s.avatar);
@@ -188,7 +187,7 @@ export default function ProfileScreen() {
             style={{ display: 'flex', alignItems: 'center', gap: 14, padding: '12px 14px', borderRadius: 28, background: 'var(--color-surface)', cursor: 'pointer' }}
           >
             <div style={{ width: 74, height: 104, flex: 'none' }}>
-              <PigCard card={best} holoAnim={holoAnim} ownedCount={owned[best.id] || 0} isHolo={(ownedHolo[best.id] || 0) > 0} />
+              <PigCard card={best} holoAnim={holoAnim} ownedCount={owned[best.id] || 0} />
             </div>
             <div>
               <div style={{ fontFamily: 'var(--font-heading)', fontSize: 18, lineHeight: 1.15 }}>{best.name}</div>

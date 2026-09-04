@@ -83,10 +83,13 @@ export const STARTER_PACKS = 5;
 /** Version holographique : un tirage indépendant sur *chaque* carte tirée
  *  (sacs, sac gratuit, Loterie), jamais sur la carte secrète — elle a déjà
  *  son propre habillage unique, pas besoin d'une seconde couche de rareté
- *  dessus. Une carte holo compte comme n'importe quel exemplaire dans
- *  `owned` (la complétion ne change pas), et *en plus* dans `ownedHolo` —
- *  un sous-compte qui ne peut jamais dépasser `owned` (voir recycle /
- *  recycleHolo, qui préservent cet invariant). */
+ *  dessus. `owned` et `ownedHolo` sont deux collections *indépendantes* à
+ *  compléter chacune de son côté : un tirage qui sort en holo n'incrémente
+ *  QUE `ownedHolo`, jamais `owned` — la version holo d'une carte ne compte
+ *  donc pas comme "possédée" dans la collection classique tant qu'un
+ *  exemplaire normal n'a pas été tiré séparément (voir beginTear /
+ *  buyLottery). Recycler l'un ne touche jamais l'autre non plus (recycle /
+ *  recycleHolo). */
 export const HOLO_CHANCE = 1 / 15;
 /** Multiplicateur de valeur au recyclage d'un doublon holo, par rapport au
  *  recyclage normal — une pièce plus rare mérite un tarif nettement
@@ -95,10 +98,8 @@ export const HOLO_RECYCLE_MULTIPLIER = 3;
 
 interface PersistedState {
   owned: Record<number, number>;
-  /** Sous-ensemble de `owned` : combien de ces exemplaires sont la version
-   *  holo. `ownedHolo[id] <= owned[id]` toujours — jamais initialisé au delà
-   *  de ce que `owned` autorise (voir beginTear / buyLottery / recycle /
-   *  recycleHolo). */
+  /** Collection holo — *indépendante* de `owned` (pas un sous-ensemble) :
+   *  un tirage holo n'incrémente que celle-ci, voir HOLO_CHANCE plus haut. */
   ownedHolo: Record<number, number>;
   glands: number;
   stock: Record<PackKey, number>;
@@ -304,13 +305,20 @@ function beginTear(get: () => Store, set: (partial: Partial<Store>) => void, pac
   const ownedHolo = { ...s.ownedHolo };
   const isNew: Record<number, true> = {};
   // Jet holo indépendant par carte tirée, jamais sur la carte secrète (déjà
-  // unique en soi). `ownedHolo` reste un sous-ensemble de `owned` : toute
-  // carte holo est aussi comptée normalement.
+  // unique en soi). Un tirage holo va UNIQUEMENT dans `ownedHolo`, jamais
+  // dans `owned` — deux collections séparées à compléter chacune de son
+  // côté (voir HOLO_CHANCE) : `isNew` suit celle des deux qui est
+  // concernée par ce tirage précis, pour que la pastille "Nouvelle carte"
+  // reste correcte dans les deux cas.
   const pullHolo = pull.map((c) => c.rarity !== SECRET_RARITY_ID && Math.random() < HOLO_CHANCE);
   pull.forEach((c, i) => {
-    if (!owned[c.id]) isNew[c.id] = true;
-    owned[c.id] = (owned[c.id] || 0) + 1;
-    if (pullHolo[i]) ownedHolo[c.id] = (ownedHolo[c.id] || 0) + 1;
+    if (pullHolo[i]) {
+      if (!ownedHolo[c.id]) isNew[c.id] = true;
+      ownedHolo[c.id] = (ownedHolo[c.id] || 0) + 1;
+    } else {
+      if (!owned[c.id]) isNew[c.id] = true;
+      owned[c.id] = (owned[c.id] || 0) + 1;
+    }
   });
   for (let i = 0; i < qty; i++) trackPackOpened(pack.key, source);
   pull.forEach((c) => trackCardPulled(c, pack.key));
@@ -591,37 +599,23 @@ export const useStore = create<Store>()(
         const s = get();
         const card = CARDS.find((c) => c.id === cardId);
         const count = s.owned[cardId] || 0;
-        // On garde toujours au moins 1 exemplaire — et en plus tous les
-        // exemplaires holo (`ownedHolo`) : ils se recyclent à part, via
-        // recycleHolo, à un tarif supérieur. Sans ce plancher, recycler un
-        // doublon normal pourrait faire disparaître une carte holo sans que
-        // le joueur l'ait choisi.
-        const keep = Math.max(1, s.ownedHolo[cardId] || 0);
-        if (!card || count <= keep) return;
-        const extra = count - keep;
-        const gain = rarityById(card.rarity).recycleValue * extra;
-        set({ owned: { ...s.owned, [cardId]: keep }, glands: s.glands + gain });
+        if (!card || count < 2) return;
+        const gain = rarityById(card.rarity).recycleValue * (count - 1);
+        set({ owned: { ...s.owned, [cardId]: 1 }, glands: s.glands + gain });
         trackGlandsEarned(gain, 'recycle');
         playSfx('recycle');
         s.say(`+${gain} glands`);
       },
 
+      // `owned` et `ownedHolo` sont deux collections indépendantes (voir
+      // HOLO_CHANCE) : recycler l'une ne touche jamais l'autre.
       recycleHolo: (cardId) => {
         const s = get();
         const card = CARDS.find((c) => c.id === cardId);
         const holoCount = s.ownedHolo[cardId] || 0;
         if (!card || holoCount < 2) return;
-        const extra = holoCount - 1;
-        const gain = rarityById(card.rarity).recycleValue * HOLO_RECYCLE_MULTIPLIER * extra;
-        // Recycler un doublon holo retire aussi ces exemplaires du total
-        // normal — `ownedHolo` est un sous-ensemble d'`owned`, sans quoi il
-        // le dépasserait une fois les holo en trop retirés.
-        const totalCount = s.owned[cardId] || 0;
-        set({
-          ownedHolo: { ...s.ownedHolo, [cardId]: 1 },
-          owned: { ...s.owned, [cardId]: Math.max(1, totalCount - extra) },
-          glands: s.glands + gain,
-        });
+        const gain = rarityById(card.rarity).recycleValue * HOLO_RECYCLE_MULTIPLIER * (holoCount - 1);
+        set({ ownedHolo: { ...s.ownedHolo, [cardId]: 1 }, glands: s.glands + gain });
         trackGlandsEarned(gain, 'recycle_holo');
         playSfx('recycle');
         s.say(`+${gain} glands (holo)`);
@@ -647,11 +641,14 @@ export const useStore = create<Store>()(
         lotteryTimer = setTimeout(() => {
           const s2 = get();
           const card = roll(LOTTERY_FLOOR);
-          const wasOwned = !!s2.owned[card.id];
           const isHolo = card.rarity !== SECRET_RARITY_ID && Math.random() < HOLO_CHANCE;
-          const owned = { ...s2.owned, [card.id]: (s2.owned[card.id] || 0) + 1 };
-          const ownedHolo = isHolo ? { ...s2.ownedHolo, [card.id]: (s2.ownedHolo[card.id] || 0) + 1 } : s2.ownedHolo;
-          set({ owned, ownedHolo, lotteryCard: card, lotteryIsNew: !wasOwned, lotteryIsHolo: isHolo, lotteryState: 'result', openedCount: s2.openedCount + 1 });
+          // Comme un sac : un tirage holo va uniquement dans `ownedHolo`,
+          // jamais dans `owned` (deux collections indépendantes).
+          const patch = isHolo
+            ? { ownedHolo: { ...s2.ownedHolo, [card.id]: (s2.ownedHolo[card.id] || 0) + 1 } }
+            : { owned: { ...s2.owned, [card.id]: (s2.owned[card.id] || 0) + 1 } };
+          const wasOwned = isHolo ? !!s2.ownedHolo[card.id] : !!s2.owned[card.id];
+          set({ ...patch, lotteryCard: card, lotteryIsNew: !wasOwned, lotteryIsHolo: isHolo, lotteryState: 'result', openedCount: s2.openedCount + 1 });
           trackCardPulled(card, 'lottery');
           playSfx(revealSfx(card.rarity));
         }, LOTTERY_SPIN_MS);

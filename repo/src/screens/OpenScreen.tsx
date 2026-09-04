@@ -67,6 +67,7 @@ export default function OpenScreen() {
   const dragging = useStore((s) => s.dragging);
   const isNew = useStore((s) => s.isNew);
   const owned = useStore((s) => s.owned);
+  const ownedHolo = useStore((s) => s.ownedHolo);
   const cardBack = useStore((s) => s.cardBack);
   const openQty = useStore((s) => s.openQty);
   const startTear = useStore((s) => s.startTear);
@@ -442,7 +443,10 @@ export default function OpenScreen() {
             </p>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,minmax(0,1fr))', gap: 10 }}>
               {pull.map((card, i) => {
-                const count = owned[card.id] || 0;
+                // Compte pris dans le bon panier (owned/ownedHolo) selon
+                // que ce tirage précis est sorti en holo ou non — les deux
+                // collections sont indépendantes (voir HOLO_CHANCE).
+                const count = pullHolo[i] ? ownedHolo[card.id] || 0 : owned[card.id] || 0;
                 return (
                   <div
                     key={`${card.id}-${i}`}

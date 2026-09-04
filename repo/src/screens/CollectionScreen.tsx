@@ -230,7 +230,7 @@ export default function CollectionScreen() {
               onClick={() => openDetail(card.id)}
               style={{ position: 'relative', aspectRatio: '0.72', cursor: 'pointer', minWidth: 0 }}
             >
-              <PigCard card={card} holoAnim={holoAnim} ownedCount={count} isHolo={(ownedHolo[card.id] || 0) > 0} />
+              <PigCard card={card} holoAnim={holoAnim} ownedCount={count} />
               {count > 1 && (
                 <span
                   style={{

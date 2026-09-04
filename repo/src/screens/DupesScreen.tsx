@@ -7,11 +7,10 @@ import { HOLO_RECYCLE_MULTIPLIER, useStore } from '../state/store';
 /** Ported from the "DOUBLONS" block in Grouin - TCG Cochons.dc.html.
  *  Une seule direction visuelle (Collector foil) : plus de prop `style`.
  *
- *  Les doublons holo ont leur propre section, plus bas : `ownedHolo` est
- *  toujours un sous-ensemble d'`owned` (voir state/store.ts), donc un
- *  exemplaire holo compte double, en quelque sorte — il protège la carte du
- *  recyclage normal (qui ne descend jamais sous `ownedHolo`) et se recycle
- *  à part, à un tarif nettement meilleur. */
+ *  Les doublons holo ont leur propre section, plus bas : `owned` et
+ *  `ownedHolo` sont deux collections indépendantes (voir HOLO_CHANCE dans
+ *  state/store.ts), donc les deux listes ci-dessous ne se croisent jamais
+ *  — recycler l'une ne touche jamais l'autre. */
 export default function DupesScreen() {
   const owned = useStore((s) => s.owned);
   const ownedHolo = useStore((s) => s.ownedHolo);
@@ -24,15 +23,8 @@ export default function DupesScreen() {
   // La carte secrète ne se recycle jamais, même en cas de double exemplaire
   // (1 chance sur 6 000 000 deux fois — en pratique jamais, mais on ne
   // laisse pas la possibilité) : c'est une pièce unique à garder, pas une
-  // source de glands. Les exemplaires "en trop" sont ceux au delà du
-  // plancher protégé (au moins 1, plus tous les holo) — sinon un doublon
-  // normal en trop qui se trouve être le seul exemplaire holo apparaîtrait
-  // ici alors qu'il ne se recycle pas depuis ce bouton.
-  const dupeList = CARDS.filter((c) => {
-    if (c.rarity === SECRET_RARITY_ID) return false;
-    const keep = Math.max(1, ownedHolo[c.id] || 0);
-    return (owned[c.id] || 0) > keep;
-  }).sort((a, b) => b.rarity - a.rarity);
+  // source de glands.
+  const dupeList = CARDS.filter((c) => c.rarity !== SECRET_RARITY_ID && (owned[c.id] || 0) > 1).sort((a, b) => b.rarity - a.rarity);
 
   const holoDupeList = CARDS.filter((c) => c.rarity !== SECRET_RARITY_ID && (ownedHolo[c.id] || 0) > 1).sort((a, b) => b.rarity - a.rarity);
 
@@ -52,15 +44,13 @@ export default function DupesScreen() {
         <div className="screen-inner" style={{ paddingTop: 18, display: 'flex', flexDirection: 'column', gap: 10 }}>
           {dupeList.map((card) => {
             const n = owned[card.id];
-            const holoN = ownedHolo[card.id] || 0;
-            const keep = Math.max(1, holoN);
-            const extra = n - keep;
+            const extra = n - 1;
             const rarity = rarityById(card.rarity);
             const gain = rarity.recycleValue * extra;
             return (
               <div key={card.id} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 12px', borderRadius: 26, background: 'var(--color-surface)' }}>
                 <div className="pressable" onClick={() => openDetail(card.id)} style={{ width: 60, height: 84, flex: 'none', cursor: 'pointer' }}>
-                  <PigCard card={card} holoAnim={holoAnim} ownedCount={n} isHolo={holoN > 0} />
+                  <PigCard card={card} holoAnim={holoAnim} ownedCount={n} />
                 </div>
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={{ fontFamily: 'var(--font-heading)', fontSize: 15, lineHeight: 1.15 }}>{card.name}</div>
@@ -104,7 +94,7 @@ export default function DupesScreen() {
               return (
                 <div key={card.id} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 12px', borderRadius: 26, background: 'var(--color-surface)', boxShadow: 'inset 0 0 0 1.5px rgba(160,107,255,.35)' }}>
                   <div className="pressable" onClick={() => openDetail(card.id)} style={{ width: 60, height: 84, flex: 'none', cursor: 'pointer' }}>
-                    <PigCard card={card} holoAnim={holoAnim} ownedCount={owned[card.id] || 0} isHolo />
+                    <PigCard card={card} holoAnim={holoAnim} ownedCount={holoN} isHolo />
                   </div>
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <div style={{ fontFamily: 'var(--font-heading)', fontSize: 15, lineHeight: 1.15 }}>{card.name}</div>

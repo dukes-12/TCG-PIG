@@ -16,6 +16,7 @@ export default function LotteryOverlay() {
   const lotteryIsNew = useStore((s) => s.lotteryIsNew);
   const lotteryIsHolo = useStore((s) => s.lotteryIsHolo);
   const owned = useStore((s) => s.owned);
+  const ownedHolo = useStore((s) => s.ownedHolo);
   const cardBack = useStore((s) => s.cardBack);
   const glands = useStore((s) => s.glands);
   const buyLottery = useStore((s) => s.buyLottery);
@@ -46,7 +47,9 @@ export default function LotteryOverlay() {
   if (!lotteryCard) return null;
   const rarity = rarityById(lotteryCard.rarity);
   const visual = RARITY_VISUALS[lotteryCard.rarity as RarityId];
-  const count = owned[lotteryCard.id] || 0;
+  // Panier concerné par ce tirage précis (owned/ownedHolo indépendants,
+  // voir HOLO_CHANCE dans state/store.ts).
+  const count = lotteryIsHolo ? ownedHolo[lotteryCard.id] || 0 : owned[lotteryCard.id] || 0;
   const affordable = glands >= LOTTERY_PRICE;
 
   return (
