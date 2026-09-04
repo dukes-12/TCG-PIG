@@ -277,8 +277,7 @@
     { "id": 180, "name": "Chipolini", "type": "Dictateurs", "rarity": 2, "image": "assets/cards/180.jpg", "slotId": "art-180" },
     { "id": 181, "name": "Chipo le nain", "type": "Film", "rarity": 1, "image": "assets/cards/181.jpg", "slotId": "art-181" },
     { "id": 182, "name": "Twin Chipo", "type": "Hors catégorie", "rarity": 4, "image": "assets/cards/182.jpg", "slotId": "art-182" },
-    { "id": 183, "name": "La Chiponde", "type": "Art", "rarity": 4, "image": "assets/cards/183.jpg", "slotId": "art-183" }
-
+    { "id": 183, "name": "La Chiponde", "type": "Art", "rarity": 4, "image": "assets/cards/183.jpg", "slotId": "art-183" },
     { "id": 184, "name": "Vermine", "type": "Harry Potter", "rarity": 3, "image": "assets/cards/184.jpg", "slotId": "art-184" },
     { "id": 185, "name": "Toutanchipo", "type": "Meme", "rarity": 1, "image": "assets/cards/185.jpg", "slotId": "art-185" },
     { "id": 186, "name": "Chipo Malefoy", "type": "Harry Potter","rarity": 2, "image": "assets/cards/186.jpg", "slotId": "art-186" },
@@ -359,7 +358,7 @@
     { "id": 261, "name": "Chipowser", "type": "Jeux-vidéo", "rarity": 5, "image": "assets/cards/261.jpg", "slotId": "art-261" },
     { "id": 262, "name": "Chipo Ultime aux yeux bleus", "type": "YuGiOh", "rarity": 4, "image": "assets/cards/262.jpg", "slotId": "art-262" },
     { "id": 263, "name": "Swaaaggy", "type": "Humains", "rarity": 2, "image": "assets/cards/263.jpg", "slotId": "art-263" },
-    { "id": 264, "name": "Chipo Kaiba", "type": "YuGiOh", "rarity": 3, "image": "assets/cards/264.jpg", "slotId": "art-264" }
+    { "id": 264, "name": "Chipo Kaiba", "type": "YuGiOh", "rarity": 3, "image": "assets/cards/264.jpg", "slotId": "art-264" },
     { "id": 265, "name": "Chuigi", "type": "Jeux-vidéo", "rarity": 2, "image": "assets/cards/265.jpg", "slotId": "art-265" },
     { "id": 266, "name": "Chario", "type": "Jeux-vidéo", "rarity": 3, "image": "assets/cards/266.jpg", "slotId": "art-266" },
     { "id": 267, "name": "Chibrumblebee", "type": "Jeux-vidéo", "rarity": 3, "image": "assets/cards/267.jpg", "slotId": "art-267" },
@@ -370,6 +369,6 @@
     { "id": 272, "name": "Chipendrick", "type": "Célébrités", "rarity": 1, "image": "assets/cards/272.jpg", "slotId": "art-272" },
     { "id": 273, "name": "Chipo Noir aux yeux rouges", "type": "YuGiOh", "rarity": 4, "image": "assets/cards/273.jpg", "slotId": "art-273" },
     { "id": 274, "name": "Palpapig", "type": "Star Wars", "rarity": 4, "image": "assets/cards/274.jpg", "slotId": "art-274" },
-    { "id": 275, "name": "Chepinem", "type": "Célébrités", "rarity": 2, "image": "assets/cards/275.jpg", "slotId": "art-275" },
+    { "id": 275, "name": "Chepinem", "type": "Célébrités", "rarity": 2, "image": "assets/cards/275.jpg", "slotId": "art-275" }
 ]
 }
