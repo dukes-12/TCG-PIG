@@ -25,16 +25,24 @@ export const onRequestGet: PagesFunction<Env> = async ({ request, env, params })
 
   const state = JSON.parse(row.state_json || '{}') as {
     owned?: Record<string, number>;
+    ownedHolo?: Record<string, number>;
     openedCount?: number;
     avatar?: string;
     avatarPhoto?: string | null;
   };
   const owned = { ...(state.owned ?? {}) };
   delete owned[String(SECRET_CARD_ID)];
+  // `owned` et `ownedHolo` sont deux collections indépendantes (voir
+  // HOLO_CHANCE dans state/store.ts) — la carte secrète n'est jamais
+  // tirée en holo, mais on la retire quand même ici par cohérence avec
+  // `owned` plutôt que de faire confiance à cette invariant côté client.
+  const ownedHolo = { ...(state.ownedHolo ?? {}) };
+  delete ownedHolo[String(SECRET_CARD_ID)];
 
   return json({
     username,
     owned,
+    ownedHolo,
     openedCount: state.openedCount ?? 0,
     avatar: state.avatar ?? 'truffe-rose',
     avatarPhoto: state.avatarPhoto ?? null,

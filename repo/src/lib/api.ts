@@ -56,9 +56,14 @@ export function apiFetchFriends() {
   return call<{ players: { username: string; avatar: string; avatarPhoto: string | null }[] }>('/friends');
 }
 export function apiFetchProfile(username: string) {
-  return call<{ username: string; owned: Record<string, number>; openedCount: number; avatar: string; avatarPhoto: string | null }>(
-    `/profile/${encodeURIComponent(username)}`,
-  );
+  return call<{
+    username: string;
+    owned: Record<string, number>;
+    ownedHolo: Record<string, number>;
+    openedCount: number;
+    avatar: string;
+    avatarPhoto: string | null;
+  }>(`/profile/${encodeURIComponent(username)}`);
 }
 
 export interface Trade {
