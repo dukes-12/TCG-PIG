@@ -6,23 +6,26 @@ interface TiltState {
   /** Position du pointeur dans la carte, en % (0-100). */
   mx: number;
   my: number;
+  /** Distance au centre, normalisée 0 (centre) → 1 (coin) — sert à faire
+   *  flamber le voile holo (`shineStyle`, cardVisual.ts) davantage sur les
+   *  bords, comme une vraie carte à effet arc-en-ciel qu'on penche. */
+  dist: number;
   active: boolean;
 }
 
-const REST: TiltState = { rx: 0, ry: 0, mx: 50, my: 50, active: false };
+const REST: TiltState = { rx: 0, ry: 0, mx: 50, my: 50, dist: 0, active: false };
 
 /** Incline la carte au doigt/à la souris pour l'admirer — rotation 3D
  *  pilotée par pointer event, plus un reflet blanc discret qui suit le
  *  point de contact, sur toutes les cartes.
  *
  *  Le voile arc-en-ciel/chrome des cartes Épique+ et holo ne vit plus ici :
- *  il est posé par PigCard lui-même (voir cardVisual.ts, `chromeStyle`),
- *  qui a son propre habillage indépendant de l'inclinaison — TiltCard
- *  n'a donc plus besoin de savoir si la carte qu'il enveloppe est holo ou
- *  non ; il fournissait avant sa propre version de ce voile en plus,
- *  ce qui doublait le reflet sur les holos (l'un statique/CSS via
- *  cardVisual, l'autre ici en color-dodge) — retiré pour n'en garder
- *  qu'un seul, plus lisible. */
+ *  il est posé par PigCard lui-même (voir cardVisual.ts, `chromeStyle` /
+ *  `shineStyle`), qui a son propre habillage indépendant de l'inclinaison —
+ *  TiltCard n'a donc plus besoin de savoir si la carte qu'il enveloppe est
+ *  holo ou non ; il fournit juste position (`--mx`/`--my`) et intensité
+ *  (`--holo-dist`) via des propriétés CSS custom, héritées sans prop
+ *  drilling. */
 export default function TiltCard({ children, maxTilt = 18 }: { children: ReactNode; maxTilt?: number }) {
   const ref = useRef<HTMLDivElement>(null);
   const [t, setT] = useState<TiltState>(REST);
@@ -35,7 +38,10 @@ export default function TiltCard({ children, maxTilt = 18 }: { children: ReactNo
     const py = Math.min(1, Math.max(0, (clientY - rect.top) / rect.height));
     const ry = (px - 0.5) * 2 * maxTilt;
     const rx = -(py - 0.5) * 2 * maxTilt;
-    setT({ rx, ry, mx: px * 100, my: py * 100, active: true });
+    // Pythagore normalisé par la distance centre→coin (√0.5) : 0 au milieu,
+    // ~1 dans les coins.
+    const dist = Math.min(1, Math.hypot(px - 0.5, py - 0.5) / 0.707);
+    setT({ rx, ry, mx: px * 100, my: py * 100, dist, active: true });
   };
 
   const onDown = (e: ReactPointerEvent<HTMLDivElement>) => {
@@ -51,6 +57,7 @@ export default function TiltCard({ children, maxTilt = 18 }: { children: ReactNo
   const vars = {
     '--mx': `${t.mx}%`,
     '--my': `${t.my}%`,
+    '--holo-dist': t.dist,
   } as CSSProperties;
 
   return (

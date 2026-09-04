@@ -55,9 +55,10 @@ export interface CardVisual {
   chrome: boolean;
   chromeStyle: CSSProperties;
   chromeTopStyle: CSSProperties;
-  /** Paillettes — réservées à la version holo, voir plus bas. */
-  glitter: boolean;
-  glitterStyle: CSSProperties;
+  /** Voile arc-en-ciel piloté par le pointeur — réservé à la version holo,
+   *  voir plus bas. */
+  shine: boolean;
+  shineStyle: CSSProperties;
   lockStyle: CSSProperties;
 }
 
@@ -214,13 +215,20 @@ export function buildCardVisual(card: Card, opts: BuildCardOptions = {}): CardVi
   // briller.
   const chrome = (!!skin.sheen || holo) && owned && holoAnim;
   const chromeOpacity = holo ? 0.22 : 1;
+  // La Légendaire a déjà un cadre doré (skin.bg ci-dessus) — le voile chrome
+  // lui-même reste neutre pour tout le monde SAUF elle, où on teinte les
+  // mêmes arrêts vers l'or plutôt que le gris/argent : un chrome neutre
+  // par-dessus un cadre doré le grisait légèrement, demandé "un peu doré"
+  // pour que le voile aille dans le sens du cadre au lieu de le contredire.
+  const chromeGold = card.rarity === 5;
   const chromeStyle: CSSProperties = {
     position: 'absolute',
     inset: 0,
     pointerEvents: 'none',
     borderRadius: R2,
-    backgroundImage:
-      'linear-gradient(135deg,rgba(20,20,40,.15) 0%,rgba(130,130,160,.25) 20%,rgba(255,255,255,.42) 40%,rgba(130,130,160,.25) 60%,rgba(20,20,40,.15) 80%,rgba(130,130,160,.25) 100%)',
+    backgroundImage: chromeGold
+      ? 'linear-gradient(135deg,rgba(40,26,4,.18) 0%,rgba(201,154,58,.32) 20%,rgba(255,244,200,.5) 40%,rgba(201,154,58,.32) 60%,rgba(40,26,4,.18) 80%,rgba(201,154,58,.32) 100%)'
+      : 'linear-gradient(135deg,rgba(20,20,40,.15) 0%,rgba(130,130,160,.25) 20%,rgba(255,255,255,.42) 40%,rgba(130,130,160,.25) 60%,rgba(20,20,40,.15) 80%,rgba(130,130,160,.25) 100%)',
     backgroundSize: '200% 200%',
     animation: 'pigChrome 3s ease infinite',
     opacity: chromeOpacity,
@@ -230,38 +238,48 @@ export function buildCardVisual(card: Card, opts: BuildCardOptions = {}): CardVi
     inset: 2,
     pointerEvents: 'none',
     borderRadius: Math.max(2, R2 - 2),
-    background: 'linear-gradient(180deg,rgba(255,255,255,.25) 0%,transparent 50%)',
+    background: chromeGold
+      ? 'linear-gradient(180deg,rgba(255,236,170,.32) 0%,transparent 50%)'
+      : 'linear-gradient(180deg,rgba(255,255,255,.25) 0%,transparent 50%)',
     opacity: chromeOpacity,
   };
 
-  // Paillettes — inspiré de la carte "CSS Holo card effect" de nycos62
-  // (codepen.io/nycos62/pen/PoaKZjL, inaccessible depuis cet environnement
-  // — codepen.io est bloqué comme précédemment, réimplémenté depuis la
-  // famille de techniques "holo card CSS" à laquelle ce genre de pen
-  // appartient généralement : une texture de points tuilée, teintée par le
-  // dégradé arc-en-ciel via `background-blend-mode`, plutôt que des points
-  // qui flottent individuellement — cette dernière approche (les "3 points
-  // qui bougent") a déjà été retirée ailleurs, pas question d'y revenir
-  // sous une autre forme. Suit le pointeur (--mx/--my, posées par
-  // TiltCard ; repli à 50%/50% hors contexte interactif) pour un vrai
-  // miroitement qui répond au geste, comme les cartes holo qu'on penche
-  // sous la lumière. Réservé à la version holo — le chrome neutre
-  // d'Épique+ n'a pas de paillettes.
-  const glitter = holo && owned && holoAnim;
-  const glitterStyle: CSSProperties = {
+  // Voile holo — bandes arc-en-ciel qui se décalent avec le pointeur : la
+  // technique de la « carte Pokémon holographique CSS » popularisée sur
+  // CodePen, explicitement demandée (codepen.io/konstantindenerz/pen/
+  // XWPpvpg — déjà tentée telle quelle une première fois dans ce projet
+  // quand codepen.io était accessible depuis cet environnement ; toujours
+  // bloqué ici, donc repris depuis cette implémentation précédente plutôt
+  // que redeviné). Position pilotée par --mx/--my (TiltCard), intensité par
+  // --holo-dist (0 au centre → 1 dans les coins, aussi posée par TiltCard) :
+  // le reflet s'anime avec l'inclinaison, pas seulement la position, comme
+  // une vraie carte foil qu'on penche vers la lumière. Repli à 50%/50% et
+  // intensité nulle hors contexte interactif (grille, révélation…) —
+  // l'effet ne vit que dans l'écran de détail (TiltCard).
+  //
+  // `color-dodge` (première tentative, comme la référence) sature en blanc
+  // quasi invisible sur les fonds de carte clairs (Commune, Rare…) et reste
+  // franchement terne sur les fonds sombres (Mythique). `soft-light` (deuxième
+  // tentative) a le défaut inverse et pire : sur un aplat de test il donnait
+  // un joli lavis pastel, mais sur les vraies photos — souvent très claires,
+  // pelage/fond presque blancs — il ne teinte quasiment rien du tout : sur un
+  // pixel blanc pur, soft-light ne peut mathématiquement rien changer, quelle
+  // que soit la couleur de la source (vérifié à l'écran : invisible sur
+  // Docteur Chipo, fond très clair). `hard-light` est le seul des trois testé
+  // qui reste visible aussi bien sur fond très clair que très sombre, sans
+  // laver le texte — retenu ici, avec une opacité modeste (0.32 en plein pot
+  // s'est avéré déjà bien visible à l'écran).
+  const shine = holo && owned && holoAnim;
+  const shineStyle: CSSProperties = {
     position: 'absolute',
     inset: 0,
     pointerEvents: 'none',
     borderRadius: R2,
-    backgroundImage: [
-      'radial-gradient(circle at 1px 1px,rgba(255,255,255,.95) 1px,transparent 0)',
-      'linear-gradient(115deg,#ff5f6d,#ffc93c 16%,#5cf29a 33%,#4fc3ff 50%,#a06bff 66%,#ff5fc7 83%,#ff5f6d)',
-    ].join(','),
-    backgroundSize: '6px 6px, 250% 250%',
-    backgroundBlendMode: 'overlay',
-    backgroundPosition: 'var(--mx, 50%) var(--my, 50%), var(--mx, 50%) var(--my, 50%)',
-    mixBlendMode: 'color-dodge',
-    opacity: 0.3,
+    mixBlendMode: 'hard-light',
+    backgroundImage: 'repeating-linear-gradient(115deg,#ff5f6d 0%,#ffc93c 10%,#5cf29a 20%,#4fc3ff 30%,#a06bff 40%,#ff5fc7 50%,#ff5f6d 60%)',
+    backgroundSize: '300% 300%',
+    backgroundPosition: 'var(--mx, 50%) var(--my, 50%)',
+    opacity: 'calc(0.22 + var(--holo-dist, 0) * 0.2)',
   } as CSSProperties;
 
   const lockStyle: CSSProperties = {
@@ -299,8 +317,8 @@ export function buildCardVisual(card: Card, opts: BuildCardOptions = {}): CardVi
     chrome,
     chromeStyle,
     chromeTopStyle,
-    glitter,
-    glitterStyle,
+    shine,
+    shineStyle,
     lockStyle,
   };
 }

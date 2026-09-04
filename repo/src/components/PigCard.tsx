@@ -58,7 +58,7 @@ export default function PigCard({
             <div style={d.chromeTopStyle} />
           </>
         )}
-        {d.glitter && <div style={d.glitterStyle} />}
+        {d.shine && <div style={d.shineStyle} />}
       </div>
     </div>
   );
