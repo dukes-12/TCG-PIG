@@ -168,22 +168,6 @@ export default function SecretCard({
           </span>
           <span style={{ fontSize: s.star, lineHeight: 1, color: '#ffd98a', textShadow: owned ? '0 0 8px rgba(255,217,138,.9)' : 'none' }}>★</span>
         </div>
-
-        {owned && (
-          <div
-            aria-hidden
-            style={{
-              position: 'absolute',
-              top: '-20%',
-              left: 0,
-              width: '55%',
-              height: '140%',
-              pointerEvents: 'none',
-              background: 'linear-gradient(100deg,transparent,rgba(255,255,255,.5),transparent)',
-              animation: holoAnim ? 'pigShine 2.6s ease-in-out infinite' : 'none',
-            }}
-          />
-        )}
       </div>
     </div>
   );
