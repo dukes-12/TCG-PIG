@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Chip from '../components/Chip';
 import PigCard from '../components/PigCard';
-import { CARDS, RARITIES, SECRET_RARITY_ID, TOTAL_CARDS } from '../data/catalog';
+import { CARDS, RARITIES, SECRET_CARD, SECRET_RARITY_ID, TOTAL_CARDS } from '../data/catalog';
 import { useAnimations } from '../lib/useAnimations';
 import { HOLO_CHANCE, useStore } from '../state/store';
 import type { Card, RarityId } from '../types';
@@ -26,9 +26,12 @@ export default function HoloCollectionScreen() {
 
   // La carte secrète n'est jamais tirée en holo (voir HOLO_CHANCE dans
   // state/store.ts) — le filtre est là par cohérence avec le reste du code,
-  // pas parce que le cas peut vraiment se produire.
+  // pas parce que le cas peut vraiment se produire. `ownedHolo` est indexé
+  // par id de *carte* : comparer à `SECRET_CARD?.id` (pas `SECRET_RARITY_ID`,
+  // un id de *rareté* — bug corrigé ici, il excluait à tort toute carte
+  // dont l'id vaut 1-7, ex. Piggin Biebers, du compteur "X/183").
   const holoIds = useMemo(
-    () => Object.keys(ownedHolo).filter((k) => ownedHolo[Number(k)] > 0 && Number(k) !== SECRET_RARITY_ID),
+    () => Object.keys(ownedHolo).filter((k) => ownedHolo[Number(k)] > 0 && Number(k) !== SECRET_CARD?.id),
     [ownedHolo],
   );
   const uniq = holoIds.length;
@@ -39,6 +42,7 @@ export default function HoloCollectionScreen() {
     const q = query.trim().toLowerCase();
     return CARDS.filter(
       (c) =>
+        c.rarity !== SECRET_RARITY_ID &&
         (ownedHolo[c.id] || 0) > 0 &&
         (rarityFilter === 'all' || c.rarity === rarityFilter) &&
         (!q || c.name.toLowerCase().includes(q)),
