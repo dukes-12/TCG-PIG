@@ -49,6 +49,13 @@ export interface CardVisual {
   typeStyle: CSSProperties;
   pipWrap: CSSProperties;
   pips: { style: CSSProperties }[];
+  /** Voile métallique (Épique, Légendaire, Mythique) — remplace l'ancien
+   *  reflet qui balayait la carte. */
+  chrome: boolean;
+  chromeStyle: CSSProperties;
+  chromeTopStyle: CSSProperties;
+  /** Reflet diagonal réservé à la version holo (plus haut, indépendant de
+   *  la rareté). */
   sheen: boolean;
   sheenStyle: CSSProperties;
   lockStyle: CSSProperties;
@@ -186,7 +193,41 @@ export function buildCardVisual(card: Card, opts: BuildCardOptions = {}): CardVi
     };
   });
 
-  const sheen = (skin.sheen || holo) && owned && holoAnim;
+  // Voile métallique — remplace l'ancien reflet qui balayait les cartes
+  // Épique/Légendaire/Mythique (« pas très beau »). Un dégradé large dont
+  // on anime la position (marine → gris → argent → gris → marine), plutôt
+  // qu'une bande qui traverse : ça se lit comme du chrome brossé qui
+  // ondule, pas comme un flash qui passe. L'alpha est directement dans les
+  // arrêts du dégradé (pas d'opacité globale ni de mix-blend-mode) : un
+  // premier essai en `mix-blend-mode: overlay` disparaissait presque sur
+  // les fonds très sombres (Mythique) — l'overlay écrase vers le noir sur
+  // un fond déjà proche du noir. Ici le sommet argenté reste bien visible
+  // partout, et les creux marine restent translucides pour laisser
+  // transparaître la couleur propre à chaque rareté. Un second calque,
+  // fixe, imite le reflet du haut d'une vraie surface chromée.
+  const chrome = !!skin.sheen && owned && holoAnim;
+  const chromeStyle: CSSProperties = {
+    position: 'absolute',
+    inset: 0,
+    pointerEvents: 'none',
+    borderRadius: R2,
+    backgroundImage:
+      'linear-gradient(135deg,rgba(20,20,40,.15) 0%,rgba(130,130,160,.25) 20%,rgba(255,255,255,.42) 40%,rgba(130,130,160,.25) 60%,rgba(20,20,40,.15) 80%,rgba(130,130,160,.25) 100%)',
+    backgroundSize: '200% 200%',
+    animation: 'pigChrome 3s ease infinite',
+  };
+  const chromeTopStyle: CSSProperties = {
+    position: 'absolute',
+    inset: 2,
+    pointerEvents: 'none',
+    borderRadius: Math.max(2, R2 - 2),
+    background: 'linear-gradient(180deg,rgba(255,255,255,.25) 0%,transparent 50%)',
+  };
+
+  // Reflet diagonal — désormais réservé à la version holo (indépendante de
+  // la rareté) : les paliers Épique+ ont leur propre voile (chrome
+  // ci-dessus).
+  const sheen = holo && owned && holoAnim;
   const sheenStyle: CSSProperties = {
     position: 'absolute',
     top: '-20%',
@@ -194,8 +235,8 @@ export function buildCardVisual(card: Card, opts: BuildCardOptions = {}): CardVi
     width: '55%',
     height: '140%',
     pointerEvents: 'none',
-    background: `linear-gradient(100deg,transparent,rgba(255,255,255,${card.rarity === 6 ? 0.38 : 0.45}),transparent)`,
-    animation: `pigShine ${card.rarity >= 5 ? 3.1 : 4.6}s ease-in-out infinite`,
+    background: 'linear-gradient(100deg,transparent,rgba(255,255,255,.45),transparent)',
+    animation: 'pigShine 4.6s ease-in-out infinite',
   };
 
   const lockStyle: CSSProperties = {
@@ -230,6 +271,9 @@ export function buildCardVisual(card: Card, opts: BuildCardOptions = {}): CardVi
     typeStyle,
     pipWrap,
     pips,
+    chrome,
+    chromeStyle,
+    chromeTopStyle,
     sheen,
     sheenStyle,
     lockStyle,
