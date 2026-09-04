@@ -22,18 +22,22 @@ export default function PigCard({
   holoAnim = true,
   ownedCount = 0,
   forceOwned = false,
+  isHolo = false,
 }: {
   card: Card;
   big?: boolean;
   holoAnim?: boolean;
   ownedCount?: number;
   forceOwned?: boolean;
+  /** Rend la version holo de la carte (voir HOLO_CHANCE) — sans effet sur
+   *  la carte secrète, qui a déjà son propre habillage unique. */
+  isHolo?: boolean;
 }) {
   if (card.rarity === SECRET_RARITY_ID) {
     return <SecretCard big={big} holoAnim={holoAnim} ownedCount={ownedCount} forceOwned={forceOwned} />;
   }
 
-  const d = buildCardVisual(card, { big, holoAnim, ownedCount, forceOwned });
+  const d = buildCardVisual(card, { big, holoAnim, ownedCount, forceOwned, isHolo });
 
   return (
     <div style={d.shell}>
@@ -46,7 +50,7 @@ export default function PigCard({
         </div>
         <div style={d.namePlate}>{d.name}</div>
         <div style={d.metaRow}>
-          <span style={d.typeStyle}>{d.type}</span>
+          <span style={d.typeStyle}>{d.holo ? '✨ ' : ''}{d.type}</span>
           <span style={d.pipWrap}>
             {d.pips.map((p, i) => (
               <i key={i} style={p.style} />

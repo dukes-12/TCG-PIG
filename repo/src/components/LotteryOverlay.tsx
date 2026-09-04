@@ -14,6 +14,7 @@ export default function LotteryOverlay() {
   const lotteryState = useStore((s) => s.lotteryState);
   const lotteryCard = useStore((s) => s.lotteryCard);
   const lotteryIsNew = useStore((s) => s.lotteryIsNew);
+  const lotteryIsHolo = useStore((s) => s.lotteryIsHolo);
   const owned = useStore((s) => s.owned);
   const cardBack = useStore((s) => s.cardBack);
   const glands = useStore((s) => s.glands);
@@ -63,7 +64,7 @@ export default function LotteryOverlay() {
         }}
       />
       <div style={{ width: 238, height: 332, animation: 'pigPop .3s ease both', position: 'relative', zIndex: 2 }}>
-        <PigCard card={lotteryCard} big forceOwned holoAnim={holoAnim} ownedCount={count} />
+        <PigCard card={lotteryCard} big forceOwned holoAnim={holoAnim} ownedCount={count} isHolo={lotteryIsHolo} />
         {lotteryIsNew && (
           <span
             style={{
@@ -81,6 +82,25 @@ export default function LotteryOverlay() {
             }}
           >
             NOUVEAU
+          </span>
+        )}
+        {lotteryIsHolo && (
+          <span
+            style={{
+              position: 'absolute',
+              bottom: 10,
+              left: 10,
+              background: 'linear-gradient(90deg,#5cf29a,#4fc3ff,#a06bff)',
+              color: '#161022',
+              fontSize: 9,
+              fontWeight: 700,
+              letterSpacing: '.1em',
+              padding: '4px 9px',
+              borderRadius: 999,
+              boxShadow: 'var(--shadow-sm)',
+            }}
+          >
+            ✨ HOLO
           </span>
         )}
         {count > 1 && (

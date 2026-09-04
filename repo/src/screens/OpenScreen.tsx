@@ -60,6 +60,7 @@ export default function OpenScreen() {
   const packState = useStore((s) => s.packState);
   const stock = useStore((s) => s.stock);
   const pull = useStore((s) => s.pull);
+  const pullHolo = useStore((s) => s.pullHolo);
   const pullIndex = useStore((s) => s.pullIndex);
   const flipped = useStore((s) => s.flipped);
   const dragX = useStore((s) => s.dragX);
@@ -201,6 +202,7 @@ export default function OpenScreen() {
         const card = pull[pullIndex] || CARDS[0];
         const rarity = rarityById(card.rarity);
         const isSecret = card.rarity === SECRET_RARITY_ID;
+        const isHolo = !!pullHolo[pullIndex];
         const glow = isSecret ? 'rgba(255,138,217,.75)' : RARITY_VISUALS[card.rarity as RarityId].glow;
         const onDown = (e: ReactPointerEvent) => dragStart(e.clientX);
         const onMove = (e: ReactPointerEvent) => dragMove(e.clientX);
@@ -265,7 +267,7 @@ export default function OpenScreen() {
                 n'apparaît qu'au retournement (`revealed`), mais réserver
                 l'espace tout du long évite que la carte ne saute d'une
                 position à l'autre au moment où elle apparaît/disparaît. */}
-            <div style={{ height: 30, marginBottom: 12, position: 'relative', zIndex: 2, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <div style={{ height: 30, marginBottom: 12, position: 'relative', zIndex: 2, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 7 }}>
               {revealed && (
                 <div
                   key={`newbadge-${pullIndex}`}
@@ -285,6 +287,26 @@ export default function OpenScreen() {
                   }}
                 >
                   {isNew[card.id] ? '✦ Nouvelle carte' : 'Doublon'}
+                </div>
+              )}
+              {revealed && isHolo && (
+                <div
+                  key={`holobadge-${pullIndex}`}
+                  style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    padding: '7px 13px',
+                    borderRadius: 999,
+                    fontFamily: 'var(--font-heading)',
+                    fontSize: 12,
+                    letterSpacing: '.03em',
+                    animation: 'pigPop .4s ease .08s both',
+                    background: 'linear-gradient(90deg,#5cf29a,#4fc3ff,#a06bff)',
+                    color: '#161022',
+                    boxShadow: '0 4px 16px rgba(160,107,255,.4)',
+                  }}
+                >
+                  ✨ Holo
                 </div>
               )}
             </div>
@@ -346,7 +368,7 @@ export default function OpenScreen() {
                 >
                   {/* holoAnim conditionné à `revealed` : face cachée, le foil
                       et le reflet ne tournent pas — rien à laisser filtrer. */}
-                  <PigCard card={card} big forceOwned holoAnim={holoAnim && revealed} />
+                  <PigCard card={card} big forceOwned holoAnim={holoAnim && revealed} isHolo={isHolo} />
                 </div>
               </div>
             </div>
@@ -428,7 +450,7 @@ export default function OpenScreen() {
                     onClick={() => openDetail(card.id)}
                     style={{ position: 'relative', aspectRatio: '0.72', cursor: 'pointer', minWidth: 0 }}
                   >
-                    <PigCard card={card} holoAnim={holoAnim} ownedCount={count} />
+                    <PigCard card={card} holoAnim={holoAnim} ownedCount={count} isHolo={pullHolo[i]} />
                     {/* Badges posés *dans* la carte : en débord ils étaient
                         rognés par overflow-x: hidden sur .screen. */}
                     {isNew[card.id] && (

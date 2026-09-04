@@ -42,6 +42,7 @@ export interface CardVisual {
   owned: boolean;
   locked: boolean;
   mini: boolean;
+  holo: boolean;
   shell: CSSProperties;
   inner: CSSProperties;
   artWrap: CSSProperties;
@@ -62,12 +63,19 @@ export interface BuildCardOptions {
   /** Force the card to render as owned regardless of ownedCount (pack reveal). */
   forceOwned?: boolean;
   ownedCount?: number;
+  /** Version holo de cette carte (voir HOLO_CHANCE dans state/store.ts) —
+   *  remplace le fond de la rareté par un dégradé arc-en-ciel animé, quelle
+   *  que soit la rareté, et force les mêmes ornements (points flottants,
+   *  reflet) que les skins déjà "holoFoil". N'a d'effet que si la carte est
+   *  possédée. */
+  isHolo?: boolean;
 }
 
 export function buildCardVisual(card: Card, opts: BuildCardOptions = {}): CardVisual {
   const big = !!opts.big;
   const holoAnim = opts.holoAnim ?? true;
   const owned = opts.forceOwned || (opts.ownedCount ?? 0) > 0;
+  const holo = !!opts.isHolo && owned;
   const skin = SKIN[card.rarity - 1];
   const dark = isDark(card.rarity);
 
@@ -99,6 +107,16 @@ export function buildCardVisual(card: Card, opts: BuildCardOptions = {}): CardVi
   if (skin.holoFoil && holoAnim && owned) {
     shell.backgroundSize = '300% 100%';
     shell.animation = 'pigHolo 5s linear infinite';
+  }
+  // La version holo l'emporte sur le skin de base, quelle que soit la
+  // rareté — même une carte Commune holo tourne en arc-en-ciel. Réutilise
+  // le même mécanisme (`background-position` + `pigHolo`) que le foil des
+  // raretés hautes, avec un dégradé bien plus large et saturé pour rester
+  // reconnaissable même sans l'animation (holoAnim coupé).
+  if (holo) {
+    shell.background = 'linear-gradient(115deg,#ff5f6d,#ffc93c 16%,#5cf29a 33%,#4fc3ff 50%,#a06bff 66%,#ff5fc7 83%,#ff5f6d)';
+    shell.backgroundSize = '300% 100%';
+    if (holoAnim) shell.animation = 'pigHolo 3.2s linear infinite';
   }
   if (!owned) {
     shell.filter = 'grayscale(1)';
@@ -172,8 +190,9 @@ export function buildCardVisual(card: Card, opts: BuildCardOptions = {}): CardVi
     };
   });
 
+  const HOLO_SPARKS = ['#ff5f6d', '#5cf29a', '#a06bff'];
   const dots =
-    skin.holoFoil && owned
+    (skin.holoFoil || holo) && owned
       ? [0, 1, 2].map((k) => ({
           style: {
             position: 'absolute',
@@ -182,14 +201,14 @@ export function buildCardVisual(card: Card, opts: BuildCardOptions = {}): CardVi
             width: big ? 6 : 3.5,
             height: big ? 6 : 3.5,
             borderRadius: '50%',
-            background: skin.spark ?? '#ffe1d0',
+            background: holo ? HOLO_SPARKS[k] : (skin.spark ?? '#ffe1d0'),
             animation: holoAnim ? `pigFloat ${2.4 + k * 0.6}s ease-in-out infinite` : 'none',
             opacity: 0.6,
           } as CSSProperties,
         }))
       : [];
 
-  const sheen = !!skin.sheen && owned && holoAnim;
+  const sheen = (skin.sheen || holo) && owned && holoAnim;
   const sheenStyle: CSSProperties = {
     position: 'absolute',
     top: '-20%',
@@ -224,6 +243,7 @@ export function buildCardVisual(card: Card, opts: BuildCardOptions = {}): CardVi
     owned,
     locked: !owned,
     mini: !big,
+    holo,
     shell,
     inner,
     artWrap,

@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-import { CARDS, PACKS, SECRET_CARD, packByKey, rarityById } from '../data/catalog';
+import { CARDS, PACKS, SECRET_CARD, SECRET_RARITY_ID, packByKey, rarityById } from '../data/catalog';
 import { CARD_BACKS, DEFAULT_CARD_BACK, cardBackByKey } from '../data/cardBacks';
 import { DEFAULT_AVATAR } from '../data/avatars';
 import { openPack, roll } from '../lib/draw';
@@ -80,8 +80,26 @@ const WHEEL_PACK: PackKey = 'basic';
 /** Sachets offerts au tout premier lancement. */
 export const STARTER_PACKS = 5;
 
+/** Version holographique : un tirage indépendant sur *chaque* carte tirée
+ *  (sacs, sac gratuit, Loterie), jamais sur la carte secrète — elle a déjà
+ *  son propre habillage unique, pas besoin d'une seconde couche de rareté
+ *  dessus. Une carte holo compte comme n'importe quel exemplaire dans
+ *  `owned` (la complétion ne change pas), et *en plus* dans `ownedHolo` —
+ *  un sous-compte qui ne peut jamais dépasser `owned` (voir recycle /
+ *  recycleHolo, qui préservent cet invariant). */
+export const HOLO_CHANCE = 1 / 15;
+/** Multiplicateur de valeur au recyclage d'un doublon holo, par rapport au
+ *  recyclage normal — une pièce plus rare mérite un tarif nettement
+ *  meilleur. */
+export const HOLO_RECYCLE_MULTIPLIER = 5;
+
 interface PersistedState {
   owned: Record<number, number>;
+  /** Sous-ensemble de `owned` : combien de ces exemplaires sont la version
+   *  holo. `ownedHolo[id] <= owned[id]` toujours — jamais initialisé au delà
+   *  de ce que `owned` autorise (voir beginTear / buyLottery / recycle /
+   *  recycleHolo). */
+  ownedHolo: Record<number, number>;
   glands: number;
   stock: Record<PackKey, number>;
   openedCount: number;
@@ -115,6 +133,9 @@ interface UiState {
   packState: PackState;
   openQty: number;
   pull: Card[];
+  /** Alignée sur `pull` (même index) : quel tirage de ce lot est sorti en
+   *  version holo. Voir beginTear. */
+  pullHolo: boolean[];
   pullIndex: number;
   flipped: boolean;
   isNew: Record<number, true>;
@@ -124,6 +145,7 @@ interface UiState {
   lotteryState: 'idle' | 'spinning' | 'result';
   lotteryCard: Card | null;
   lotteryIsNew: boolean;
+  lotteryIsHolo: boolean;
   wheelState: WheelState;
   wheelWon: boolean;
   mailbox: MailboxMessage[];
@@ -168,6 +190,10 @@ interface Actions {
   dragEnd: () => void;
 
   recycle: (cardId: number) => void;
+  /** Recycle un doublon *holo* — bouton séparé (voir DupesScreen) : à valeur
+   *  supérieure (HOLO_RECYCLE_MULTIPLIER), et ne touche jamais aux
+   *  exemplaires normaux au delà de ce qu'il faut retirer. */
+  recycleHolo: (cardId: number) => void;
   say: (msg: string) => void;
 
   buyLottery: () => void;
@@ -207,6 +233,7 @@ let dragStartX = 0;
 function persistedSlice(s: Store): PersistedState {
   return {
     owned: s.owned,
+    ownedHolo: s.ownedHolo,
     glands: s.glands,
     stock: s.stock,
     openedCount: s.openedCount,
@@ -246,6 +273,7 @@ function mergeServer(current: Store, incoming: Partial<PersistedState>): Partial
     soundOn: incoming.soundOn ?? current.soundOn,
     stock: incoming.stock ?? current.stock,
     owned: incoming.owned ?? current.owned,
+    ownedHolo: incoming.ownedHolo ?? current.ownedHolo,
     wheelSpins: incoming.wheelSpins ?? current.wheelSpins,
     nextWheelResetAt: incoming.nextWheelResetAt ?? current.nextWheelResetAt,
   };
@@ -273,10 +301,16 @@ function beginTear(get: () => Store, set: (partial: Partial<Store>) => void, pac
   // fois pour tout le paquet groupé.
   const pull = Array.from({ length: qty }, () => openPack(pack, pack.cards)).flat();
   const owned = { ...s.owned };
+  const ownedHolo = { ...s.ownedHolo };
   const isNew: Record<number, true> = {};
-  pull.forEach((c) => {
+  // Jet holo indépendant par carte tirée, jamais sur la carte secrète (déjà
+  // unique en soi). `ownedHolo` reste un sous-ensemble de `owned` : toute
+  // carte holo est aussi comptée normalement.
+  const pullHolo = pull.map((c) => c.rarity !== SECRET_RARITY_ID && Math.random() < HOLO_CHANCE);
+  pull.forEach((c, i) => {
     if (!owned[c.id]) isNew[c.id] = true;
     owned[c.id] = (owned[c.id] || 0) + 1;
+    if (pullHolo[i]) ownedHolo[c.id] = (ownedHolo[c.id] || 0) + 1;
   });
   for (let i = 0; i < qty; i++) trackPackOpened(pack.key, source);
   pull.forEach((c) => trackCardPulled(c, pack.key));
@@ -284,9 +318,11 @@ function beginTear(get: () => Store, set: (partial: Partial<Store>) => void, pac
     activePack: pack.key,
     packState: 'tearing',
     pull,
+    pullHolo,
     pullIndex: 0,
     flipped: false,
     owned,
+    ownedHolo,
     isNew,
     openedCount: s.openedCount + qty,
     dragX: 0,
@@ -302,6 +338,7 @@ export const useStore = create<Store>()(
     (set, get) => ({
       // ── persisted (miroir local — la source de vérité est le compte) ──
       owned: {},
+      ownedHolo: {},
       glands: 0,
       stock: { basic: STARTER_PACKS, foire: 0, doree: 0 },
       openedCount: 0,
@@ -331,6 +368,7 @@ export const useStore = create<Store>()(
       packState: 'idle',
       openQty: 1,
       pull: [],
+      pullHolo: [],
       pullIndex: 0,
       flipped: false,
       isNew: {},
@@ -340,6 +378,7 @@ export const useStore = create<Store>()(
       lotteryState: 'idle',
       lotteryCard: null,
       lotteryIsNew: false,
+      lotteryIsHolo: false,
       wheelState: 'idle',
       wheelWon: false,
       mailbox: [],
@@ -446,7 +485,7 @@ export const useStore = create<Store>()(
         const isNew: Record<number, true> = {};
         if (!owned[SECRET_CARD.id]) isNew[SECRET_CARD.id] = true;
         owned[SECRET_CARD.id] = (owned[SECRET_CARD.id] || 0) + 1;
-        set({ packState: 'tearing', pull, pullIndex: 0, flipped: false, owned, isNew, dragX: 0 });
+        set({ packState: 'tearing', pull, pullHolo: [false], pullIndex: 0, flipped: false, owned, isNew, dragX: 0 });
         playSfx('tear');
         clearTimeout(tearTimer);
         clearTimeout(advanceTimer);
@@ -457,7 +496,7 @@ export const useStore = create<Store>()(
         clearTimeout(tearTimer);
         clearTimeout(advanceTimer);
         clearTimeout(revealTimer);
-        set({ packState: 'idle', pull: [], pullIndex: 0, flipped: false, dragX: 0 });
+        set({ packState: 'idle', pull: [], pullHolo: [], pullIndex: 0, flipped: false, dragX: 0 });
       },
 
       reconcileDailyGrant: () => {
@@ -552,12 +591,40 @@ export const useStore = create<Store>()(
         const s = get();
         const card = CARDS.find((c) => c.id === cardId);
         const count = s.owned[cardId] || 0;
-        if (!card || count < 2) return;
-        const gain = rarityById(card.rarity).recycleValue * (count - 1);
-        set({ owned: { ...s.owned, [cardId]: 1 }, glands: s.glands + gain });
+        // On garde toujours au moins 1 exemplaire — et en plus tous les
+        // exemplaires holo (`ownedHolo`) : ils se recyclent à part, via
+        // recycleHolo, à un tarif supérieur. Sans ce plancher, recycler un
+        // doublon normal pourrait faire disparaître une carte holo sans que
+        // le joueur l'ait choisi.
+        const keep = Math.max(1, s.ownedHolo[cardId] || 0);
+        if (!card || count <= keep) return;
+        const extra = count - keep;
+        const gain = rarityById(card.rarity).recycleValue * extra;
+        set({ owned: { ...s.owned, [cardId]: keep }, glands: s.glands + gain });
         trackGlandsEarned(gain, 'recycle');
         playSfx('recycle');
         s.say(`+${gain} glands`);
+      },
+
+      recycleHolo: (cardId) => {
+        const s = get();
+        const card = CARDS.find((c) => c.id === cardId);
+        const holoCount = s.ownedHolo[cardId] || 0;
+        if (!card || holoCount < 2) return;
+        const extra = holoCount - 1;
+        const gain = rarityById(card.rarity).recycleValue * HOLO_RECYCLE_MULTIPLIER * extra;
+        // Recycler un doublon holo retire aussi ces exemplaires du total
+        // normal — `ownedHolo` est un sous-ensemble d'`owned`, sans quoi il
+        // le dépasserait une fois les holo en trop retirés.
+        const totalCount = s.owned[cardId] || 0;
+        set({
+          ownedHolo: { ...s.ownedHolo, [cardId]: 1 },
+          owned: { ...s.owned, [cardId]: Math.max(1, totalCount - extra) },
+          glands: s.glands + gain,
+        });
+        trackGlandsEarned(gain, 'recycle_holo');
+        playSfx('recycle');
+        s.say(`+${gain} glands (holo)`);
       },
 
       say: (msg) => {
@@ -573,7 +640,7 @@ export const useStore = create<Store>()(
           s.say(`Pas assez de glands (${LOTTERY_PRICE} requis).`);
           return;
         }
-        set({ glands: s.glands - LOTTERY_PRICE, lotteryState: 'spinning', lotteryCard: null, lotteryIsNew: false });
+        set({ glands: s.glands - LOTTERY_PRICE, lotteryState: 'spinning', lotteryCard: null, lotteryIsNew: false, lotteryIsHolo: false });
         trackGlandsSpent(LOTTERY_PRICE, 'lottery', 'lottery');
         playSfx('coin');
         clearTimeout(lotteryTimer);
@@ -581,8 +648,10 @@ export const useStore = create<Store>()(
           const s2 = get();
           const card = roll(LOTTERY_FLOOR);
           const wasOwned = !!s2.owned[card.id];
+          const isHolo = card.rarity !== SECRET_RARITY_ID && Math.random() < HOLO_CHANCE;
           const owned = { ...s2.owned, [card.id]: (s2.owned[card.id] || 0) + 1 };
-          set({ owned, lotteryCard: card, lotteryIsNew: !wasOwned, lotteryState: 'result', openedCount: s2.openedCount + 1 });
+          const ownedHolo = isHolo ? { ...s2.ownedHolo, [card.id]: (s2.ownedHolo[card.id] || 0) + 1 } : s2.ownedHolo;
+          set({ owned, ownedHolo, lotteryCard: card, lotteryIsNew: !wasOwned, lotteryIsHolo: isHolo, lotteryState: 'result', openedCount: s2.openedCount + 1 });
           trackCardPulled(card, 'lottery');
           playSfx(revealSfx(card.rarity));
         }, LOTTERY_SPIN_MS);
@@ -590,7 +659,7 @@ export const useStore = create<Store>()(
 
       closeLottery: () => {
         clearTimeout(lotteryTimer);
-        set({ lotteryState: 'idle', lotteryCard: null, lotteryIsNew: false });
+        set({ lotteryState: 'idle', lotteryCard: null, lotteryIsNew: false, lotteryIsHolo: false });
       },
 
       // ── roue de la chance ──

@@ -64,14 +64,24 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
   if (to.id === me.id) return json({ error: "Impossible de s'échanger avec soi-même." }, 400);
 
   const meRow = await env.DB.prepare('SELECT state_json FROM users WHERE id = ?').bind(me.id).first<{ state_json: string }>();
-  const myOwned = (JSON.parse(meRow?.state_json || '{}').owned ?? {}) as Record<string, number>;
-  const theirOwned = (JSON.parse(to.state_json || '{}').owned ?? {}) as Record<string, number>;
+  const meState = JSON.parse(meRow?.state_json || '{}');
+  const toState = JSON.parse(to.state_json || '{}');
+  const myOwned = (meState.owned ?? {}) as Record<string, number>;
+  const myOwnedHolo = (meState.ownedHolo ?? {}) as Record<string, number>;
+  const theirOwned = (toState.owned ?? {}) as Record<string, number>;
+  const theirOwnedHolo = (toState.ownedHolo ?? {}) as Record<string, number>;
 
+  // Le plancher protégé (au moins 1 exemplaire, plus tous les holo) ne se
+  // propose jamais dans un échange — mêmes garde-fous que le recyclage
+  // (voir recycle/recycleHolo dans state/store.ts), revérifiés ici côté
+  // serveur plutôt que de faire confiance au client.
   for (const [id, qty] of Object.entries(body.offer)) {
-    if ((myOwned[id] || 0) < qty + 1) return json({ error: 'Tu ne peux proposer que tes doublons.' }, 400);
+    const keep = Math.max(1, myOwnedHolo[id] || 0);
+    if ((myOwned[id] || 0) - qty < keep) return json({ error: 'Tu ne peux proposer que tes doublons.' }, 400);
   }
   for (const [id, qty] of Object.entries(body.request)) {
-    if ((theirOwned[id] || 0) < qty + 1) return json({ error: "Cette carte n'est pas un doublon chez ce joueur." }, 400);
+    const keep = Math.max(1, theirOwnedHolo[id] || 0);
+    if ((theirOwned[id] || 0) - qty < keep) return json({ error: "Cette carte n'est pas un doublon chez ce joueur." }, 400);
   }
 
   const now = Date.now();

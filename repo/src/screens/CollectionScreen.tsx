@@ -15,6 +15,7 @@ import type { Card, GridCols, RarityId } from '../types';
  *  tronquées sur la colonne de droite. */
 export default function CollectionScreen() {
   const owned = useStore((s) => s.owned);
+  const ownedHolo = useStore((s) => s.ownedHolo);
   const sort = useStore((s) => s.sort);
   const rarityFilter = useStore((s) => s.rarityFilter);
   const typeFilter = useStore((s) => s.typeFilter);
@@ -199,7 +200,7 @@ export default function CollectionScreen() {
               onClick={() => openDetail(card.id)}
               style={{ position: 'relative', aspectRatio: '0.72', cursor: 'pointer', minWidth: 0 }}
             >
-              <PigCard card={card} holoAnim={holoAnim} ownedCount={count} />
+              <PigCard card={card} holoAnim={holoAnim} ownedCount={count} isHolo={(ownedHolo[card.id] || 0) > 0} />
               {count > 1 && (
                 <span
                   style={{

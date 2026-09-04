@@ -35,6 +35,7 @@ const STATUS_LABEL: Record<Trade['status'], string> = {
  *  cartes en jeu, pas une phrase compacte. */
 export default function TradesScreen() {
   const owned = useStore((s) => s.owned);
+  const ownedHolo = useStore((s) => s.ownedHolo);
   const say = useStore((s) => s.say);
   const setTradesUnread = useStore((s) => s.setTradesUnread);
   const holoAnim = useAnimations();
@@ -75,10 +76,18 @@ export default function TradesScreen() {
   const targetFriend = friends.find((f) => f.username === target);
   // La carte secrète n'est jamais proposable — `theirOwned` vient déjà
   // filtrée du serveur (voir functions/api/profile/[username].ts), mais
-  // `owned` est notre état local complet : on l'exclut ici aussi.
+  // `owned` est notre état local complet : on l'exclut ici aussi. Les
+  // exemplaires holo ne sont pas proposables non plus dans cette version —
+  // on ne compte comme "doublon" que ce qui dépasse le plancher protégé
+  // (au moins 1 exemplaire, plus tous les holo), même logique que le
+  // recyclage normal (voir recycle dans state/store.ts). Le serveur
+  // revérifie de toute façon à la proposition et à l'acceptation.
   const myDupes = useMemo(
-    () => Object.entries(owned).filter(([id, n]) => n > 1 && Number(id) !== SECRET_CARD?.id).map(([id]) => Number(id)),
-    [owned],
+    () =>
+      Object.entries(owned)
+        .filter(([id, n]) => Number(id) !== SECRET_CARD?.id && n > Math.max(1, ownedHolo[Number(id)] || 0))
+        .map(([id]) => Number(id)),
+    [owned, ownedHolo],
   );
   const theirDupes = useMemo(
     () => (theirOwned ? Object.entries(theirOwned).filter(([, n]) => n > 1).map(([id]) => Number(id)) : []),
