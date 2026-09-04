@@ -6,9 +6,9 @@ import SecretCard from './SecretCard';
 
 /** Renders one card: shell (rarity identity — gradient/shadow/animation)
  *  → inner (surface) → artWrap / namePlate / metaRow, plus le voile
- *  métallique (Épique+) ou le reflet diagonal (version holo). Une seule
- *  direction visuelle (Collector foil) : la prop `style` a disparu avec le
- *  retrait de la direction cartoon.
+ *  métallique (Épique+ et version holo). Une seule direction visuelle
+ *  (Collector foil) : la prop `style` a disparu avec le retrait de la
+ *  direction cartoon.
  *
  *  La carte secrète (rareté 7) n'a pas de skin dans buildCardVisual — la
  *  table `SKIN` n'a que 6 entrées (raretés 1-6), y indexer avec 7
@@ -58,7 +58,6 @@ export default function PigCard({
             <div style={d.chromeTopStyle} />
           </>
         )}
-        {d.sheen && <div style={d.sheenStyle} />}
       </div>
     </div>
   );

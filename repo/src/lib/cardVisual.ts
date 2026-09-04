@@ -49,15 +49,12 @@ export interface CardVisual {
   typeStyle: CSSProperties;
   pipWrap: CSSProperties;
   pips: { style: CSSProperties }[];
-  /** Voile métallique (Épique, Légendaire, Mythique) — remplace l'ancien
-   *  reflet qui balayait la carte. */
+  /** Voile métallique (Épique, Légendaire, Mythique, et version holo,
+   *  quelle que soit sa rareté) — remplace l'ancien reflet qui balayait la
+   *  carte, sur toutes les cartes qui l'avaient. */
   chrome: boolean;
   chromeStyle: CSSProperties;
   chromeTopStyle: CSSProperties;
-  /** Reflet diagonal réservé à la version holo (plus haut, indépendant de
-   *  la rareté). */
-  sheen: boolean;
-  sheenStyle: CSSProperties;
   lockStyle: CSSProperties;
 }
 
@@ -69,8 +66,8 @@ export interface BuildCardOptions {
   ownedCount?: number;
   /** Version holo de cette carte (voir HOLO_CHANCE dans state/store.ts) —
    *  remplace le fond de la rareté par un dégradé arc-en-ciel animé, quelle
-   *  que soit la rareté, et reçoit le même reflet (sheen) que les skins
-   *  déjà "holoFoil". N'a d'effet que si la carte est possédée. */
+   *  que soit la rareté, et reçoit le même voile chrome que les paliers
+   *  Épique+. N'a d'effet que si la carte est possédée. */
   isHolo?: boolean;
 }
 
@@ -194,18 +191,21 @@ export function buildCardVisual(card: Card, opts: BuildCardOptions = {}): CardVi
   });
 
   // Voile métallique — remplace l'ancien reflet qui balayait les cartes
-  // Épique/Légendaire/Mythique (« pas très beau »). Un dégradé large dont
-  // on anime la position (marine → gris → argent → gris → marine), plutôt
-  // qu'une bande qui traverse : ça se lit comme du chrome brossé qui
-  // ondule, pas comme un flash qui passe. L'alpha est directement dans les
-  // arrêts du dégradé (pas d'opacité globale ni de mix-blend-mode) : un
-  // premier essai en `mix-blend-mode: overlay` disparaissait presque sur
-  // les fonds très sombres (Mythique) — l'overlay écrase vers le noir sur
-  // un fond déjà proche du noir. Ici le sommet argenté reste bien visible
-  // partout, et les creux marine restent translucides pour laisser
-  // transparaître la couleur propre à chaque rareté. Un second calque,
-  // fixe, imite le reflet du haut d'une vraie surface chromée.
-  const chrome = !!skin.sheen && owned && holoAnim;
+  // Épique/Légendaire/Mythique et la version holo (« pas très beau »,
+  // sur toutes les cartes qui l'avaient — la version holo gardait encore
+  // l'ancien reflet diagonal après le premier passage, corrigé ici). Un
+  // dégradé large dont on anime la position (marine → gris → argent →
+  // gris → marine), plutôt qu'une bande qui traverse : ça se lit comme du
+  // chrome brossé qui ondule, pas comme un flash qui passe. L'alpha est
+  // directement dans les arrêts du dégradé (pas d'opacité globale ni de
+  // mix-blend-mode) : un premier essai en `mix-blend-mode: overlay`
+  // disparaissait presque sur les fonds très sombres (Mythique) — l'overlay
+  // écrase vers le noir sur un fond déjà proche du noir. Ici le sommet
+  // argenté reste bien visible partout, et les creux marine restent
+  // translucides pour laisser transparaître la couleur propre à chaque
+  // rareté (ou le cadre arc-en-ciel pour la version holo). Un second
+  // calque, fixe, imite le reflet du haut d'une vraie surface chromée.
+  const chrome = (!!skin.sheen || holo) && owned && holoAnim;
   const chromeStyle: CSSProperties = {
     position: 'absolute',
     inset: 0,
@@ -222,21 +222,6 @@ export function buildCardVisual(card: Card, opts: BuildCardOptions = {}): CardVi
     pointerEvents: 'none',
     borderRadius: Math.max(2, R2 - 2),
     background: 'linear-gradient(180deg,rgba(255,255,255,.25) 0%,transparent 50%)',
-  };
-
-  // Reflet diagonal — désormais réservé à la version holo (indépendante de
-  // la rareté) : les paliers Épique+ ont leur propre voile (chrome
-  // ci-dessus).
-  const sheen = holo && owned && holoAnim;
-  const sheenStyle: CSSProperties = {
-    position: 'absolute',
-    top: '-20%',
-    left: 0,
-    width: '55%',
-    height: '140%',
-    pointerEvents: 'none',
-    background: 'linear-gradient(100deg,transparent,rgba(255,255,255,.45),transparent)',
-    animation: 'pigShine 4.6s ease-in-out infinite',
   };
 
   const lockStyle: CSSProperties = {
@@ -274,8 +259,6 @@ export function buildCardVisual(card: Card, opts: BuildCardOptions = {}): CardVi
     chrome,
     chromeStyle,
     chromeTopStyle,
-    sheen,
-    sheenStyle,
     lockStyle,
   };
 }

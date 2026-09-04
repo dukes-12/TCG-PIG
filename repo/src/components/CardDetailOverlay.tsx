@@ -51,7 +51,7 @@ export default function CardDetailOverlay() {
         }}
       />
       <div style={{ width: 238, height: 332, animation: 'pigPop .3s ease both', position: 'relative', zIndex: 2 }}>
-        <TiltCard holo={holoCount > 0}>
+        <TiltCard>
           <PigCard card={card} big holoAnim={holoAnim} ownedCount={count} isHolo={holoCount > 0} />
         </TiltCard>
       </div>
