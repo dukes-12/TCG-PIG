@@ -67,6 +67,9 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
   const myOwned = (JSON.parse(meRow?.state_json || '{}').owned ?? {}) as Record<string, number>;
   const theirOwned = (JSON.parse(to.state_json || '{}').owned ?? {}) as Record<string, number>;
 
+  // `owned` et `ownedHolo` sont deux collections indépendantes (voir
+  // HOLO_CHANCE dans state/store.ts) — les échanges ne portent que sur
+  // `owned`, jamais consultée en croisant `ownedHolo`.
   for (const [id, qty] of Object.entries(body.offer)) {
     if ((myOwned[id] || 0) < qty + 1) return json({ error: 'Tu ne peux proposer que tes doublons.' }, 400);
   }

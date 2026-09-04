@@ -52,7 +52,7 @@ export function trackPackOpened(packKey: string, source: 'stock' | 'free_hourly'
 /** Glands gagnés — recyclage de doublons ou versement quotidien — et
  *  dépensés — achat de sac ou de dos. Séparer gain/dépense permet de suivre
  *  le solde net par jour dans GA (glands/jour = somme des `value` du jour). */
-export function trackGlandsEarned(amount: number, source: 'recycle' | 'daily_grant') {
+export function trackGlandsEarned(amount: number, source: 'recycle' | 'recycle_holo' | 'daily_grant') {
   send('glands_earned', { value: amount, source });
 }
 export function trackGlandsSpent(amount: number, item: 'pack' | 'card_back' | 'lottery', key: string) {

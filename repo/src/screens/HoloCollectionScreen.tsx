@@ -1,87 +1,96 @@
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Chip from '../components/Chip';
 import PigCard from '../components/PigCard';
-import { CARDS, RARITIES, SECRET_CARD, SECRET_RARITY_ID, TOTAL_CARDS, TYPES } from '../data/catalog';
+import { CARDS, RARITIES, SECRET_RARITY_ID, TOTAL_CARDS, TYPES } from '../data/catalog';
 import { RARITY_VISUALS } from '../data/rarityVisuals';
 import { useAnimations } from '../lib/useAnimations';
-import { useStore } from '../state/store';
-import type { Card, GridCols, RarityId } from '../types';
+import { HOLO_CHANCE, useStore } from '../state/store';
+import type { Card, GridCols, RarityId, SortKey } from '../types';
 
-/** Ported from the "COLLECTION" block in Grouin - TCG Cochons.dc.html.
- *  Deux ajouts par rapport au portage initial : la densité de grille est
- *  réglable (2, 3 ou 4 cartes de front, persistée), et le badge de doublon
- *  est posé *dans* la carte — en débord il était rogné par
- *  `overflow-x: hidden` sur `.screen`, ce qui donnait des cartes visuellement
- *  tronquées sur la colonne de droite. */
-export default function CollectionScreen() {
-  const owned = useStore((s) => s.owned);
+/** Sous-collection des cartes holo — une deuxième collection à part
+ *  entière à compléter, avec exactement le même écran que "Ma collection"
+ *  (mêmes filtres, même grille, même logique d'affichage verrouillé/
+ *  possédé) mais scopée sur `ownedHolo` au lieu de `owned` : les deux sont
+ *  des collections *indépendantes* (voir HOLO_CHANCE dans state/store.ts)
+ *  — un tirage holo ne compte jamais comme "possédé" ici sous sa forme
+ *  classique, et inversement.
+ *
+ *  État de tri/recherche/filtre en local (pas dans le store global) :
+ *  croiser les filtres des deux écrans aurait été surprenant — changer le
+ *  tri ici ne doit pas se répercuter sur "Ma collection". La densité de
+ *  grille (gridCols), elle, reste un réglage global partagé — c'est une
+ *  préférence d'affichage, pas un filtre de collection. */
+export default function HoloCollectionScreen() {
   const ownedHolo = useStore((s) => s.ownedHolo);
-  const sort = useStore((s) => s.sort);
-  const rarityFilter = useStore((s) => s.rarityFilter);
-  const typeFilter = useStore((s) => s.typeFilter);
-  const query = useStore((s) => s.query);
-  const ownedOnly = useStore((s) => s.ownedOnly);
   const gridCols = useStore((s) => s.gridCols);
-  const setSort = useStore((s) => s.setSort);
-  const setRarityFilter = useStore((s) => s.setRarityFilter);
-  const setTypeFilter = useStore((s) => s.setTypeFilter);
-  const setQuery = useStore((s) => s.setQuery);
   const setGridCols = useStore((s) => s.setGridCols);
-  const toggleOwnedOnly = useStore((s) => s.toggleOwnedOnly);
   const openDetail = useStore((s) => s.openDetail);
   const holoAnim = useAnimations();
   const navigate = useNavigate();
 
-  // La carte secrète ne compte pas dans "cartes uniques" — comme
-  // TOTAL_CARDS, c'est un bonus caché, pas un objectif de complétion.
-  const ownedIds = useMemo(
-    () => Object.keys(owned).filter((k) => owned[Number(k)] > 0 && Number(k) !== SECRET_CARD?.id),
-    [owned],
-  );
-  const uniq = ownedIds.length;
-  const holoUniq = useMemo(() => Object.keys(ownedHolo).filter((k) => ownedHolo[Number(k)] > 0).length, [ownedHolo]);
+  const [sort, setSort] = useState<SortKey>('rarete');
+  const [rarityFilter, setRarityFilter] = useState<RarityId | 'all'>('all');
+  const [typeFilter, setTypeFilter] = useState<string | 'all'>('all');
+  const [query, setQuery] = useState('');
+  const [ownedOnly, setOwnedOnly] = useState(false);
 
-  // Tant qu'elle n'a jamais été tirée, la carte secrète n'existe nulle
-  // part dans l'interface — pas de case verrouillée, pas de filtre, pas de
-  // pastille de complétion. Elle n'apparaît qu'une fois vraiment possédée.
-  const hasSecret = !!SECRET_CARD && (owned[SECRET_CARD.id] || 0) > 0;
-  const visibleRarities = useMemo(() => RARITIES.filter((r) => r.id !== SECRET_RARITY_ID || hasSecret), [hasSecret]);
-  const visibleTypes = useMemo(() => TYPES.filter((t) => t !== SECRET_CARD?.type || hasSecret), [hasSecret]);
+  // La carte secrète n'est jamais tirée en holo (voir HOLO_CHANCE) — comme
+  // TOTAL_CARDS, exclue par cohérence avec le reste du code plutôt que
+  // parce que le cas peut vraiment se produire.
+  const holoIds = useMemo(
+    () => Object.keys(ownedHolo).filter((k) => ownedHolo[Number(k)] > 0 && Number(k) !== SECRET_RARITY_ID),
+    [ownedHolo],
+  );
+  const uniq = holoIds.length;
+
+  const rarities = useMemo(() => RARITIES.filter((r) => r.id !== SECRET_RARITY_ID), []);
+  const types = useMemo(() => TYPES.filter((t) => t !== 'Mystère'), []);
 
   const list = useMemo(() => {
     const q = query.trim().toLowerCase();
     let l = CARDS.filter(
       (c) =>
-        (c.rarity !== SECRET_RARITY_ID || hasSecret) &&
+        c.rarity !== SECRET_RARITY_ID &&
         (rarityFilter === 'all' || c.rarity === rarityFilter) &&
         (typeFilter === 'all' || c.type === typeFilter) &&
         (!q || c.name.toLowerCase().includes(q)) &&
-        (!ownedOnly || (owned[c.id] || 0) > 0),
+        (!ownedOnly || (ownedHolo[c.id] || 0) > 0),
     );
     l = l.slice();
     if (sort === 'rarete') l.sort((a, b) => b.rarity - a.rarity || a.name.localeCompare(b.name));
     if (sort === 'nom') l.sort((a, b) => a.name.localeCompare(b.name));
     if (sort === 'type') l.sort((a, b) => a.type.localeCompare(b.type) || b.rarity - a.rarity);
-    if (sort === 'nb') l.sort((a, b) => (owned[b.id] || 0) - (owned[a.id] || 0) || b.rarity - a.rarity);
-
-    // Toujours en dernier, quel que soit le tri — jamais mêlée aux autres
-    // cartes même quand elle est possédée.
-    const secretIdx = l.findIndex((c) => c.rarity === SECRET_RARITY_ID);
-    if (secretIdx !== -1) l.push(...l.splice(secretIdx, 1));
-
+    if (sort === 'nb') l.sort((a, b) => (ownedHolo[b.id] || 0) - (ownedHolo[a.id] || 0) || b.rarity - a.rarity);
     return l;
-  }, [query, rarityFilter, typeFilter, ownedOnly, owned, sort, hasSecret]);
+  }, [query, rarityFilter, typeFilter, ownedOnly, ownedHolo, sort]);
 
-  // En 4 de front la carte fait ~90 px : on resserre la gouttière pour ne pas
-  // rogner davantage, et on garde le grand format pour 2 de front.
   const gap = gridCols === 4 ? 7 : gridCols === 3 ? 10 : 14;
+  const holoPercent = Math.round(1 / HOLO_CHANCE);
 
   return (
     <div className="screen">
       <div className="screen-inner">
-        <div style={{ display: 'flex', alignItems: 'flex-end', gap: 10 }}>
-          <h1 style={{ fontSize: 30, margin: 0, lineHeight: 1 }}>Ma collection</h1>
+        <button
+          className="pressable"
+          onClick={() => navigate('/collection')}
+          style={{
+            border: 0,
+            background: 'none',
+            cursor: 'pointer',
+            padding: 0,
+            fontSize: 11.5,
+            fontWeight: 700,
+            opacity: 0.55,
+            display: 'flex',
+            alignItems: 'center',
+            gap: 4,
+          }}
+        >
+          ← Collection
+        </button>
+        <div style={{ display: 'flex', alignItems: 'flex-end', gap: 10, marginTop: 8 }}>
+          <h1 style={{ fontSize: 30, margin: 0, lineHeight: 1 }}>Collection holo ✨</h1>
           <span style={{ marginLeft: 'auto', fontSize: 12, fontWeight: 700, opacity: 0.5, paddingBottom: 4 }}>
             {uniq}/{TOTAL_CARDS}
           </span>
@@ -91,18 +100,22 @@ export default function CollectionScreen() {
             style={{
               height: '100%',
               width: `${Math.round((uniq / TOTAL_CARDS) * 100)}%`,
-              background: 'linear-gradient(90deg,var(--color-accent-2-500),var(--color-accent))',
+              background: 'linear-gradient(90deg,#5cf29a,#4fc3ff,#a06bff)',
               borderRadius: 999,
               transition: 'width .4s ease',
             }}
           />
         </div>
+        <p style={{ fontSize: 11.5, opacity: 0.55, margin: '9px 0 0', textWrap: 'pretty' as const }}>
+          Chaque carte tirée a 1 chance sur {holoPercent} de sortir en holo, quelle que soit sa rareté — une collection à
+          part, séparée de la classique.
+        </p>
       </div>
 
       <div style={{ display: 'flex', gap: 5, padding: '16px 18px 0' }}>
-        {visibleRarities.map((r) => {
+        {rarities.map((r) => {
           const rTotal = CARDS.filter((c) => c.rarity === r.id).length;
-          const rOwned = CARDS.filter((c) => c.rarity === r.id && (owned[c.id] || 0) > 0).length;
+          const rOwned = CARDS.filter((c) => c.rarity === r.id && (ownedHolo[c.id] || 0) > 0).length;
           return (
             <div
               key={r.id}
@@ -120,44 +133,17 @@ export default function CollectionScreen() {
         })}
       </div>
 
-      <div className="screen-inner" style={{ paddingTop: 14 }}>
-        <button
-          className="pressable"
-          onClick={() => navigate('/collection/holo')}
-          style={{
-            width: '100%',
-            cursor: 'pointer',
-            border: 0,
-            textAlign: 'left',
-            display: 'flex',
-            alignItems: 'center',
-            gap: 12,
-            padding: '13px 16px',
-            borderRadius: 22,
-            background: 'linear-gradient(90deg,rgba(92,242,154,.16),rgba(79,195,255,.16),rgba(160,107,255,.16))',
-            boxShadow: 'inset 0 0 0 1.5px rgba(160,107,255,.35)',
-          }}
-        >
-          <span style={{ fontSize: 20 }}>✨</span>
-          <span style={{ flex: 1, minWidth: 0 }}>
-            <span style={{ display: 'block', fontFamily: 'var(--font-heading)', fontSize: 14 }}>Collection holo</span>
-            <span style={{ display: 'block', fontSize: 10.5, opacity: 0.6, marginTop: 2 }}>{holoUniq} carte{holoUniq !== 1 ? 's' : ''} en version holo</span>
-          </span>
-          <span style={{ fontSize: 16, opacity: 0.5 }}>›</span>
-        </button>
-      </div>
-
       <div className="screen-inner" style={{ paddingTop: 16, display: 'flex', gap: 8, alignItems: 'center' }}>
         <input
           className="input"
-          placeholder="Chercher un cochon…"
+          placeholder="Chercher un cochon holo…"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           style={{ flex: 1, minWidth: 0, background: 'var(--color-neutral-100)' }}
         />
         <button
           className="pressable"
-          onClick={toggleOwnedOnly}
+          onClick={() => setOwnedOnly((v) => !v)}
           style={{
             cursor: 'pointer',
             border: 0,
@@ -199,7 +185,7 @@ export default function CollectionScreen() {
         <div className="section-label" style={{ margin: '13px 0 7px' }}>Rareté</div>
         <div className="chip-row">
           <Chip label="Toutes" active={rarityFilter === 'all'} onClick={() => setRarityFilter('all')} />
-          {visibleRarities.map((r) => (
+          {rarities.map((r) => (
             <Chip key={r.id} label={r.name} active={rarityFilter === r.id} onClick={() => setRarityFilter(r.id as RarityId)} />
           ))}
         </div>
@@ -207,7 +193,7 @@ export default function CollectionScreen() {
         <div className="section-label" style={{ margin: '13px 0 7px' }}>Type</div>
         <div className="chip-row">
           <Chip label="Tous" active={typeFilter === 'all'} onClick={() => setTypeFilter('all')} />
-          {visibleTypes.map((t) => (
+          {types.map((t) => (
             <Chip key={t} label={t} active={typeFilter === t} onClick={() => setTypeFilter(t)} />
           ))}
         </div>
@@ -222,7 +208,7 @@ export default function CollectionScreen() {
         }}
       >
         {list.map((card: Card) => {
-          const count = owned[card.id] || 0;
+          const holoCount = ownedHolo[card.id] || 0;
           return (
             <div
               key={card.id}
@@ -230,12 +216,10 @@ export default function CollectionScreen() {
               onClick={() => openDetail(card.id)}
               style={{ position: 'relative', aspectRatio: '0.72', cursor: 'pointer', minWidth: 0 }}
             >
-              <PigCard card={card} holoAnim={holoAnim} ownedCount={count} />
-              {count > 1 && (
+              <PigCard card={card} holoAnim={holoAnim} ownedCount={holoCount} isHolo />
+              {holoCount > 1 && (
                 <span
                   style={{
-                    // Badge *à l'intérieur* de la carte : en débord (top:-5,
-                    // right:-4) il se faisait rogner par overflow-x: hidden.
                     position: 'absolute',
                     top: 5,
                     right: 5,
@@ -248,7 +232,7 @@ export default function CollectionScreen() {
                     boxShadow: 'var(--shadow-sm)',
                   }}
                 >
-                  ×{count}
+                  ✨×{holoCount}
                 </span>
               )}
             </div>

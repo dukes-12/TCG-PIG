@@ -52,8 +52,11 @@ export function apiPushState(state: Record<string, unknown>) {
 export function apiFetchPlayers() {
   return call<{ players: string[] }>('/players');
 }
+export function apiFetchFriends() {
+  return call<{ players: { username: string; avatar: string; avatarPhoto: string | null }[] }>('/friends');
+}
 export function apiFetchProfile(username: string) {
-  return call<{ username: string; owned: Record<string, number>; openedCount: number }>(
+  return call<{ username: string; owned: Record<string, number>; openedCount: number; avatar: string; avatarPhoto: string | null }>(
     `/profile/${encodeURIComponent(username)}`,
   );
 }
@@ -77,4 +80,19 @@ export function apiProposeTrade(toUsername: string, offer: Record<string, number
 }
 export function apiRespondTrade(id: number, action: 'accept' | 'decline' | 'cancel') {
   return call<{ ok: true }>(`/trades/${id}`, { method: 'POST', body: JSON.stringify({ action }) });
+}
+
+export interface MailboxMessage {
+  id: number;
+  message: string;
+  glands: number;
+  created_at: number;
+  read_at: number | null;
+}
+
+export function apiFetchMailbox() {
+  return call<{ messages: MailboxMessage[]; unread: number }>('/mailbox');
+}
+export function apiMarkMailboxRead(ids: number[]) {
+  return call<{ ok: true }>('/mailbox', { method: 'POST', body: JSON.stringify({ ids }) });
 }

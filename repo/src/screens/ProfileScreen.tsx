@@ -1,43 +1,51 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import AnimationPicker from '../components/AnimationPicker';
 import AuthScreen from './AuthScreen';
+import Avatar from '../components/Avatar';
+import AvatarPicker from '../components/AvatarPicker';
 import CardBackPicker from '../components/CardBackPicker';
+import MailboxButton from '../components/MailboxButton';
+import MailboxOverlay from '../components/MailboxOverlay';
 import SoundToggle from '../components/SoundToggle';
 import PigCard from '../components/PigCard';
-import Snout from '../components/Snout';
-import { CARDS, RARITIES, TOTAL_CARDS, rarityById } from '../data/catalog';
+import { CARDS, RARITIES, SECRET_CARD, SECRET_RARITY_ID, TOTAL_CARDS, rarityById } from '../data/catalog';
 import { RARITY_VISUALS } from '../data/rarityVisuals';
 import { useAnimations } from '../lib/useAnimations';
-import { apiFetchPlayers } from '../lib/api';
 import { useStore } from '../state/store';
 import type { RarityId } from '../types';
 
 /** Ported from the "PROFIL" block in Grouin - TCG Cochons.dc.html.
- *  Deux ajouts pour les comptes : le pseudo actif + déconnexion, et la
- *  liste des autres joueurs pour aller voir leur collection (leur profil
- *  est la seule façon de la consulter — pas de classement, pas d'annuaire
- *  affichant les cartes directement). */
+ *  Ajouts pour les comptes : le pseudo actif + déconnexion, l'avatar (voir
+ *  AvatarPicker plus bas). La liste des autres joueurs a déménagé dans son
+ *  propre onglet Amis — voir FriendsScreen. */
 export default function ProfileScreen() {
   const account = useStore((s) => s.account);
   const owned = useStore((s) => s.owned);
   const glands = useStore((s) => s.glands);
   const openedCount = useStore((s) => s.openedCount);
+  const avatar = useStore((s) => s.avatar);
+  const avatarPhoto = useStore((s) => s.avatarPhoto);
+  const mailboxUnread = useStore((s) => s.mailboxUnread);
   const openDetail = useStore((s) => s.openDetail);
   const logout = useStore((s) => s.logout);
+  const debugTriggerSecret = useStore((s) => s.debugTriggerSecret);
   const holoAnim = useAnimations();
   const navigate = useNavigate();
-
-  const [players, setPlayers] = useState<string[]>([]);
-  useEffect(() => {
-    if (!account) return;
-    apiFetchPlayers().then((r) => setPlayers(r.players)).catch(() => {});
-  }, [account]);
+  const [mailboxOpen, setMailboxOpen] = useState(false);
 
   const ownedIds = useMemo(() => Object.keys(owned).filter((k) => owned[Number(k)] > 0).map(Number), [owned]);
-  const uniq = ownedIds.length;
+  // Complétion : la carte secrète ne compte pas dedans (comme TOTAL_CARDS),
+  // sinon "uniq/TOTAL_CARDS" peut dépasser 100 % pour qui l'a trouvée.
+  const uniq = useMemo(() => ownedIds.filter((id) => id !== SECRET_CARD?.id).length, [ownedIds]);
+  // Tant qu'elle n'a jamais été tirée, aucune trace d'elle dans l'interface
+  // — même pas une ligne "Secrète 0/1" dans la complétion par rareté.
+  const hasSecret = !!SECRET_CARD && (owned[SECRET_CARD.id] || 0) > 0;
 
   const best = useMemo(() => {
+    // Ici en revanche on la laisse concourir — "meilleure trouvaille" sur
+    // son propre profil, personne d'autre ne le voit, c'est le bon endroit
+    // pour s'en vanter.
     const candidates = ownedIds.map((id) => CARDS.find((c) => c.id === id)!).sort((a, b) => b.rarity - a.rarity);
     return candidates[0] || CARDS[0];
   }, [ownedIds]);
@@ -56,17 +64,70 @@ export default function ProfileScreen() {
       <div className="screen-inner" style={{ display: 'flex', alignItems: 'flex-end', gap: 10 }}>
         <h1 style={{ fontSize: 30, margin: 0, lineHeight: 1 }}>Profil</h1>
         {account && (
-          <button
-            onClick={logout}
-            style={{ marginLeft: 'auto', border: 0, background: 'none', cursor: 'pointer', fontSize: 11.5, fontWeight: 700, opacity: 0.5, paddingBottom: 4 }}
-          >
-            Se déconnecter
-          </button>
+          <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 14 }}>
+            <MailboxButton unread={mailboxUnread} onClick={() => setMailboxOpen(true)} />
+            <button
+              onClick={logout}
+              style={{ border: 0, background: 'none', cursor: 'pointer', fontSize: 11.5, fontWeight: 700, opacity: 0.5, paddingBottom: 4 }}
+            >
+              Se déconnecter
+            </button>
+          </div>
         )}
       </div>
 
+      {mailboxOpen && <MailboxOverlay onClose={() => setMailboxOpen(false)} />}
+
+      {/* Outil de test — visible seulement sur ce compte précis, pas un vrai
+          contrôle d'accès (juste une condition côté client, contournable en
+          devtools par qui saurait la chercher). Rejoue la vraie séquence de
+          révélation avec la carte secrète comme seul tirage, sans toucher au
+          stock de sacs réel — voir debugTriggerSecret dans store.ts. */}
+      {account === 'Dukes' && (
+        <div className="screen-inner" style={{ paddingTop: 16 }}>
+          <div
+            style={{
+              boxSizing: 'border-box',
+              padding: '12px 15px',
+              borderRadius: 22,
+              background: 'var(--color-surface)',
+              border: '1.5px dashed var(--color-accent-500)',
+              display: 'flex',
+              alignItems: 'center',
+              gap: 12,
+            }}
+          >
+            <span style={{ fontSize: 20 }}>🔧</span>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontFamily: 'var(--font-heading)', fontSize: 14 }}>Outils de test</div>
+              <div style={{ fontSize: 10.5, opacity: 0.6, marginTop: 2 }}>Visible seulement sur ce compte.</div>
+            </div>
+            <button
+              className="pressable"
+              onClick={() => {
+                debugTriggerSecret();
+                navigate('/open');
+              }}
+              style={{
+                cursor: 'pointer',
+                border: 0,
+                fontFamily: 'var(--font-heading)',
+                fontSize: 11.5,
+                padding: '9px 14px',
+                borderRadius: 999,
+                background: 'var(--color-accent)',
+                color: 'var(--color-bg)',
+                whiteSpace: 'nowrap',
+              }}
+            >
+              Voir la carte secrète
+            </button>
+          </div>
+        </div>
+      )}
+
       <div className="screen-inner" style={{ paddingTop: 18, display: 'flex', alignItems: 'center', gap: 14 }}>
-        <Snout width={74} height={74} nostrilWidth={12} nostrilHeight={19} gap={11} bg="linear-gradient(160deg,#ffd2b4,#f6a06b)" boxShadow="var(--shadow-md)" />
+        <Avatar avatar={avatar} photo={avatarPhoto} size={74} />
         <div>
           <div style={{ fontFamily: 'var(--font-heading)', fontSize: 22, lineHeight: 1.1 }}>{account ?? 'Éleveur Grouik'}</div>
           <div style={{ fontSize: 11.5, opacity: 0.6, marginTop: 4 }}>{account ? rank : 'Pas encore connecté'}</div>
@@ -82,40 +143,9 @@ export default function ProfileScreen() {
         ))}
       </div>
 
-      <div className="screen-inner" style={{ paddingTop: 20 }}>
-        {!account ? (
-          <AuthScreen />
-        ) : (
-          <>
-            <div className="section-label" style={{ marginBottom: 8 }}>Voir la collection d'un ami</div>
-            {players.length === 0 ? (
-              <p style={{ fontSize: 12, opacity: 0.5, margin: 0 }}>Personne d'autre n'a encore de compte.</p>
-            ) : (
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 7 }}>
-            {players.map((p) => (
-              <button
-                key={p}
-                className="pressable"
-                onClick={() => navigate(`/players/${p}`)}
-                style={{
-                  cursor: 'pointer',
-                  border: 0,
-                  fontFamily: 'var(--font-body)',
-                  fontSize: 12.5,
-                  padding: '9px 14px',
-                  borderRadius: 999,
-                  background: 'var(--color-neutral-100)',
-                  color: 'var(--color-text)',
-                }}
-              >
-                {p}
-              </button>
-            ))}
-              </div>
-            )}
-          </>
-        )}
-      </div>
+      <div className="screen-inner" style={{ paddingTop: 20 }}>{!account && <AuthScreen />}</div>
+
+      <AvatarPicker />
 
       <CardBackPicker />
 
@@ -126,7 +156,7 @@ export default function ProfileScreen() {
       <div className="screen-inner" style={{ paddingTop: 20 }}>
         <div className="section-label" style={{ marginBottom: 11 }}>Complétion par rareté</div>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 11 }}>
-          {RARITIES.map((r) => {
+          {RARITIES.filter((r) => r.id !== SECRET_RARITY_ID || hasSecret).map((r) => {
             const t = CARDS.filter((c) => c.rarity === r.id).length;
             const o = CARDS.filter((c) => c.rarity === r.id && (owned[c.id] || 0) > 0).length;
             const ink = RARITY_VISUALS[r.id as RarityId].ink;
@@ -148,24 +178,26 @@ export default function ProfileScreen() {
         </div>
       </div>
 
-      <div className="screen-inner" style={{ paddingTop: 22, paddingBottom: 12 }}>
-        <div className="section-label" style={{ marginBottom: 11 }}>Meilleure trouvaille</div>
-        <div
-          className="pressable"
-          onClick={() => openDetail(best.id)}
-          style={{ display: 'flex', alignItems: 'center', gap: 14, padding: '12px 14px', borderRadius: 28, background: 'var(--color-surface)', cursor: 'pointer' }}
-        >
-          <div style={{ width: 74, height: 104, flex: 'none' }}>
-            <PigCard card={best} holoAnim={holoAnim} ownedCount={owned[best.id] || 0} />
-          </div>
-          <div>
-            <div style={{ fontFamily: 'var(--font-heading)', fontSize: 18, lineHeight: 1.15 }}>{best.name}</div>
-            <div style={{ fontSize: 11, opacity: 0.6, marginTop: 5 }}>
-              {rarityById(best.rarity).name} · {best.type} · ×{owned[best.id] || 1}
+      {uniq > 0 && (
+        <div className="screen-inner" style={{ paddingTop: 22, paddingBottom: 12 }}>
+          <div className="section-label" style={{ marginBottom: 11 }}>Meilleure trouvaille</div>
+          <div
+            className="pressable"
+            onClick={() => openDetail(best.id)}
+            style={{ display: 'flex', alignItems: 'center', gap: 14, padding: '12px 14px', borderRadius: 28, background: 'var(--color-surface)', cursor: 'pointer' }}
+          >
+            <div style={{ width: 74, height: 104, flex: 'none' }}>
+              <PigCard card={best} holoAnim={holoAnim} ownedCount={owned[best.id] || 0} />
+            </div>
+            <div>
+              <div style={{ fontFamily: 'var(--font-heading)', fontSize: 18, lineHeight: 1.15 }}>{best.name}</div>
+              <div style={{ fontSize: 11, opacity: 0.6, marginTop: 5 }}>
+                {rarityById(best.rarity).name} · {best.type} · ×{owned[best.id] || 1}
+              </div>
             </div>
           </div>
         </div>
-      </div>
+      )}
     </div>
   );
 }

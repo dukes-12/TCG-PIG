@@ -20,4 +20,5 @@ export const RARITY_VISUALS: Record<RarityId, RarityVisual> = {
   4: { short: 'Épique', ink: '#6c3fa0', glow: 'rgba(122,73,180,.85)' },
   5: { short: 'Légend.', ink: '#8c6318', glow: 'rgba(255,215,130,1)' },
   6: { short: 'Myth.', ink: '#43206d', glow: 'rgba(255,217,138,1)' },
+  7: { short: 'Secr.', ink: '#c94fb0', glow: 'rgba(255,138,217,.85)' },
 };

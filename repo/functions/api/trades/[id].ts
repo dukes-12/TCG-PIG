@@ -49,6 +49,10 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env, params }
   const offer = JSON.parse(trade.offer_json) as Record<string, number>;
   const wanted = JSON.parse(trade.request_json) as Record<string, number>;
 
+  // `owned` et `ownedHolo` sont deux collections indépendantes (voir
+  // HOLO_CHANCE dans state/store.ts) — les échanges ne portent que sur
+  // `owned`. Revérifié ici (comme à la proposition) : la collection a pu
+  // changer depuis (recyclage, autre échange…).
   for (const [cid, qty] of Object.entries(offer)) {
     if ((fromState.owned[cid] || 0) < qty + 1) return json({ error: "Le proposant n'a plus ce doublon." }, 409);
   }

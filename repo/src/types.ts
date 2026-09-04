@@ -1,4 +1,7 @@
-export type RarityId = 1 | 2 | 3 | 4 | 5 | 6;
+/** 7 = Secrète — pas une rareté "normale" : poids 0 dans `roll()`, elle
+ *  n'est jamais tirée par la table pondérée habituelle. Voir SECRET_CHANCE
+ *  dans lib/draw.ts. */
+export type RarityId = 1 | 2 | 3 | 4 | 5 | 6 | 7;
 
 export type RarityKey =
   | 'commune'
@@ -6,7 +9,8 @@ export type RarityKey =
   | 'rare'
   | 'epique'
   | 'legendaire'
-  | 'mythique';
+  | 'mythique'
+  | 'secrete';
 
 export interface Rarity {
   id: RarityId;
@@ -35,6 +39,10 @@ export interface Pack {
   price: number;
   cards: number;
   guaranteedFloor: RarityId | null;
+  /** Combien de cartes du sac doivent atteindre `guaranteedFloor` — au
+   *  moins, pas exactement (un tirage naturel peut en donner plus). Absent
+   *  ou 0 : pas de garantie, `guaranteedFloor` est alors ignoré. */
+  guaranteedCount?: number;
   subtitle: string;
 }
 
@@ -53,11 +61,26 @@ export type CardBackKey = 'sceau' | 'souille' | 'deco' | 'nuit';
 /** Préférence d'animations — voir src/lib/useAnimations.ts. */
 export type AnimationPref = 'auto' | 'on' | 'off';
 
+/** Avatars de profil — voir src/data/avatars.ts. Tous débloqués d'office
+ *  (identité, pas une rareté à collectionner comme les dos de carte). */
+export type AvatarKey =
+  | 'classique'
+  | 'truffe-rose'
+  | 'sanglier'
+  | 'dore'
+  | 'nuit-violette'
+  | 'prairie'
+  | 'givre-bleu'
+  | 'onyx';
+
 /** Nombre de cartes par ligne dans la collection. */
 export type GridCols = 2 | 3 | 4;
 
 export type SortKey = 'rarete' | 'nom' | 'type' | 'nb';
 
-export type TabKey = 'collection' | 'shop' | 'open' | 'dupes' | 'trades' | 'profile';
+export type TabKey = 'collection' | 'shop' | 'open' | 'dupes' | 'trades' | 'friends' | 'profile';
 
 export type PackState = 'idle' | 'tearing' | 'reveal' | 'summary';
+
+/** Roue de la chance — voir src/components/WheelOverlay.tsx. */
+export type WheelState = 'idle' | 'spinning' | 'result';

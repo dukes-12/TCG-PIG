@@ -3,9 +3,11 @@ import { useNavigate } from 'react-router-dom';
 import CardBack from '../components/CardBack';
 import PackPicker from '../components/PackPicker';
 import PigCard from '../components/PigCard';
+import QtyPicker from '../components/QtyPicker';
 import RarePullFx from '../components/RarePullFx';
+import SecretRevealFx from '../components/SecretRevealFx';
 import Snout from '../components/Snout';
-import { CARDS, RARITIES, packByKey, rarityById } from '../data/catalog';
+import { CARDS, RARITIES, SECRET_RARITY_ID, packByKey, rarityById } from '../data/catalog';
 import { RARITY_VISUALS } from '../data/rarityVisuals';
 import { PACK_VISUALS } from '../data/packVisuals';
 import { useAnimations } from '../lib/useAnimations';
@@ -58,14 +60,18 @@ export default function OpenScreen() {
   const packState = useStore((s) => s.packState);
   const stock = useStore((s) => s.stock);
   const pull = useStore((s) => s.pull);
+  const pullHolo = useStore((s) => s.pullHolo);
   const pullIndex = useStore((s) => s.pullIndex);
   const flipped = useStore((s) => s.flipped);
   const dragX = useStore((s) => s.dragX);
   const dragging = useStore((s) => s.dragging);
   const isNew = useStore((s) => s.isNew);
   const owned = useStore((s) => s.owned);
+  const ownedHolo = useStore((s) => s.ownedHolo);
   const cardBack = useStore((s) => s.cardBack);
+  const openQty = useStore((s) => s.openQty);
   const startTear = useStore((s) => s.startTear);
+  const revealAll = useStore((s) => s.revealAll);
   const nextReveal = useStore((s) => s.nextReveal);
   const dragStart = useStore((s) => s.dragStart);
   const dragMove = useStore((s) => s.dragMove);
@@ -85,6 +91,8 @@ export default function OpenScreen() {
     if (inPocket <= 0) navigate('/shop');
     else startTear();
   };
+  const qtyToOpen = Math.max(1, Math.min(openQty, inPocket || 1));
+  const tearLabel = inPocket > 0 ? `Déchirer ${qtyToOpen} sac${qtyToOpen > 1 ? 's' : ''}` : 'Aller en boutique';
 
   return (
     <div className="screen" style={{ display: 'flex', flexDirection: 'column' }}>
@@ -99,6 +107,7 @@ export default function OpenScreen() {
           </p>
 
           <PackPicker />
+          <QtyPicker />
 
           <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '10px 0', minHeight: 260 }}>
             <div
@@ -139,12 +148,16 @@ export default function OpenScreen() {
           </div>
 
           <button className="pressable" onClick={tearOrShop} style={openBtnStyle}>
-            {inPocket > 0 ? 'Déchirer le sac' : 'Aller en boutique'}
+            {tearLabel}
           </button>
 
           <div style={{ marginTop: 16, padding: '14px 18px', borderRadius: 26, background: 'var(--color-surface)' }}>
             <div className="section-label" style={{ marginBottom: 9 }}>Chances par carte</div>
-            {RARITIES.map((r) => (
+            {/* La carte secrète (poids 0) n'est pas dans cette table pondérée —
+                elle a son propre jet indépendant (voir SECRET_CHANCE), pas
+                une ligne "0 %" ici qui donnerait l'impression, à tort,
+                qu'elle est totalement impossible à tirer. */}
+            {RARITIES.filter((r) => r.weight > 0).map((r) => (
               <div key={r.id} style={{ display: 'flex', alignItems: 'center', gap: 9, padding: '3px 0' }}>
                 <i style={{ display: 'block', width: 9, height: 9, borderRadius: '50%', background: RARITY_VISUALS[r.id as RarityId].ink }} />
                 <span style={{ fontSize: 12, flex: 1 }}>{r.name}</span>
@@ -189,7 +202,9 @@ export default function OpenScreen() {
       {packState === 'reveal' && (() => {
         const card = pull[pullIndex] || CARDS[0];
         const rarity = rarityById(card.rarity);
-        const glow = RARITY_VISUALS[card.rarity as RarityId].glow;
+        const isSecret = card.rarity === SECRET_RARITY_ID;
+        const isHolo = !!pullHolo[pullIndex];
+        const glow = isSecret ? 'rgba(255,138,217,.75)' : RARITY_VISUALS[card.rarity as RarityId].glow;
         const onDown = (e: ReactPointerEvent) => dragStart(e.clientX);
         const onMove = (e: ReactPointerEvent) => dragMove(e.clientX);
         const onUp = () => dragEnd();
@@ -218,11 +233,17 @@ export default function OpenScreen() {
             <div
               style={{
                 position: 'absolute',
-                width: 320,
-                height: 320,
+                width: isSecret ? 420 : 320,
+                height: isSecret ? 420 : 320,
                 borderRadius: '50%',
                 background: `radial-gradient(circle,${glow},transparent 68%)`,
-                animation: revealed && card.rarity >= 3 ? 'pigGlow 2.6s ease-in-out infinite' : 'none',
+                animation: revealed
+                  ? isSecret
+                    ? 'pigSecretHalo 2.6s ease-in-out infinite, pigSecretRainbow 4s linear infinite'
+                    : card.rarity >= 3
+                      ? 'pigGlow 2.6s ease-in-out infinite'
+                      : 'none'
+                  : 'none',
                 opacity: revealed ? (card.rarity >= 3 ? 1 : 0.35) : 0,
                 transition: 'opacity .5s ease',
                 pointerEvents: 'none',
@@ -243,6 +264,54 @@ export default function OpenScreen() {
                 />
               ))}
             </div>
+            {/* Hauteur fixe toujours présente : la pastille elle-même
+                n'apparaît qu'au retournement (`revealed`), mais réserver
+                l'espace tout du long évite que la carte ne saute d'une
+                position à l'autre au moment où elle apparaît/disparaît. */}
+            <div style={{ height: 30, marginBottom: 12, position: 'relative', zIndex: 2, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 7 }}>
+              {revealed && (
+                <div
+                  key={`newbadge-${pullIndex}`}
+                  style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: 5,
+                    padding: '7px 15px',
+                    borderRadius: 999,
+                    fontFamily: 'var(--font-heading)',
+                    fontSize: 12,
+                    letterSpacing: '.03em',
+                    animation: 'pigPop .4s ease both',
+                    ...(isNew[card.id]
+                      ? { background: 'var(--color-accent)', color: 'var(--color-bg)', boxShadow: '0 4px 16px rgba(220,120,60,.4)' }
+                      : { background: 'var(--color-neutral-300)', color: 'var(--color-neutral-700)' }),
+                  }}
+                >
+                  {isNew[card.id] ? '✦ Nouvelle carte' : 'Doublon'}
+                </div>
+              )}
+              {revealed && isHolo && (
+                <div
+                  key={`holobadge-${pullIndex}`}
+                  style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    padding: '7px 13px',
+                    borderRadius: 999,
+                    fontFamily: 'var(--font-heading)',
+                    fontSize: 12,
+                    letterSpacing: '.03em',
+                    animation: 'pigPop .4s ease .08s both',
+                    background: 'linear-gradient(90deg,#5cf29a,#4fc3ff,#a06bff)',
+                    color: '#161022',
+                    boxShadow: '0 4px 16px rgba(160,107,255,.4)',
+                  }}
+                >
+                  ✨ Holo
+                </div>
+              )}
+            </div>
+
             <div
               key={pullIndex}
               style={{
@@ -300,13 +369,18 @@ export default function OpenScreen() {
                 >
                   {/* holoAnim conditionné à `revealed` : face cachée, le foil
                       et le reflet ne tournent pas — rien à laisser filtrer. */}
-                  <PigCard card={card} big forceOwned holoAnim={holoAnim && revealed} />
+                  <PigCard card={card} big forceOwned holoAnim={holoAnim && revealed} isHolo={isHolo} />
                 </div>
               </div>
             </div>
 
-            {/* Gerbe d'éclats — remontée à chaque carte grâce à la key. */}
-            <RarePullFx key={`fx-${pullIndex}`} rarity={card.rarity} active={revealed} enabled={holoAnim} />
+            {/* Gerbe d'éclats — remontée à chaque carte grâce à la key. La
+                carte secrète a sa propre mise en scène (SecretRevealFx),
+                donc on désactive celle-ci pour ne pas jouer les deux à la
+                fois : `active` retombe à false plutôt que de laisser
+                RarePullFx se fier seul à son test `rarity < 4`. */}
+            <RarePullFx key={`fx-${pullIndex}`} rarity={card.rarity} active={revealed && !isSecret} enabled={holoAnim} />
+            <SecretRevealFx key={`sfx-${pullIndex}`} active={revealed && isSecret} enabled={holoAnim} />
 
             <div
               style={{
@@ -324,6 +398,36 @@ export default function OpenScreen() {
             <div style={{ fontSize: 11, opacity: 0.4, marginTop: 7 }}>
               {flipped ? (pullIndex < pull.length - 1 ? 'Glisse ou touche pour la suivante' : 'Glisse pour voir le butin') : 'Touche pour retourner'}
             </div>
+
+            {/* Utile surtout après une ouverture groupée (QtyPicker) — flipper
+                10, 15, 25 cartes une par une devient vite fastidieux. Les
+                cartes sont déjà résolues (owned/isNew), sauter la mise en
+                scène ne change rien au résultat. */}
+            {pull.length > 1 && (
+              <button
+                className="pressable"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  revealAll();
+                }}
+                style={{
+                  marginTop: 18,
+                  position: 'relative',
+                  zIndex: 2,
+                  cursor: 'pointer',
+                  border: 0,
+                  background: 'none',
+                  fontFamily: 'var(--font-body)',
+                  fontWeight: 700,
+                  fontSize: 11.5,
+                  opacity: 0.5,
+                  textDecoration: 'underline',
+                  padding: 6,
+                }}
+              >
+                Tout révéler
+              </button>
+            )}
           </div>
         );
       })()}
@@ -339,7 +443,10 @@ export default function OpenScreen() {
             </p>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,minmax(0,1fr))', gap: 10 }}>
               {pull.map((card, i) => {
-                const count = owned[card.id] || 0;
+                // Compte pris dans le bon panier (owned/ownedHolo) selon
+                // que ce tirage précis est sorti en holo ou non — les deux
+                // collections sont indépendantes (voir HOLO_CHANCE).
+                const count = pullHolo[i] ? ownedHolo[card.id] || 0 : owned[card.id] || 0;
                 return (
                   <div
                     key={`${card.id}-${i}`}
@@ -347,7 +454,7 @@ export default function OpenScreen() {
                     onClick={() => openDetail(card.id)}
                     style={{ position: 'relative', aspectRatio: '0.72', cursor: 'pointer', minWidth: 0 }}
                   >
-                    <PigCard card={card} holoAnim={holoAnim} ownedCount={count} />
+                    <PigCard card={card} holoAnim={holoAnim} ownedCount={count} isHolo={pullHolo[i]} />
                     {/* Badges posés *dans* la carte : en débord ils étaient
                         rognés par overflow-x: hidden sur .screen. */}
                     {isNew[card.id] && (
@@ -392,7 +499,7 @@ export default function OpenScreen() {
               })}
             </div>
             <button className="pressable" onClick={tearOrShop} style={openBtnStyle}>
-              {inPocket > 0 ? 'Déchirer le sac' : 'Aller en boutique'}
+              {tearLabel}
             </button>
             <button className="pressable" onClick={() => navigate('/collection')} style={ghostBtnStyle}>
               Voir la collection
