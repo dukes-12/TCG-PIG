@@ -48,6 +48,21 @@ export async function requireUser(request: Request, env: Env): Promise<AuthedUse
   return { id: row.id, username: row.username };
 }
 
+/** Seul ce compte peut passer les routes /api/admin/* (requêtes SQL
+ *  pré-enregistrées, voir functions/api/admin/queries) — un pouvoir bien
+ *  plus lourd que le reste de l'API (SQL arbitraire sur la base de
+ *  production), donc vérifié ici côté serveur, pas seulement caché côté
+ *  client comme le bouton "Outils de test" du Profil. Même compte,
+ *  volontairement en dur plutôt qu'un rôle en base : un seul admin pour
+ *  ce projet, pas besoin de plus. */
+const ADMIN_USERNAME = 'Dukes';
+
+export async function requireAdmin(request: Request, env: Env): Promise<AuthedUser | null> {
+  const me = await requireUser(request, env);
+  if (!me || me.username !== ADMIN_USERNAME) return null;
+  return me;
+}
+
 export async function createSession(env: Env, userId: number): Promise<string> {
   const token = randomToken();
   const now = Date.now();
