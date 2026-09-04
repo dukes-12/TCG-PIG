@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import AdminSqlOverlay from '../components/AdminSqlOverlay';
 import AnimationPicker from '../components/AnimationPicker';
 import AuthScreen from './AuthScreen';
 import Avatar from '../components/Avatar';
@@ -33,6 +34,7 @@ export default function ProfileScreen() {
   const holoAnim = useAnimations();
   const navigate = useNavigate();
   const [mailboxOpen, setMailboxOpen] = useState(false);
+  const [sqlOpen, setSqlOpen] = useState(false);
 
   const ownedIds = useMemo(() => Object.keys(owned).filter((k) => owned[Number(k)] > 0).map(Number), [owned]);
   // Complétion : la carte secrète ne compte pas dedans (comme TOTAL_CARDS),
@@ -77,12 +79,17 @@ export default function ProfileScreen() {
       </div>
 
       {mailboxOpen && <MailboxOverlay onClose={() => setMailboxOpen(false)} />}
+      {sqlOpen && <AdminSqlOverlay onClose={() => setSqlOpen(false)} />}
 
       {/* Outil de test — visible seulement sur ce compte précis, pas un vrai
-          contrôle d'accès (juste une condition côté client, contournable en
-          devtools par qui saurait la chercher). Rejoue la vraie séquence de
-          révélation avec la carte secrète comme seul tirage, sans toucher au
-          stock de sacs réel — voir debugTriggerSecret dans store.ts. */}
+          contrôle d'accès pour "Voir la carte secrète" (juste une condition
+          côté client, contournable en devtools par qui saurait la
+          chercher) : rejoue la vraie séquence de révélation avec la carte
+          secrète comme seul tirage, sans toucher au stock de sacs réel —
+          voir debugTriggerSecret dans store.ts. "Requêtes SQL" en revanche
+          est un vrai pouvoir serveur (SQL sur la base de production) : le
+          masquage ici n'est qu'un raccourci, chaque route est revérifiée
+          par requireAdmin côté serveur (voir functions/_lib/auth.ts). */}
       {account === 'Dukes' && (
         <div className="screen-inner" style={{ paddingTop: 16 }}>
           <div
@@ -93,35 +100,56 @@ export default function ProfileScreen() {
               background: 'var(--color-surface)',
               border: '1.5px dashed var(--color-accent-500)',
               display: 'flex',
-              alignItems: 'center',
-              gap: 12,
+              flexDirection: 'column',
+              gap: 10,
             }}
           >
-            <span style={{ fontSize: 20 }}>🔧</span>
-            <div style={{ flex: 1, minWidth: 0 }}>
-              <div style={{ fontFamily: 'var(--font-heading)', fontSize: 14 }}>Outils de test</div>
-              <div style={{ fontSize: 10.5, opacity: 0.6, marginTop: 2 }}>Visible seulement sur ce compte.</div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+              <span style={{ fontSize: 20 }}>🔧</span>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontFamily: 'var(--font-heading)', fontSize: 14 }}>Outils de test</div>
+                <div style={{ fontSize: 10.5, opacity: 0.6, marginTop: 2 }}>Visible seulement sur ce compte.</div>
+              </div>
             </div>
-            <button
-              className="pressable"
-              onClick={() => {
-                debugTriggerSecret();
-                navigate('/open');
-              }}
-              style={{
-                cursor: 'pointer',
-                border: 0,
-                fontFamily: 'var(--font-heading)',
-                fontSize: 11.5,
-                padding: '9px 14px',
-                borderRadius: 999,
-                background: 'var(--color-accent)',
-                color: 'var(--color-bg)',
-                whiteSpace: 'nowrap',
-              }}
-            >
-              Voir la carte secrète
-            </button>
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+              <button
+                className="pressable"
+                onClick={() => {
+                  debugTriggerSecret();
+                  navigate('/open');
+                }}
+                style={{
+                  cursor: 'pointer',
+                  border: 0,
+                  fontFamily: 'var(--font-heading)',
+                  fontSize: 11.5,
+                  padding: '9px 14px',
+                  borderRadius: 999,
+                  background: 'var(--color-accent)',
+                  color: 'var(--color-bg)',
+                  whiteSpace: 'nowrap',
+                }}
+              >
+                Voir la carte secrète
+              </button>
+              <button
+                className="pressable"
+                onClick={() => setSqlOpen(true)}
+                style={{
+                  cursor: 'pointer',
+                  border: '1.5px solid var(--color-accent-500)',
+                  fontFamily: 'var(--font-heading)',
+                  fontSize: 11.5,
+                  padding: '9px 14px',
+                  borderRadius: 999,
+                  background: 'none',
+                  color: 'var(--color-text)',
+                  whiteSpace: 'nowrap',
+                }}
+              >
+                Requêtes SQL
+              </button>
+            </div>
           </div>
         </div>
       )}

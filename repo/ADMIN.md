@@ -3,12 +3,20 @@
 Toutes les données des joueurs vivent dans une seule base D1 (nom : `grouin`
 dans le dashboard Cloudflare), table `users` — une ligne par joueur, avec
 une colonne `state_json` qui contient tout : glands, cartes possédées, sacs
-en poche, dos de carte, réglages. Rien de tout ça n'est modifiable depuis
-l'appli elle-même (c'est voulu) — voici comment le faire à la main.
+en poche, dos de carte, réglages. Voici les requêtes SQL pour le faire à la
+main dans la console D1.
 
 **Où** : Cloudflare dashboard → Workers & Pages → Storage & Databases → D1 →
 `grouin` → onglet **Console**. Colle le SQL, Execute. (Ou `wrangler d1
 execute grouin --file=...` en local si tu préfères la CLI.)
+
+**Depuis l'appli directement** (Profil → Outils de test → Requêtes SQL,
+compte "Dukes" uniquement) : tous les modèles ci-dessous sont déjà
+enregistrés (voir `admin_queries` dans `schema.sql`), éditables et
+exécutables en un clic — plus besoin de revenir ici copier-coller à chaque
+fois. Cette page reste la référence pour comprendre ce que fait chaque
+requête et en écrire de nouvelles. Le `WHERE username = '...'` est à
+adapter au joueur visé avant de lancer, dans l'un ou l'autre outil.
 
 ## Modifier les glands, les cartes, le stock d'un joueur
 
@@ -95,8 +103,8 @@ SELECT username, json_extract(state_json,'$.glands') AS glands,
 FROM users ORDER BY glands DESC;
 
 -- Les messages déjà envoyés à un joueur
-SELECT message, glands, datetime(created_at/1000, 'unixepoch') AS envoye_le,
+SELECT message, glands, datetime(mailbox.created_at/1000, 'unixepoch') AS envoye_le,
        read_at IS NOT NULL AS lu
 FROM mailbox JOIN users ON users.id = mailbox.user_id
-WHERE users.username = 'Dukes' ORDER BY created_at DESC;
+WHERE users.username = 'Dukes' ORDER BY mailbox.created_at DESC;
 ```

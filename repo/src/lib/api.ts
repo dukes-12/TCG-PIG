@@ -96,3 +96,36 @@ export function apiFetchMailbox() {
 export function apiMarkMailboxRead(ids: number[]) {
   return call<{ ok: true }>('/mailbox', { method: 'POST', body: JSON.stringify({ ids }) });
 }
+
+/** Requêtes SQL d'administration — voir functions/api/admin/queries et
+ *  ADMIN.md. Réservées côté serveur au compte "Dukes" (requireAdmin) ;
+ *  ces routes répondent 403 pour tout autre compte, il ne faut donc
+ *  appeler ces fonctions qu'après avoir déjà vérifié `account === 'Dukes'`
+ *  côté client (voir AdminSqlOverlay). */
+export interface AdminQuery {
+  id: number;
+  name: string;
+  sql_text: string;
+  created_at: number;
+  updated_at: number;
+}
+
+export interface AdminQueryRunResult {
+  results: { results: Record<string, unknown>[]; meta: { changes?: number; last_row_id?: number; rows_read?: number; rows_written?: number } }[];
+}
+
+export function apiFetchAdminQueries() {
+  return call<{ queries: AdminQuery[] }>('/admin/queries');
+}
+export function apiCreateAdminQuery(name: string, sqlText: string) {
+  return call<{ id: number }>('/admin/queries', { method: 'POST', body: JSON.stringify({ name, sqlText }) });
+}
+export function apiUpdateAdminQuery(id: number, patch: { name?: string; sqlText?: string }) {
+  return call<{ ok: true }>(`/admin/queries/${id}`, { method: 'PATCH', body: JSON.stringify(patch) });
+}
+export function apiDeleteAdminQuery(id: number) {
+  return call<{ ok: true }>(`/admin/queries/${id}`, { method: 'DELETE' });
+}
+export function apiRunAdminQuery(id: number, sqlText?: string) {
+  return call<AdminQueryRunResult>(`/admin/queries/${id}`, { method: 'POST', body: JSON.stringify({ sqlText }) });
+}
