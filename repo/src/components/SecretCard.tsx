@@ -1,14 +1,19 @@
-import Snout from './Snout';
+import type { Card } from '../types';
+import CardArt from './CardArt';
 
 /** La carte secrète (Chipo Oméga, rareté 7) — un seul exemplaire dans tout
  *  le jeu, 1 chance sur 6 000 000 par carte tirée (voir SECRET_CHANCE dans
  *  lib/draw.ts). Design entièrement à part : pas de skin partagé avec
- *  buildCardVisual (qui indexe `SKIN[rarity-1]`, calé sur les raretés 1-6),
- *  pas de photo non plus — l'art est un vide étoilé dessiné en CSS, pas un
- *  fichier. Même signature de props que PigCard : c'est PigCard qui bascule
- *  ici quand `card.rarity === SECRET_RARITY_ID`, donc tous les écrans qui
- *  affichent déjà des cartes (collection, doublons, échanges, détail…)
- *  récupèrent ce rendu sans rien changer de leur côté.
+ *  buildCardVisual (qui indexe `SKIN[rarity-1]`, calé sur les raretés 1-6).
+ *  A désormais une vraie photo (comme les autres cartes, via CardArt) — les
+ *  étoiles qui scintillent et le halo tournant restent par-dessus en
+ *  décoration, pour garder l'identité "carte secrète" plutôt que de
+ *  ressembler à une carte normale avec juste un cadre différent. Même
+ *  signature de props que PigCard (plus `card`, nécessaire pour l'image) :
+ *  c'est PigCard qui bascule ici quand `card.rarity === SECRET_RARITY_ID`,
+ *  donc tous les écrans qui affichent déjà des cartes (collection,
+ *  doublons, échanges, détail…) récupèrent ce rendu sans rien changer de
+ *  leur côté.
  *
  *  Le cadre arc-en-ciel est une couche à part, *derrière* le contenu, pas
  *  un parent qui l'engloberait : `filter: hue-rotate` anime toute la
@@ -16,11 +21,13 @@ import Snout from './Snout';
  *  sur un ancêtre commun — en le réservant à cette couche isolée, seul
  *  l'anneau tourne en couleur, le reste de la carte reste net. */
 export default function SecretCard({
+  card,
   big = false,
   holoAnim = true,
   ownedCount = 0,
   forceOwned = false,
 }: {
+  card: Card;
   big?: boolean;
   holoAnim?: boolean;
   ownedCount?: number;
@@ -79,6 +86,29 @@ export default function SecretCard({
         >
           {owned ? (
             <>
+              {/* La photo — comme les autres cartes (CardArt lit
+                  card.image), avant décorative uniquement (Snout) faute
+                  de fichier. Les étoiles/halo restent par-dessus : sans
+                  eux la carte ressemblerait juste à une carte normale
+                  avec un cadre différent. */}
+              <CardArt card={card} mini={!big} />
+              {/* halo tournant, en `screen` pour ajouter de la lumière sur
+                  la photo plutôt que de la ternir — même astuce de couche
+                  isolée que la rotation de couleur de l'anneau. */}
+              <div
+                aria-hidden
+                style={{
+                  position: 'absolute',
+                  width: '140%',
+                  height: '140%',
+                  borderRadius: '50%',
+                  background: 'conic-gradient(rgba(255,138,217,.35),rgba(138,217,255,.35),rgba(255,217,138,.35),rgba(255,138,217,.35))',
+                  // rotation à plat déjà définie pour la Roue de la chance (WheelOverlay) — réutilisée ici.
+                  animation: holoAnim ? 'pigWheelSpin 6s linear infinite' : 'none',
+                  filter: 'blur(6px)',
+                  mixBlendMode: 'screen',
+                }}
+              />
               {/* étoiles qui scintillent, semées à des positions fixes */}
               {STAR_POSITIONS.map((p, i) => (
                 <i
@@ -91,35 +121,11 @@ export default function SecretCard({
                     height: p.size,
                     borderRadius: '50%',
                     background: '#fff6ef',
+                    boxShadow: '0 0 4px 1px rgba(255,246,239,.9)',
                     animation: holoAnim ? `pigSecretTwinkle ${2.2 + (i % 4) * 0.5}s ease-in-out ${i * 0.13}s infinite` : 'none',
                   }}
                 />
               ))}
-              {/* halo tournant derrière le groin — même astuce de couche isolée */}
-              <div
-                aria-hidden
-                style={{
-                  position: 'absolute',
-                  width: '140%',
-                  height: '140%',
-                  borderRadius: '50%',
-                  background: 'conic-gradient(rgba(255,138,217,.35),rgba(138,217,255,.35),rgba(255,217,138,.35),rgba(255,138,217,.35))',
-                  // rotation à plat déjà définie pour la Roue de la chance (WheelOverlay) — réutilisée ici.
-                  animation: holoAnim ? 'pigWheelSpin 6s linear infinite' : 'none',
-                  filter: 'blur(6px)',
-                }}
-              />
-              <Snout
-                width={big ? 70 : 30}
-                height={big ? 56 : 24}
-                nostrilWidth={big ? 10 : 4.5}
-                nostrilHeight={big ? 17 : 7.5}
-                gap={big ? 10 : 4.5}
-                bg="linear-gradient(160deg,#ffe9b0,#c99a3a)"
-                nostrilColor="#2b1a02"
-                boxShadow="0 0 22px rgba(255,217,138,.65)"
-                style={{ position: 'relative', zIndex: 2, animation: holoAnim ? 'pigBreathe 5s ease-in-out infinite' : 'none' }}
-              />
             </>
           ) : (
             <div

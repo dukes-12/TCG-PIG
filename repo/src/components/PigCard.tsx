@@ -34,7 +34,7 @@ export default function PigCard({
   isHolo?: boolean;
 }) {
   if (card.rarity === SECRET_RARITY_ID) {
-    return <SecretCard big={big} holoAnim={holoAnim} ownedCount={ownedCount} forceOwned={forceOwned} />;
+    return <SecretCard card={card} big={big} holoAnim={holoAnim} ownedCount={ownedCount} forceOwned={forceOwned} />;
   }
 
   const d = buildCardVisual(card, { big, holoAnim, ownedCount, forceOwned, isHolo });
