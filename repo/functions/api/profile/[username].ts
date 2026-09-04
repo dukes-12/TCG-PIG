@@ -1,6 +1,6 @@
 import { json, requireUser, type Env } from '../../_lib/auth';
 
-// Id de la carte secrète (Chipo Oméga, rareté 7) dans src/data/cards.json —
+// Id de la carte secrète (rareté 7) dans src/data/cards.json —
 // dupliqué ici en dur parce que les Pages Functions n'importent pas le
 // catalogue front-end. Si la carte est un jour recréée avec un autre id,
 // mettre à jour cette constante. Volontairement jamais renvoyée par cette

@@ -101,7 +101,7 @@
   100% { transform: rotate(360deg); }
 }
 
-/* ── Carte secrète (Chipo Oméga, rareté 7) ─────────────────────────
+/* ── Carte secrète (rareté 7) ─────────────────────────
    Utilisées par src/components/SecretCard.tsx et SecretRevealFx.tsx. */
 @keyframes pigSecretRainbow {
   0% { filter: hue-rotate(0deg); }

@@ -1,7 +1,7 @@
 import type { Card } from '../types';
 import CardArt from './CardArt';
 
-/** La carte secrète (Chipo Oméga, rareté 7) — un seul exemplaire dans tout
+/** La carte secrète (rareté 7) — un seul exemplaire dans tout
  *  le jeu, 1 chance sur 6 000 000 par carte tirée (voir SECRET_CHANCE dans
  *  lib/draw.ts). Design entièrement à part : pas de skin partagé avec
  *  buildCardVisual (qui indexe `SKIN[rarity-1]`, calé sur les raretés 1-6).
@@ -152,7 +152,7 @@ export default function SecretCard({
             textShadow: owned ? '0 0 12px rgba(255,217,138,.75)' : 'none',
           }}
         >
-          {owned ? 'Chipo Oméga' : '???'}
+          {owned ? card.name : '???'}
         </div>
 
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 4, padding: big ? '0 3px 2px' : '0 3px 1px' }}>
