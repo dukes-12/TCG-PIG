@@ -31,21 +31,21 @@
       "key": "commune",
       "name": "Commune",
       "weight": 49,
-      "recycleValue": 3
+      "recycleValue": 8
     },
     {
       "id": 2,
       "key": "peu_commune",
       "name": "Peu commune",
       "weight": 27,
-      "recycleValue": 8
+      "recycleValue": 20
     },
     {
       "id": 3,
       "key": "rare",
       "name": "Rare",
       "weight": 18.8,
-      "recycleValue": 26
+      "recycleValue": 50
     },
     {
       "id": 4,
