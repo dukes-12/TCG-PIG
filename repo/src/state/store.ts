@@ -91,7 +91,7 @@ export const HOLO_CHANCE = 1 / 15;
 /** Multiplicateur de valeur au recyclage d'un doublon holo, par rapport au
  *  recyclage normal — une pièce plus rare mérite un tarif nettement
  *  meilleur. */
-export const HOLO_RECYCLE_MULTIPLIER = 5;
+export const HOLO_RECYCLE_MULTIPLIER = 3;
 
 interface PersistedState {
   owned: Record<number, number>;
