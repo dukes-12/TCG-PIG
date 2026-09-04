@@ -34,6 +34,86 @@
   "rarities": [
     {
       "id": 1,
+      "key": "commune",
+      "name": "Commune",
+      "weight": 49,
+      "recycleValue": 8
+    },
+    {
+      "id": 2,
+      "key": "peu_commune",
+      "name": "Peu commune",
+      "weight": 27,
+      "recycleValue": 20
+    },
+    {
+      "id": 3,
+      "key": "rare",
+      "name": "Rare",
+      "weight": 18.8,
+      "recycleValue": 50
+    },
+    {
+      "id": 4,
+      "key": "epique",
+      "name": "Épique",
+      "weight": 3.8,
+      "recycleValue": 200
+    },
+    {
+      "id": 5,
+      "key": "legendaire",
+      "name": "Légendaire",
+      "weight": 1.2,
+      "recycleValue": 750
+    },
+    {
+      "id": 6,
+      "key": "mythique",
+      "name": "Mythique",
+      "weight": 0.2,
+      "recycleValue": 2750
+    },
+    {
+      "id": 7,
+      "key": "secrete",
+      "name": "Secrète",
+      "weight": 0,
+      "recycleValue": 0
+    }
+  ],
+  "packs": [
+    {
+      "key": "basic",
+      "name": "Sac de glands",
+      "price": 100,
+      "cards": 5,
+      "guaranteedFloor": null,
+      "guaranteedCount": 0,
+      "subtitle": "5 cartes · standard"
+    },
+    {
+      "key": "foire",
+      "name": "La porcherie",
+      "price": 250,
+      "cards": 6,
+      "guaranteedFloor": 3,
+      "guaranteedCount": 3,
+      "subtitle": "6 cartes · 3 rares garanties"
+    },
+    {
+      "key": "doree",
+      "name": "Malle Dorée",
+      "price": 550,
+      "cards": 7,
+      "guaranteedFloor": 4,
+      "guaranteedCount": 2,
+      "subtitle": "7 cartes · 2 épiques garanties"
+    }
+  ],
+  "cards": [
+    {
+      "id": 1,
       "name": "Docteur Chipo",
       "type": "Métiers",
       "rarity": 1,
@@ -2237,8 +2317,8 @@
       "name": "Vermine",
       "type": "Harry Potter",
       "rarity": 3,
-      "image": "assets/cards/184.jpg",
-      "slotId": "art-184"
+      "image": "assets/cards/276.jpg",
+      "slotId": "art-276"
     }
   ]
 }
