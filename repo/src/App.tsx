@@ -8,6 +8,7 @@ import Toast from './components/Toast';
 import CollectionScreen from './screens/CollectionScreen';
 import DupesScreen from './screens/DupesScreen';
 import FriendsScreen from './screens/FriendsScreen';
+import HoloCollectionScreen from './screens/HoloCollectionScreen';
 import OpenScreen from './screens/OpenScreen';
 import PlayerProfileScreen from './screens/PlayerProfileScreen';
 import ProfileScreen from './screens/ProfileScreen';
@@ -68,6 +69,7 @@ export default function App() {
       <Routes>
         <Route path="/" element={<Navigate to="/collection" replace />} />
         <Route path="/collection" element={<CollectionScreen />} />
+        <Route path="/collection/holo" element={<HoloCollectionScreen />} />
         <Route path="/shop" element={<ShopScreen />} />
         <Route path="/open" element={<OpenScreen />} />
         <Route path="/dupes" element={<DupesScreen />} />

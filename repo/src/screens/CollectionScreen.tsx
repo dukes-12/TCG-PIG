@@ -1,4 +1,5 @@
 import { useMemo } from 'react';
+import { useNavigate } from 'react-router-dom';
 import Chip from '../components/Chip';
 import PigCard from '../components/PigCard';
 import { CARDS, RARITIES, SECRET_CARD, SECRET_RARITY_ID, TOTAL_CARDS, TYPES } from '../data/catalog';
@@ -30,6 +31,7 @@ export default function CollectionScreen() {
   const toggleOwnedOnly = useStore((s) => s.toggleOwnedOnly);
   const openDetail = useStore((s) => s.openDetail);
   const holoAnim = useAnimations();
+  const navigate = useNavigate();
 
   // La carte secrète ne compte pas dans "cartes uniques" — comme
   // TOTAL_CARDS, c'est un bonus caché, pas un objectif de complétion.
@@ -38,6 +40,7 @@ export default function CollectionScreen() {
     [owned],
   );
   const uniq = ownedIds.length;
+  const holoUniq = useMemo(() => Object.keys(ownedHolo).filter((k) => ownedHolo[Number(k)] > 0).length, [ownedHolo]);
 
   // Tant qu'elle n'a jamais été tirée, la carte secrète n'existe nulle
   // part dans l'interface — pas de case verrouillée, pas de filtre, pas de
@@ -115,6 +118,33 @@ export default function CollectionScreen() {
             </div>
           );
         })}
+      </div>
+
+      <div className="screen-inner" style={{ paddingTop: 14 }}>
+        <button
+          className="pressable"
+          onClick={() => navigate('/collection/holo')}
+          style={{
+            width: '100%',
+            cursor: 'pointer',
+            border: 0,
+            textAlign: 'left',
+            display: 'flex',
+            alignItems: 'center',
+            gap: 12,
+            padding: '13px 16px',
+            borderRadius: 22,
+            background: 'linear-gradient(90deg,rgba(92,242,154,.16),rgba(79,195,255,.16),rgba(160,107,255,.16))',
+            boxShadow: 'inset 0 0 0 1.5px rgba(160,107,255,.35)',
+          }}
+        >
+          <span style={{ fontSize: 20 }}>✨</span>
+          <span style={{ flex: 1, minWidth: 0 }}>
+            <span style={{ display: 'block', fontFamily: 'var(--font-heading)', fontSize: 14 }}>Collection holo</span>
+            <span style={{ display: 'block', fontSize: 10.5, opacity: 0.6, marginTop: 2 }}>{holoUniq} carte{holoUniq !== 1 ? 's' : ''} en version holo</span>
+          </span>
+          <span style={{ fontSize: 16, opacity: 0.5 }}>›</span>
+        </button>
       </div>
 
       <div className="screen-inner" style={{ paddingTop: 16, display: 'flex', gap: 8, alignItems: 'center' }}>
