@@ -510,8 +510,18 @@ export const useStore = create<Store>()(
       reconcileDailyGrant: () => {
         const s = get();
         const now = Date.now();
+        // Premier lancement (ou compte créé avant ce champ, jamais
+        // initialisé côté serveur non plus — voir mergeServer) : on
+        // versait le minuteur sans rien donner, le joueur attendait 24 h
+        // en silence avant le tout premier versement. On donne le premier
+        // lot tout de suite, comme l'annonce "3 sachets offerts chaque
+        // jour" le laisse entendre.
         if (s.nextDailyGrantAt == null) {
-          set({ nextDailyGrantAt: now + DAILY_GRANT_INTERVAL_MS });
+          set({
+            stock: { ...s.stock, [DAILY_GRANT_PACK]: (s.stock[DAILY_GRANT_PACK] || 0) + DAILY_GRANT_AMOUNT },
+            nextDailyGrantAt: now + DAILY_GRANT_INTERVAL_MS,
+          });
+          s.say(`+${DAILY_GRANT_AMOUNT} sachets du jour`);
           return;
         }
         if (now < s.nextDailyGrantAt) return;
