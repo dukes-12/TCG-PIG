@@ -202,6 +202,7 @@ export default function TradesScreen() {
             holoAnim={holoAnim}
             loading={theirOwned == null}
             empty={`${targetFriend?.username ?? target} n'a aucun doublon pour l'instant.`}
+            alreadyOwned={owned}
           />
 
           <button
@@ -251,7 +252,16 @@ export default function TradesScreen() {
 }
 
 /** Grille de vraies vignettes de carte (au lieu de chips de texte) — coche
- *  visuelle quand sélectionnée, badge ×N pour le nombre de doublons. */
+ *  visuelle quand sélectionnée, badge ×N pour le nombre de doublons.
+ *
+ *  `alreadyOwned` (optionnel) : pastille verte "🐷 déjà" sur les cartes
+ *  qu'on possède déjà soi-même — pensé pour le picker "tu demandes"
+ *  (doublons de l'autre) : demander une carte qu'on a déjà ne fait
+ *  qu'empiler un doublon inutile plutôt que combler un manque dans sa
+ *  collection, la pastille repère ces cas d'un coup d'œil pour se
+ *  concentrer sur ce qui manque vraiment. Jamais passé au picker "tu
+ *  proposes" (nos propres doublons) — s'y afficher sur tout serait
+ *  toujours vrai et n'apprendrait rien. */
 function CardPicker({
   label,
   ids,
@@ -261,6 +271,7 @@ function CardPicker({
   holoAnim,
   loading,
   empty,
+  alreadyOwned,
 }: {
   label: string;
   ids: number[];
@@ -270,6 +281,7 @@ function CardPicker({
   holoAnim: boolean;
   loading?: boolean;
   empty: string;
+  alreadyOwned?: Record<string, number>;
 }) {
   return (
     <div>
@@ -285,6 +297,7 @@ function CardPicker({
             if (!card) return null;
             const active = !!selected[id];
             const count = counts[id] ?? counts[String(id)] ?? 0;
+            const owned = alreadyOwned ? (alreadyOwned[id] ?? alreadyOwned[String(id)] ?? 0) > 0 : false;
             return (
               <div
                 key={id}
@@ -309,6 +322,25 @@ function CardPicker({
                 >
                   ×{count}
                 </span>
+                {owned && (
+                  <span
+                    title="Tu l'as déjà — un doublon de plus ne comble aucun manque"
+                    style={{
+                      position: 'absolute',
+                      top: 4,
+                      right: 4,
+                      background: 'var(--color-accent-2-600)',
+                      color: 'var(--color-bg)',
+                      fontSize: 7.5,
+                      fontWeight: 700,
+                      padding: '2px 5px',
+                      borderRadius: 999,
+                      boxShadow: 'var(--shadow-sm)',
+                    }}
+                  >
+                    déjà
+                  </span>
+                )}
                 {active && (
                   <span
                     style={{
