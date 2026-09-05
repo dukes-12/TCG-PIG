@@ -6,7 +6,7 @@ import Chip from '../components/Chip';
 import PigCard from '../components/PigCard';
 import { CARDS, SECRET_RARITY_ID, cardById } from '../data/catalog';
 import { apiCreateBattle, apiFetchBattles, apiFetchFriends, apiRespondBattle, type Battle, type TeamSlot } from '../lib/api';
-import { randomBotTeam, resolveBattle as resolveBattleLocally, type BotDifficulty } from '../lib/battle';
+import { CAMP_INFO, campOf, randomBotTeam, resolveBattle as resolveBattleLocally, type BotDifficulty } from '../lib/battle';
 import { useAnimations } from '../lib/useAnimations';
 import { useStore } from '../state/store';
 import type { AvatarKey } from '../types';
@@ -38,6 +38,8 @@ export default function BattlesScreen() {
   const ownedHolo = useStore((s) => s.ownedHolo);
   const say = useStore((s) => s.say);
   const account = useStore((s) => s.account);
+  const favoriteTeam = useStore((s) => s.favoriteTeam);
+  const setFavoriteTeam = useStore((s) => s.setFavoriteTeam);
   const holoAnim = useAnimations();
   const [params, setParams] = useSearchParams();
 
@@ -53,7 +55,17 @@ export default function BattlesScreen() {
   const [busy, setBusy] = useState(false);
   const [viewing, setViewing] = useState<Battle | null>(null);
 
-  const refresh = () => apiFetchBattles().then((r) => setBattles(r.battles)).catch(() => {});
+  // Recale aussi la pastille ⚔️ de Profil tout de suite (sinon elle
+  // n'aurait bougé qu'au prochain sondage de 30s, voir App.tsx) — un
+  // décompte redondant avec fetchBattlesUnread, mais bien plus réactif ici
+  // puisqu'on vient déjà de recharger la liste complète.
+  const refresh = () =>
+    apiFetchBattles()
+      .then((r) => {
+        setBattles(r.battles);
+        useStore.setState({ battlesUnread: r.battles.filter((b) => b.direction === 'incoming' && b.status === 'pending').length });
+      })
+      .catch(() => {});
 
   useEffect(() => {
     apiFetchFriends().then((r) => setFriends(r.players as Friend[])).catch(() => {});
@@ -91,19 +103,42 @@ export default function BattlesScreen() {
     });
   };
 
+  // Équipe favorite (proposition C) — proposée d'office à l'ouverture du
+  // composeur, seulement si les 5 cartes sont encore possédées telles que
+  // sauvegardées (une carte recyclée/échangée depuis invalide juste le
+  // pré-remplissage, pas la sauvegarde elle-même : on ne l'efface pas ici).
+  const favoriteIfValid = (): TeamSlot[] => {
+    if (!favoriteTeam || favoriteTeam.length !== 5) return [];
+    const stillOwned = favoriteTeam.every((s) => ((s.holo ? ownedHolo : owned)[s.cardId] || 0) > 0);
+    return stillOwned ? favoriteTeam : [];
+  };
+
   const startChallenge = (username: string) => {
     setCompose({ target: username });
-    setTeam([]);
+    setTeam(favoriteIfValid());
   };
 
   const startBotChallenge = () => {
     setCompose({ target: `Bot (${BOT_LABEL[botDifficulty]})`, bot: botDifficulty });
-    setTeam([]);
+    setTeam(favoriteIfValid());
   };
 
   const startRespond = (b: Battle) => {
     setCompose({ target: b.challengerUsername, respondTo: b.id });
-    setTeam([]);
+    setTeam(favoriteIfValid());
+  };
+
+  const isCurrentTeamFavorite =
+    team.length === 5 && !!favoriteTeam && favoriteTeam.length === 5 && team.every((s, i) => favoriteTeam[i]?.cardId === s.cardId && favoriteTeam[i]?.holo === s.holo);
+
+  const toggleFavorite = () => {
+    if (isCurrentTeamFavorite) {
+      setFavoriteTeam(null);
+      say('Équipe favorite retirée');
+    } else if (team.length === 5) {
+      setFavoriteTeam(team);
+      say('Équipe favorite sauvegardée ★');
+    }
   };
 
   const cancelCompose = () => {
@@ -136,7 +171,18 @@ export default function BattlesScreen() {
         });
       } else if (compose.respondTo) {
         const res = await apiRespondBattle(compose.respondTo, 'respond', team);
-        say(res.result?.winner === 'tie' ? 'Combat terminé — égalité' : 'Combat terminé !');
+        // Le gain de glands (voir functions/api/battles/[id].ts) n'est
+        // immédiatement visible ici que si c'est nous qui l'avons gagné —
+        // sinon (le défieur a gagné) c'est déjà sur son compte serveur,
+        // juste pas encore reflété dans notre store local à nous.
+        if (res.reward?.toMe) useStore.setState((s) => ({ glands: s.glands + res.reward!.amount }));
+        say(
+          res.result?.winner === 'tie'
+            ? 'Combat terminé — égalité'
+            : res.reward?.toMe
+              ? `Combat terminé — victoire ! +${res.reward.amount} glands 🌰`
+              : 'Combat terminé !',
+        );
         await refresh();
         const updated = (await apiFetchBattles()).battles.find((b) => b.id === compose.respondTo);
         if (updated) setViewing(updated);
@@ -172,7 +218,9 @@ export default function BattlesScreen() {
       <div className="screen-inner">
         <h1 style={{ fontSize: 30, margin: 0, lineHeight: 1 }}>Combats</h1>
         <p style={{ fontSize: 13, opacity: 0.6, margin: '10px 0 0', textWrap: 'pretty' as const }}>
-          5 cartes, la rareté fait la puissance (holo = +50%). Asynchrone : ton adversaire répond quand il veut.
+          5 cartes, la rareté fait la puissance (holo = +50%). Trois camps se contrent façon pierre-papier-ciseaux
+          ({CAMP_INFO.fiction.icon} bat {CAMP_INFO.pouvoir.icon} bat {CAMP_INFO.culture.icon} bat {CAMP_INFO.fiction.icon}) et
+          gagner un duel donne de la lancée 🔥 à ta carte suivante — l'ordre compte. Asynchrone : ton adversaire répond quand il veut.
         </p>
       </div>
 
@@ -240,7 +288,25 @@ export default function BattlesScreen() {
             <div className="section-label" style={{ margin: 0 }}>
               {compose.respondTo ? `Répondre au défi de ${compose.target}` : `Composer ton équipe contre ${compose.target}`}
             </div>
-            <button className="pressable" onClick={cancelCompose} style={{ marginLeft: 'auto', border: 0, background: 'none', cursor: 'pointer', fontSize: 11, opacity: 0.5 }}>
+            <button
+              className="pressable"
+              onClick={toggleFavorite}
+              disabled={!isCurrentTeamFavorite && team.length !== 5}
+              title={isCurrentTeamFavorite ? 'Retirer cette équipe des favoris' : 'Sauvegarder comme équipe favorite'}
+              style={{
+                marginLeft: 'auto',
+                border: 0,
+                background: 'none',
+                cursor: isCurrentTeamFavorite || team.length === 5 ? 'pointer' : 'default',
+                fontSize: 15,
+                opacity: isCurrentTeamFavorite ? 1 : team.length === 5 ? 0.6 : 0.25,
+                padding: 4,
+                lineHeight: 1,
+              }}
+            >
+              {isCurrentTeamFavorite ? '★' : '☆'}
+            </button>
+            <button className="pressable" onClick={cancelCompose} style={{ border: 0, background: 'none', cursor: 'pointer', fontSize: 11, opacity: 0.5 }}>
               Annuler
             </button>
           </div>
@@ -249,18 +315,31 @@ export default function BattlesScreen() {
             {Array.from({ length: 5 }).map((_, i) => {
               const slot = team[i];
               const card = slot ? cardById(slot.cardId) : null;
+              const camp = card ? campOf(card.id) : null;
               return (
-                <div key={i} style={{ width: 46, aspectRatio: '0.72', flex: 'none', borderRadius: 10, background: 'var(--color-neutral-200)', overflow: 'hidden' }}>
+                <div key={i} style={{ position: 'relative', width: 46, aspectRatio: '0.72', flex: 'none', borderRadius: 10, background: 'var(--color-neutral-200)', overflow: 'hidden' }}>
                   {card ? <PigCard card={card} holoAnim={holoAnim} ownedCount={1} isHolo={slot!.holo} /> : null}
+                  {camp && (
+                    <span
+                      title={CAMP_INFO[camp].label}
+                      style={{ position: 'absolute', top: 2, left: 2, fontSize: 11, filter: 'drop-shadow(0 1px 1px rgba(0,0,0,.4))' }}
+                    >
+                      {CAMP_INFO[camp].icon}
+                    </span>
+                  )}
                 </div>
               );
             })}
           </div>
-          <div style={{ fontSize: 11, opacity: 0.55, marginBottom: 10 }}>{team.length}/5 — {teamPreview.map((c) => c.name).join(', ') || 'aucune carte choisie'}</div>
+          <div style={{ fontSize: 11, opacity: 0.55, marginBottom: 4 }}>{team.length}/5 — {teamPreview.map((c) => c.name).join(', ') || 'aucune carte choisie'}</div>
+          <div style={{ fontSize: 10.5, opacity: 0.5, marginBottom: 10 }}>
+            L'ordre des cartes ci-dessus est l'ordre des duels — la 1ère carte affronte la 1ère de l'adversaire, etc.
+          </div>
 
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,minmax(0,1fr))', gap: 8, maxHeight: '38vh', overflowY: 'auto' }}>
             {eligible.map(({ card, holo }) => {
               const active = team.some((s) => s.cardId === card.id);
+              const camp = campOf(card.id);
               return (
                 <div
                   key={card.id}
@@ -269,6 +348,14 @@ export default function BattlesScreen() {
                   style={{ position: 'relative', aspectRatio: '0.72', cursor: 'pointer', minWidth: 0, borderRadius: 15, boxShadow: active ? '0 0 0 3px var(--color-accent)' : 'none' }}
                 >
                   <PigCard card={card} holoAnim={holoAnim} ownedCount={1} isHolo={holo} />
+                  {camp && (
+                    <span
+                      title={CAMP_INFO[camp].label}
+                      style={{ position: 'absolute', top: 3, left: 3, fontSize: 12, filter: 'drop-shadow(0 1px 1px rgba(0,0,0,.4))' }}
+                    >
+                      {CAMP_INFO[camp].icon}
+                    </span>
+                  )}
                   {active && (
                     <span
                       style={{

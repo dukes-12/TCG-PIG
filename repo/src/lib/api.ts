@@ -110,12 +110,28 @@ export interface TeamSlot {
   holo: boolean;
 }
 
+/** Les 3 "camps" thématiques, façon pierre-papier-ciseaux — Fiction bat
+ *  Pouvoir bat Culture bat Fiction. Voir functions/_lib/battle.ts pour le
+ *  détail de la répartition des catégories et le calcul. */
+export type Camp = 'fiction' | 'pouvoir' | 'culture';
+
 export interface DuelResult {
   slot: number;
   challengerCardId: number;
   opponentCardId: number;
   challengerPower: number;
   opponentPower: number;
+  challengerCamp: Camp | null;
+  opponentCamp: Camp | null;
+  /** true si le camp de cette carte a l'avantage sur le camp adverse pour
+   *  ce duel précis (déjà pris en compte dans *Power ci-dessus). */
+  challengerCampAdvantage: boolean;
+  opponentCampAdvantage: boolean;
+  /** true si cette carte profite du bonus de "lancée" (la carte précédente
+   *  de la même équipe a gagné son duel) — déjà pris en compte dans
+   *  *Power ci-dessus. */
+  challengerMomentum: boolean;
+  opponentMomentum: boolean;
   winner: 'challenger' | 'opponent' | 'tie';
 }
 
@@ -150,7 +166,10 @@ export function apiCreateBattle(opponentUsername: string, team: TeamSlot[]) {
   return call<{ id: number }>('/battles', { method: 'POST', body: JSON.stringify({ opponentUsername, team }) });
 }
 export function apiRespondBattle(id: number, action: 'respond' | 'decline' | 'cancel', team?: TeamSlot[]) {
-  return call<{ ok: true; result?: BattleResult }>(`/battles/${id}`, { method: 'POST', body: JSON.stringify({ action, team }) });
+  return call<{ ok: true; result?: BattleResult; reward?: { amount: number; toMe: boolean } }>(`/battles/${id}`, {
+    method: 'POST',
+    body: JSON.stringify({ action, team }),
+  });
 }
 
 /** Requêtes SQL d'administration — voir functions/api/admin/queries et

@@ -6,11 +6,79 @@ import { CARD_META } from './cardMeta';
  *  partagent la même catégorie ; résolution en 5 duels slot à slot avec un
  *  peu de variance (±10%) tirée d'une graine dérivée de l'id du combat —
  *  reproductible, calculée ici (jamais côté client) pour ne pas pouvoir
- *  tricher sur le résultat. */
+ *  tricher sur le résultat. Deux mécaniques stratégiques s'ajoutent à la
+ *  puissance brute (sinon "empiler ses meilleures cartes" suffit toujours à
+ *  gagner) : le **triangle de camps** (contre-jeu par catégorie) et le
+ *  **momentum** (récompense l'ordre des cartes dans l'équipe). */
 
 const SECRET_RARITY_ID = 7;
 
 const RARITY_POWER: Record<number, number> = { 1: 1, 2: 2, 3: 4, 4: 8, 5: 16, 6: 32 };
+
+/** Triangle de camps — 3 regroupements thématiques des ~28 catégories de
+ *  cartes, façon pierre-papier-ciseaux : Fiction bat Pouvoir bat Culture
+ *  bat Fiction. "Mystère" (carte secrète) n'apparaît pas : elle est déjà
+ *  exclue du combat par ailleurs.
+ *  - Fiction : univers imaginaires / œuvres de fiction.
+ *  - Pouvoir : figures d'autorité ou d'influence réelle.
+ *  - Culture : savoir, matière, quotidien — ce qui reste. */
+export type Camp = 'fiction' | 'pouvoir' | 'culture';
+
+const TYPE_CAMP: Record<string, Camp> = {
+  'Super-héros': 'fiction',
+  'Harry Potter': 'fiction',
+  YuGiOh: 'fiction',
+  Fantastique: 'fiction',
+  'One Piece': 'fiction',
+  'Star Wars': 'fiction',
+  'Jeux-vidéo': 'fiction',
+  Mangas: 'fiction',
+  BD: 'fiction',
+  Mythologie: 'fiction',
+  'Dragon Ball': 'fiction',
+  Pokemon: 'fiction',
+  Film: 'fiction',
+  Série: 'fiction',
+  Simpson: 'fiction',
+  Politiques: 'pouvoir',
+  Religion: 'pouvoir',
+  Dictateurs: 'pouvoir',
+  Métiers: 'pouvoir',
+  Célébrités: 'pouvoir',
+  Sapeurs: 'pouvoir',
+  Humains: 'pouvoir',
+  Art: 'culture',
+  Fruits: 'culture',
+  Meme: 'culture',
+  Graille: 'culture',
+  'Eléments chimique': 'culture',
+  'Hors catégorie': 'culture',
+};
+
+/** `beats[a] === b` : le camp `a` a l'avantage sur le camp `b`. */
+const CAMP_BEATS: Record<Camp, Camp> = { fiction: 'pouvoir', pouvoir: 'culture', culture: 'fiction' };
+
+/** Multiplicateur de puissance pour la carte dont le camp a l'avantage sur
+ *  celui de l'adversaire. Calibré (voir tests) pour qu'une carte avantagée
+ *  gagne toujours à puissance égale ou inférieure, redevienne un vrai coup
+ *  de dés face à une carte un palier de rareté au-dessus (Commune=1 …
+ *  Mythique=32, x2 par palier), et perde quand même face à un écart de
+ *  deux paliers ou plus — le contre-jeu compense un désavantage, il ne
+ *  l'annule pas contre n'importe quoi. */
+const CAMP_ADVANTAGE_MULTIPLIER = 2;
+
+/** Bonus de "lancée" : gagner un duel donne ce bonus de puissance à la
+ *  carte suivante de la même équipe (récompense l'ordre choisi, pas
+ *  seulement la force brute des cartes). Ne s'accumule pas au-delà d'un
+ *  duel : c'est bien la victoire du duel *précédent* qui compte, pas une
+ *  série. */
+const MOMENTUM_BONUS = 0.12;
+
+export function campOf(cardId: number): Camp | null {
+  const meta = CARD_META[cardId];
+  if (!meta) return null;
+  return TYPE_CAMP[meta.type] ?? null;
+}
 
 export interface TeamSlot {
   cardId: number;
@@ -64,6 +132,12 @@ export interface DuelResult {
   opponentCardId: number;
   challengerPower: number;
   opponentPower: number;
+  challengerCamp: Camp | null;
+  opponentCamp: Camp | null;
+  challengerCampAdvantage: boolean;
+  opponentCampAdvantage: boolean;
+  challengerMomentum: boolean;
+  opponentMomentum: boolean;
   winner: 'challenger' | 'opponent' | 'tie';
 }
 
@@ -88,12 +162,25 @@ export function resolveBattle(battleId: number, challengerTeam: TeamSlot[], oppo
   const duels: DuelResult[] = [];
   let challengerRoundsWon = 0;
   let opponentRoundsWon = 0;
+  let prevWinner: DuelResult['winner'] | null = null;
 
   for (let i = 0; i < Math.min(challengerTeam.length, opponentTeam.length); i++) {
     const c = challengerTeam[i];
     const o = opponentTeam[i];
-    const cRoll = (cardPower(c.cardId, c.holo) ?? 0) * (0.9 + rand() * 0.2);
-    const oRoll = (cardPower(o.cardId, o.holo) ?? 0) * (0.9 + rand() * 0.2);
+    const cCamp = campOf(c.cardId);
+    const oCamp = campOf(o.cardId);
+    const cCampAdvantage = cCamp !== null && oCamp !== null && CAMP_BEATS[cCamp] === oCamp;
+    const oCampAdvantage = oCamp !== null && cCamp !== null && CAMP_BEATS[oCamp] === cCamp;
+    const cMomentum = prevWinner === 'challenger';
+    const oMomentum = prevWinner === 'opponent';
+
+    let cRoll = (cardPower(c.cardId, c.holo) ?? 0) * (0.9 + rand() * 0.2);
+    let oRoll = (cardPower(o.cardId, o.holo) ?? 0) * (0.9 + rand() * 0.2);
+    if (cCampAdvantage) cRoll *= CAMP_ADVANTAGE_MULTIPLIER;
+    if (oCampAdvantage) oRoll *= CAMP_ADVANTAGE_MULTIPLIER;
+    if (cMomentum) cRoll *= 1 + MOMENTUM_BONUS;
+    if (oMomentum) oRoll *= 1 + MOMENTUM_BONUS;
+
     let winner: DuelResult['winner'] = 'tie';
     if (cRoll > oRoll) winner = 'challenger';
     else if (oRoll > cRoll) winner = 'opponent';
@@ -105,8 +192,15 @@ export function resolveBattle(battleId: number, challengerTeam: TeamSlot[], oppo
       opponentCardId: o.cardId,
       challengerPower: Math.round(cRoll),
       opponentPower: Math.round(oRoll),
+      challengerCamp: cCamp,
+      opponentCamp: oCamp,
+      challengerCampAdvantage: cCampAdvantage,
+      opponentCampAdvantage: oCampAdvantage,
+      challengerMomentum: cMomentum,
+      opponentMomentum: oMomentum,
       winner,
     });
+    prevWinner = winner;
   }
 
   const cTeam = teamPower(challengerTeam);

@@ -28,6 +28,7 @@ export default function ProfileScreen() {
   const avatar = useStore((s) => s.avatar);
   const avatarPhoto = useStore((s) => s.avatarPhoto);
   const mailboxUnread = useStore((s) => s.mailboxUnread);
+  const battlesUnread = useStore((s) => s.battlesUnread);
   const openDetail = useStore((s) => s.openDetail);
   const logout = useStore((s) => s.logout);
   const debugTriggerSecret = useStore((s) => s.debugTriggerSecret);
@@ -70,9 +71,32 @@ export default function ProfileScreen() {
             <button
               onClick={() => navigate('/battles')}
               aria-label="Combats"
-              style={{ border: 0, background: 'none', cursor: 'pointer', fontSize: 19, opacity: 0.75, padding: 4, lineHeight: 1 }}
+              style={{ position: 'relative', border: 0, background: 'none', cursor: 'pointer', fontSize: 19, opacity: 0.75, padding: 4, lineHeight: 1 }}
             >
               ⚔️
+              {battlesUnread > 0 && (
+                <span
+                  style={{
+                    position: 'absolute',
+                    top: -1,
+                    right: -3,
+                    minWidth: 16,
+                    height: 16,
+                    borderRadius: 999,
+                    background: 'var(--color-accent)',
+                    color: 'var(--color-bg)',
+                    fontSize: 9.5,
+                    fontWeight: 700,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    padding: '0 3px',
+                    boxShadow: 'var(--shadow-sm)',
+                  }}
+                >
+                  {battlesUnread > 9 ? '9+' : battlesUnread}
+                </span>
+              )}
             </button>
             <MailboxButton unread={mailboxUnread} onClick={() => setMailboxOpen(true)} />
             <button

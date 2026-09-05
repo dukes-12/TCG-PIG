@@ -30,6 +30,7 @@ export default function App() {
   const reconcileWheel = useStore((s) => s.reconcileWheel);
   const fetchMailbox = useStore((s) => s.fetchMailbox);
   const fetchTradesUnread = useStore((s) => s.fetchTradesUnread);
+  const fetchBattlesUnread = useStore((s) => s.fetchBattlesUnread);
 
   useEffect(() => {
     bootAuth();
@@ -62,6 +63,12 @@ export default function App() {
     const id = setInterval(fetchTradesUnread, 30 * 1000);
     return () => clearInterval(id);
   }, [account, fetchTradesUnread]);
+  useEffect(() => {
+    if (!account) return;
+    fetchBattlesUnread();
+    const id = setInterval(fetchBattlesUnread, 30 * 1000);
+    return () => clearInterval(id);
+  }, [account, fetchBattlesUnread]);
 
   // Échanges et vue "profil d'un ami" supposent un compte — sans, on renvoie
   // simplement vers Profil, où se trouve désormais la connexion/inscription.

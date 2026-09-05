@@ -1,5 +1,5 @@
 import { CARDS, SECRET_RARITY_ID, cardById } from '../data/catalog';
-import type { TeamSlot, BattleResult, DuelResult } from './api';
+import type { TeamSlot, BattleResult, DuelResult, Camp } from './api';
 
 /** Port client de functions/_lib/battle.ts, pour le mode "Défier un bot"
  *  (BattlesScreen) — un combat contre un adversaire fictif n'a pas de
@@ -10,9 +10,60 @@ import type { TeamSlot, BattleResult, DuelResult } from './api';
  *  rareté/catégorie depuis CARD_META (généré, les Pages Functions
  *  n'important pas le catalogue front-end) alors qu'ici `CARDS` est déjà
  *  disponible directement. Si le barème change d'un côté, le changer de
- *  l'autre aussi. */
+ *  l'autre aussi — y compris le triangle de camps et le momentum
+ *  ci-dessous. */
 
 const RARITY_POWER: Record<number, number> = { 1: 1, 2: 2, 3: 4, 4: 8, 5: 16, 6: 32 };
+
+/** Triangle de camps — voir functions/_lib/battle.ts pour l'explication
+ *  complète. Doit rester identique côté serveur et côté client. */
+const TYPE_CAMP: Record<string, Camp> = {
+  'Super-héros': 'fiction',
+  'Harry Potter': 'fiction',
+  YuGiOh: 'fiction',
+  Fantastique: 'fiction',
+  'One Piece': 'fiction',
+  'Star Wars': 'fiction',
+  'Jeux-vidéo': 'fiction',
+  Mangas: 'fiction',
+  BD: 'fiction',
+  Mythologie: 'fiction',
+  'Dragon Ball': 'fiction',
+  Pokemon: 'fiction',
+  Film: 'fiction',
+  Série: 'fiction',
+  Simpson: 'fiction',
+  Politiques: 'pouvoir',
+  Religion: 'pouvoir',
+  Dictateurs: 'pouvoir',
+  Métiers: 'pouvoir',
+  Célébrités: 'pouvoir',
+  Sapeurs: 'pouvoir',
+  Humains: 'pouvoir',
+  Art: 'culture',
+  Fruits: 'culture',
+  Meme: 'culture',
+  Graille: 'culture',
+  'Eléments chimique': 'culture',
+  'Hors catégorie': 'culture',
+};
+const CAMP_BEATS: Record<Camp, Camp> = { fiction: 'pouvoir', pouvoir: 'culture', culture: 'fiction' };
+const CAMP_ADVANTAGE_MULTIPLIER = 2;
+const MOMENTUM_BONUS = 0.12;
+
+export function campOf(cardId: number): Camp | null {
+  const card = cardById(cardId);
+  if (!card) return null;
+  return TYPE_CAMP[card.type] ?? null;
+}
+
+/** Icône + libellé par camp, pour l'affichage (composeur d'équipe,
+ *  résultat de combat) — un seul endroit à mettre à jour côté UI. */
+export const CAMP_INFO: Record<Camp, { icon: string; label: string }> = {
+  fiction: { icon: '🎭', label: 'Fiction' },
+  pouvoir: { icon: '👑', label: 'Pouvoir' },
+  culture: { icon: '🌿', label: 'Culture' },
+};
 
 export function cardPower(cardId: number, holo: boolean): number | null {
   const card = cardById(cardId);
@@ -58,12 +109,25 @@ export function resolveBattle(seed: number, challengerTeam: TeamSlot[], opponent
   const duels: DuelResult[] = [];
   let challengerRoundsWon = 0;
   let opponentRoundsWon = 0;
+  let prevWinner: DuelResult['winner'] | null = null;
 
   for (let i = 0; i < Math.min(challengerTeam.length, opponentTeam.length); i++) {
     const c = challengerTeam[i];
     const o = opponentTeam[i];
-    const cRoll = (cardPower(c.cardId, c.holo) ?? 0) * (0.9 + rand() * 0.2);
-    const oRoll = (cardPower(o.cardId, o.holo) ?? 0) * (0.9 + rand() * 0.2);
+    const cCamp = campOf(c.cardId);
+    const oCamp = campOf(o.cardId);
+    const cCampAdvantage = cCamp !== null && oCamp !== null && CAMP_BEATS[cCamp] === oCamp;
+    const oCampAdvantage = oCamp !== null && cCamp !== null && CAMP_BEATS[oCamp] === cCamp;
+    const cMomentum = prevWinner === 'challenger';
+    const oMomentum = prevWinner === 'opponent';
+
+    let cRoll = (cardPower(c.cardId, c.holo) ?? 0) * (0.9 + rand() * 0.2);
+    let oRoll = (cardPower(o.cardId, o.holo) ?? 0) * (0.9 + rand() * 0.2);
+    if (cCampAdvantage) cRoll *= CAMP_ADVANTAGE_MULTIPLIER;
+    if (oCampAdvantage) oRoll *= CAMP_ADVANTAGE_MULTIPLIER;
+    if (cMomentum) cRoll *= 1 + MOMENTUM_BONUS;
+    if (oMomentum) oRoll *= 1 + MOMENTUM_BONUS;
+
     let winner: DuelResult['winner'] = 'tie';
     if (cRoll > oRoll) winner = 'challenger';
     else if (oRoll > cRoll) winner = 'opponent';
@@ -75,8 +139,15 @@ export function resolveBattle(seed: number, challengerTeam: TeamSlot[], opponent
       opponentCardId: o.cardId,
       challengerPower: Math.round(cRoll),
       opponentPower: Math.round(oRoll),
+      challengerCamp: cCamp,
+      opponentCamp: oCamp,
+      challengerCampAdvantage: cCampAdvantage,
+      opponentCampAdvantage: oCampAdvantage,
+      challengerMomentum: cMomentum,
+      opponentMomentum: oMomentum,
       winner,
     });
+    prevWinner = winner;
   }
 
   const cTeam = teamPower(challengerTeam);

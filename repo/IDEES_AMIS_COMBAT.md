@@ -28,6 +28,35 @@ avec comptes utilisateurs.
 >   de composer la sienne — connue seulement après résolution.
 > - Carte secrète explicitement exclue des équipes.
 >
+> **Second passage** (retour : "le système est trop simple, il suffit de
+> prendre les meilleures cartes qu'on a et on gagne") — deux mécaniques
+> stratégiques ajoutées à la résolution ci-dessus, dans
+> `functions/_lib/battle.ts` (autoritaire) et son miroir client
+> `src/lib/battle.ts` (mode bot) :
+> - **Triangle de camps** : les ~28 catégories de cartes sont regroupées en
+>   3 camps thématiques (Fiction, Pouvoir, Culture) façon
+>   pierre-papier-ciseaux — Fiction bat Pouvoir bat Culture bat Fiction. La
+>   carte dont le camp a l'avantage voit sa puissance ×2 pour ce duel :
+>   assez pour gagner à coup sûr à puissance égale ou inférieure, pour que
+>   l'issue redevienne un vrai coup de dés face à un palier de rareté
+>   au-dessus, et pour rester sans effet face à deux paliers ou plus d'écart.
+> - **Momentum** : gagner un duel donne +12% de puissance à la carte
+>   suivante de la *même* équipe pour le duel suivant — l'ordre dans lequel
+>   on aligne ses 5 cartes compte, pas seulement leur puissance individuelle.
+> - Affiché dans `BattleResultOverlay` (icône de camp, ⚔️ si avantage, 🔥 si
+>   lancée) et dans le composeur d'équipe de `BattlesScreen` (icône de camp
+>   par carte).
+>
+> Proposions A/B/C également implémentées à cette occasion :
+> - **A** — victoire = glands gagnés, scalés sur la puissance de l'équipe
+>   *vaincue* (pas la sienne) pour ne pas récompenser le fait de défier en
+>   boucle un adversaire plus faible ; rien en cas d'égalité.
+> - **B** — pastille de notification sur le bouton ⚔️ de Profil pour les
+>   défis entrants en attente (même mécanique que la pastille Échanges).
+> - **C** — équipe favorite : un bouton ★ dans le composeur sauvegarde la
+>   composition actuelle, reproposée d'office au prochain défi si les 5
+>   cartes sont toujours possédées.
+>
 > Le reste de ce document (schéma Postgres/Supabase, phasage, questions
 > restées ouvertes) garde sa valeur de référence historique mais ne
 > correspond plus à l'implémentation réelle (Cloudflare D1, pas Supabase —

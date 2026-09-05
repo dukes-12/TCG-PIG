@@ -1,6 +1,7 @@
 import PigCard from './PigCard';
 import { cardById } from '../data/catalog';
-import type { Battle } from '../lib/api';
+import type { Battle, Camp } from '../lib/api';
+import { CAMP_INFO } from '../lib/battle';
 import { useAnimations } from '../lib/useAnimations';
 
 /** Résultat d'un combat résolu — les deux équipes, duel par duel, et le
@@ -62,9 +63,29 @@ export default function BattleResultOverlay({ battle, myUsername, onClose }: { b
                   background: 'var(--color-surface)',
                 }}
               >
-                <DuelSide card={cCard} holo={cTeam?.holo ?? false} power={d.challengerPower} won={d.winner === 'challenger'} holoAnim={holoAnim} align="left" />
+                <DuelSide
+                  card={cCard}
+                  holo={cTeam?.holo ?? false}
+                  power={d.challengerPower}
+                  won={d.winner === 'challenger'}
+                  camp={d.challengerCamp}
+                  campAdvantage={d.challengerCampAdvantage}
+                  momentum={d.challengerMomentum}
+                  holoAnim={holoAnim}
+                  align="left"
+                />
                 <span style={{ fontSize: 10, fontWeight: 700, opacity: 0.4 }}>VS</span>
-                <DuelSide card={oCard} holo={oTeam?.holo ?? false} power={d.opponentPower} won={d.winner === 'opponent'} holoAnim={holoAnim} align="right" />
+                <DuelSide
+                  card={oCard}
+                  holo={oTeam?.holo ?? false}
+                  power={d.opponentPower}
+                  won={d.winner === 'opponent'}
+                  camp={d.opponentCamp}
+                  campAdvantage={d.opponentCampAdvantage}
+                  momentum={d.opponentMomentum}
+                  holoAnim={holoAnim}
+                  align="right"
+                />
               </div>
             );
           })}
@@ -108,6 +129,9 @@ function DuelSide({
   holo,
   power,
   won,
+  camp,
+  campAdvantage,
+  momentum,
   holoAnim,
   align,
 }: {
@@ -115,18 +139,43 @@ function DuelSide({
   holo: boolean;
   power: number;
   won: boolean;
+  camp: Camp | null;
+  campAdvantage: boolean;
+  momentum: boolean;
   holoAnim: boolean;
   align: 'left' | 'right';
 }) {
   if (!card) return null;
+  const campInfo = camp ? CAMP_INFO[camp] : null;
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexDirection: align === 'right' ? 'row-reverse' : 'row' }}>
-      <div style={{ width: 40, aspectRatio: '0.72', flex: 'none', borderRadius: 10, boxShadow: won ? '0 0 0 2px var(--color-accent)' : 'none' }}>
+      <div
+        style={{
+          width: 40,
+          aspectRatio: '0.72',
+          flex: 'none',
+          borderRadius: 10,
+          boxShadow: won ? '0 0 0 2px var(--color-accent)' : 'none',
+          position: 'relative',
+        }}
+      >
         <PigCard card={card} holoAnim={holoAnim} ownedCount={1} isHolo={holo} />
+        {campAdvantage && (
+          <span
+            title="Avantage de camp"
+            style={{ position: 'absolute', top: -4, [align === 'right' ? 'left' : 'right']: -4, fontSize: 13 }}
+          >
+            ⚔️
+          </span>
+        )}
       </div>
       <div style={{ minWidth: 0, textAlign: align }}>
         <div style={{ fontSize: 11, fontWeight: won ? 700 : 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{card.name}</div>
-        <div style={{ fontSize: 10, opacity: 0.55 }}>{power} pts</div>
+        <div style={{ fontSize: 10, opacity: 0.55, display: 'flex', alignItems: 'center', gap: 4, justifyContent: align === 'right' ? 'flex-end' : 'flex-start' }}>
+          {campInfo && <span title={campInfo.label}>{campInfo.icon}</span>}
+          <span>{power} pts</span>
+          {momentum && <span title="Lancée : bonus de puissance">🔥</span>}
+        </div>
       </div>
     </div>
   );

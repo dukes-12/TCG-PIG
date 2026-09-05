@@ -61,5 +61,24 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env, params }
     .bind(JSON.stringify(body.team), JSON.stringify(result), 'completed', now, id)
     .run();
 
-  return json({ ok: true, result });
+  // Récompense de victoire en glands (aucune en cas d'égalité) — scalée sur
+  // la puissance de l'équipe VAINCUE, pas sur celle du vainqueur : battre un
+  // adversaire déjà costaud rapporte gros, battre un adversaire famélique
+  // presque rien, sinon "défier en boucle le même joueur faible" serait la
+  // stratégie optimale. Bornée pour rester un à-côté de l'économie des sacs
+  // (100 glands le moins cher), pas un moyen de la contourner.
+  let reward: { amount: number; toMe: boolean } | undefined;
+  if (result.winner !== 'tie') {
+    const winnerIsChallenger = result.winner === 'challenger';
+    const loserTotalPower = winnerIsChallenger ? result.opponentTotalPower : result.challengerTotalPower;
+    const amount = Math.min(80, Math.max(8, Math.round(loserTotalPower * 0.4)));
+    const winnerId = winnerIsChallenger ? battle.challenger_id : me.id;
+    const winnerRow = winnerIsChallenger ? challengerRow : meRow;
+    const winnerState = JSON.parse(winnerRow?.state_json || '{}') as Record<string, unknown>;
+    winnerState.glands = (Number(winnerState.glands) || 0) + amount;
+    await env.DB.prepare('UPDATE users SET state_json = ? WHERE id = ?').bind(JSON.stringify(winnerState), winnerId).run();
+    reward = { amount, toMe: !winnerIsChallenger };
+  }
+
+  return json({ ok: true, result, reward });
 };

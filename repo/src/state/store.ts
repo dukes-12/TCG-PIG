@@ -7,6 +7,7 @@ import { openPack, roll } from '../lib/draw';
 import { playSfx, revealSfx, setSfxEnabled } from '../lib/sfx';
 import { trackCardPulled, trackGlandsEarned, trackGlandsSpent, trackPackOpened } from '../lib/analytics';
 import {
+  apiFetchBattles,
   apiFetchMailbox,
   apiFetchState,
   apiFetchTrades,
@@ -17,6 +18,7 @@ import {
   getToken,
   setToken,
   type MailboxMessage,
+  type TeamSlot,
 } from '../lib/api';
 import type {
   AnimationPref,
@@ -119,6 +121,13 @@ interface PersistedState {
   soundOn: boolean;
   wheelSpins: number;
   nextWheelResetAt: number | null;
+  /** Dernière équipe de combat sauvegardée exprès (bouton ☆, voir
+   *  BattlesScreen) — proposée par défaut au prochain défi. `null` : rien
+   *  de sauvegardé encore. Ce n'est qu'une préférence de composition, pas
+   *  une réservation : une carte recyclée/échangée depuis ne l'invalide
+   *  pas ici, c'est BattlesScreen qui filtre sur la collection actuelle
+   *  avant de la proposer. */
+  favoriteTeam: TeamSlot[] | null;
 }
 
 interface UiState {
@@ -154,6 +163,10 @@ interface UiState {
   /** Propositions d'échange entrantes en attente — voir TradesScreen et la
    *  pastille sur l'onglet Échanges de TabBar. */
   tradesUnread: number;
+  /** Défis de combat entrants en attente — même rôle que `tradesUnread`,
+   *  affiché sur le bouton ⚔️ de Profil (BattlesScreen n'a pas d'onglet
+   *  dédié dans TabBar). */
+  battlesUnread: number;
 }
 
 interface Actions {
@@ -210,6 +223,10 @@ interface Actions {
   setTradesUnread: (n: number) => void;
   fetchTradesUnread: () => Promise<void>;
 
+  setBattlesUnread: (n: number) => void;
+  fetchBattlesUnread: () => Promise<void>;
+  setFavoriteTeam: (team: TeamSlot[] | null) => void;
+
   login: (username: string, pin: string) => Promise<void>;
   register: (username: string, pin: string) => Promise<void>;
   logout: () => void;
@@ -250,6 +267,7 @@ function persistedSlice(s: Store): PersistedState {
     soundOn: s.soundOn,
     wheelSpins: s.wheelSpins,
     nextWheelResetAt: s.nextWheelResetAt,
+    favoriteTeam: s.favoriteTeam,
   };
 }
 
@@ -277,6 +295,7 @@ function mergeServer(current: Store, incoming: Partial<PersistedState>): Partial
     ownedHolo: incoming.ownedHolo ?? current.ownedHolo,
     wheelSpins: incoming.wheelSpins ?? current.wheelSpins,
     nextWheelResetAt: incoming.nextWheelResetAt ?? current.nextWheelResetAt,
+    favoriteTeam: incoming.favoriteTeam ?? current.favoriteTeam,
   };
 }
 
@@ -362,6 +381,7 @@ export const useStore = create<Store>()(
       soundOn: true,
       wheelSpins: WHEEL_SPINS_MAX,
       nextWheelResetAt: null,
+      favoriteTeam: null,
 
       // ── ui / session ──
       account: null,
@@ -392,6 +412,7 @@ export const useStore = create<Store>()(
       mailbox: [],
       mailboxUnread: 0,
       tradesUnread: 0,
+      battlesUnread: 0,
 
       // ── actions ──
       setSort: (sort) => set({ sort }),
@@ -753,6 +774,22 @@ export const useStore = create<Store>()(
         }
       },
 
+      // ── combats (juste la pastille du bouton ⚔️ — le reste vit dans
+      // BattlesScreen, même logique que tradesUnread ci-dessus) ──
+      setBattlesUnread: (battlesUnread) => set({ battlesUnread }),
+
+      fetchBattlesUnread: async () => {
+        if (!get().account) return;
+        try {
+          const res = await apiFetchBattles();
+          set({ battlesUnread: res.battles.filter((b) => b.direction === 'incoming' && b.status === 'pending').length });
+        } catch {
+          // Sondage périodique — échec silencieux, comme fetchTradesUnread.
+        }
+      },
+
+      setFavoriteTeam: (favoriteTeam) => set({ favoriteTeam }),
+
       // ── compte ──
       bootAuth: async () => {
         const token = getToken();
@@ -791,7 +828,7 @@ export const useStore = create<Store>()(
 
       logout: () => {
         setToken(null);
-        set({ account: null, mailbox: [], mailboxUnread: 0, tradesUnread: 0 });
+        set({ account: null, mailbox: [], mailboxUnread: 0, tradesUnread: 0, battlesUnread: 0 });
       },
     }),
     {
