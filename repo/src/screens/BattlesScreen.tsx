@@ -2,12 +2,16 @@ import { useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import Avatar from '../components/Avatar';
 import BattleResultOverlay from '../components/BattleResultOverlay';
+import Chip from '../components/Chip';
 import PigCard from '../components/PigCard';
 import { CARDS, SECRET_RARITY_ID, cardById } from '../data/catalog';
 import { apiCreateBattle, apiFetchBattles, apiFetchFriends, apiRespondBattle, type Battle, type TeamSlot } from '../lib/api';
+import { randomBotTeam, resolveBattle as resolveBattleLocally, type BotDifficulty } from '../lib/battle';
 import { useAnimations } from '../lib/useAnimations';
 import { useStore } from '../state/store';
 import type { AvatarKey } from '../types';
+
+const BOT_LABEL: Record<BotDifficulty, string> = { facile: 'Facile', moyen: 'Moyen', difficile: 'Difficile' };
 
 interface Friend {
   username: string;
@@ -39,10 +43,12 @@ export default function BattlesScreen() {
 
   const [friends, setFriends] = useState<Friend[]>([]);
   const [battles, setBattles] = useState<Battle[]>([]);
-  // `compose` : soit un nouveau défi (target = pseudo), soit une réponse à
-  // un défi reçu (respondTo = son id) — même sélecteur d'équipe pour les
-  // deux, seul le bouton final et l'appel API changent.
-  const [compose, setCompose] = useState<{ target: string; respondTo?: number } | null>(null);
+  // `compose` : un nouveau défi (target = pseudo), une réponse à un défi
+  // reçu (respondTo = son id), ou un test contre un bot (bot = difficulté)
+  // — même sélecteur d'équipe pour les trois, seul le bouton final et ce
+  // qui se passe à la soumission changent.
+  const [compose, setCompose] = useState<{ target: string; respondTo?: number; bot?: BotDifficulty } | null>(null);
+  const [botDifficulty, setBotDifficulty] = useState<BotDifficulty>('moyen');
   const [team, setTeam] = useState<TeamSlot[]>([]);
   const [busy, setBusy] = useState(false);
   const [viewing, setViewing] = useState<Battle | null>(null);
@@ -90,6 +96,11 @@ export default function BattlesScreen() {
     setTeam([]);
   };
 
+  const startBotChallenge = () => {
+    setCompose({ target: `Bot (${BOT_LABEL[botDifficulty]})`, bot: botDifficulty });
+    setTeam([]);
+  };
+
   const startRespond = (b: Battle) => {
     setCompose({ target: b.challengerUsername, respondTo: b.id });
     setTeam([]);
@@ -104,7 +115,26 @@ export default function BattlesScreen() {
     if (!compose || team.length !== 5) return;
     setBusy(true);
     try {
-      if (compose.respondTo) {
+      if (compose.bot) {
+        // Zone de test — tout se passe en local, jamais d'appel serveur ni
+        // de ligne ajoutée à l'historique (pas un vrai adversaire, pas de
+        // compte). Graine aléatoire à chaque défi pour ne pas rejouer
+        // toujours le même combat contre la même équipe de bot.
+        const opponentTeam = randomBotTeam(compose.bot);
+        const result = resolveBattleLocally(Math.floor(Math.random() * 2 ** 31), team, opponentTeam);
+        setViewing({
+          id: -1,
+          challengerUsername: account ?? 'Toi',
+          opponentUsername: compose.target,
+          challengerTeam: team,
+          opponentTeam,
+          result,
+          status: 'completed',
+          createdAt: Date.now(),
+          resolvedAt: Date.now(),
+          direction: 'outgoing',
+        });
+      } else if (compose.respondTo) {
         const res = await apiRespondBattle(compose.respondTo, 'respond', team);
         say(res.result?.winner === 'tie' ? 'Combat terminé — égalité' : 'Combat terminé !');
         await refresh();
@@ -145,6 +175,41 @@ export default function BattlesScreen() {
           5 cartes, la rareté fait la puissance (holo = +50%). Asynchrone : ton adversaire répond quand il veut.
         </p>
       </div>
+
+      {!compose && (
+        <div className="screen-inner" style={{ paddingTop: 18 }}>
+          <div style={{ padding: 14, borderRadius: 22, background: 'var(--color-surface)', border: '1.5px dashed var(--color-accent-500)' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10 }}>
+              <span style={{ fontSize: 20 }}>🤖</span>
+              <div>
+                <div style={{ fontFamily: 'var(--font-heading)', fontSize: 14 }}>Zone de test</div>
+                <div style={{ fontSize: 10.5, opacity: 0.6, marginTop: 2 }}>Combat immédiat contre un bot, en local — rien n'est envoyé au serveur.</div>
+              </div>
+            </div>
+            <div className="chip-row" style={{ marginBottom: 10 }}>
+              {(Object.keys(BOT_LABEL) as BotDifficulty[]).map((d) => (
+                <Chip key={d} label={BOT_LABEL[d]} active={botDifficulty === d} onClick={() => setBotDifficulty(d)} />
+              ))}
+            </div>
+            <button
+              className="pressable"
+              onClick={startBotChallenge}
+              style={{
+                cursor: 'pointer',
+                border: 0,
+                fontFamily: 'var(--font-heading)',
+                fontSize: 12,
+                padding: '9px 16px',
+                borderRadius: 999,
+                background: 'var(--color-accent)',
+                color: 'var(--color-bg)',
+              }}
+            >
+              Défier un bot
+            </button>
+          </div>
+        </div>
+      )}
 
       {!compose && (
         <div className="screen-inner" style={{ paddingTop: 18 }}>
@@ -249,7 +314,7 @@ export default function BattlesScreen() {
               opacity: busy || team.length !== 5 ? 0.5 : 1,
             }}
           >
-            {compose.respondTo ? 'Répondre au défi' : 'Lancer le défi'}
+            {compose.respondTo ? 'Répondre au défi' : compose.bot ? 'Lancer le combat' : 'Lancer le défi'}
           </button>
         </div>
       )}
