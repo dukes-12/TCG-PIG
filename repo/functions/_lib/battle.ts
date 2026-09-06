@@ -3,36 +3,31 @@ import { CARD_META } from './cardMeta';
 /** Système de combat — voir IDEES_AMIS_COMBAT.md pour la conception
  *  complète. Chaque carte a deux stats, ATTAQUE et DÉFENSE, dérivées
  *  indépendamment de sa rareté (échelle doublée par palier) et tirées une
- *  fois pour toutes via un hash déterministe de son id — pas stocké, jamais
- *  re-tiré, recalculé à la volée comme l'ancien `cardPower`. +50% (les
- *  deux stats) si la carte est en holo. Bonus d'équipe si 3+ cartes
- *  partagent la même catégorie ; résolution en 5 duels slot à slot avec un
- *  peu de variance (±10%, ATTAQUE seulement) tirée d'une graine dérivée de
- *  l'id du combat — reproductible, calculée ici (jamais côté client) pour
- *  ne pas pouvoir tricher sur le résultat. Deux mécaniques stratégiques
- *  s'ajoutent à la puissance brute (sinon "empiler ses meilleures cartes"
- *  suffit toujours à gagner) : le **triangle de camps** (contre-jeu par
- *  catégorie) et le **momentum** (récompense l'ordre des cartes dans
- *  l'équipe) — toutes deux appliquées à l'ATTAQUE uniquement (un avantage
- *  ou une lancée fait taper plus fort, pas devenir plus solide). */
+ *  fois pour toutes via un hash déterministe de son id — pas stocké,
+ *  recalculé à la volée. +50% (les deux stats) si la carte est en holo.
+ *
+ *  Combat à POINTS DE VIE : chaque équipe a une jauge de PV commune (somme
+ *  de la DÉFENSE de base de ses 5 cartes ×HP_MULT, +15% si bonus de
+ *  synergie). Le combat se déroule en PLUSIEURS TOURS (pas un résultat
+ *  instantané) : les 5 duels tournent en boucle (carte 1 vs carte 1, carte
+ *  2 vs carte 2, …, puis on reboucle sur la carte 1), chaque tour inflige
+ *  des dégâts de part et d'autre, jusqu'à ce qu'une jauge de PV tombe à 0.
+ *  Chaque carte est engagée dans une POSTURE choisie à la composition de
+ *  l'équipe — Attaque (frappe plus fort, encaisse plus) ou Défense (frappe
+ *  moins fort, encaisse moins) — un vrai choix, pas un dominant strict
+ *  (vérifié par simulation : ~50/50 à profil de cartes égal par ailleurs).
+ *  Triangle de camps et momentum s'appliquent à l'ATTAQUE, à chaque tour où
+ *  le duel concerné agit (pas juste une fois). */
 
 const SECRET_RARITY_ID = 7;
 
 const RARITY_POWER: Record<number, number> = { 1: 1, 2: 2, 3: 4, 4: 8, 5: 16, 6: 32 };
 
 /** ATTAQUE et DÉFENSE d'une carte, tirées chacune INDÉPENDAMMENT (±35%
- *  autour de sa puissance de rareté) plutôt que de sommer à un total fixe.
- *  C'est délibéré et pas juste esthétique : si les deux stats étaient
- *  forcées à sommer à une valeur constante, le "profil" attaque/défense
- *  d'une carte n'aurait mathématiquement AUCUN effet sur qui gagne un duel
- *  entre deux cartes de même rareté — quelle que soit la formule de
- *  résolution symétrique utilisée (la différence ATTAQUE-DÉFENSE d'un côté
- *  moins l'autre se ramène toujours à comparer les totaux, qui sont égaux
- *  par construction). Des tirages indépendants, si : deux cartes de même
- *  rareté peuvent avoir des profils "attaque", "défense" ou "équilibré"
- *  qui s'affrontent différemment selon la résolution en "percée" plus bas.
- *  Vérifié par simulation : à rareté égale, le profil seul tranche ~47%
- *  des duels (contre ~0% avec l'ancien système à puissance unique). */
+ *  autour de sa puissance de rareté) plutôt que de sommer à un total fixe
+ *  — voir IDEES_AMIS_COMBAT.md pour pourquoi (sinon le profil attaque/
+ *  défense n'a mathématiquement aucun effet entre deux cartes de même
+ *  rareté). */
 function hash01(seed: string): number {
   let h = 2166136261;
   for (let i = 0; i < seed.length; i++) {
@@ -59,6 +54,15 @@ export function cardStats(cardId: number, holo: boolean): CardStats | null {
   const def = Math.max(1, Math.round(P * (0.65 + hash01(`${cardId}:def`) * 0.7)));
   return { atk, def };
 }
+
+/** Posture choisie pour une carte à la composition de l'équipe — voir
+ *  STANCE_MULT plus bas pour les multiplicateurs. */
+export type Stance = 'attaque' | 'defense';
+
+const STANCE_MULT: Record<Stance, { atk: number; def: number }> = {
+  attaque: { atk: 1.15, def: 0.85 },
+  defense: { atk: 0.88, def: 1.18 },
+};
 
 /** Triangle de camps — 3 regroupements thématiques des ~28 catégories de
  *  cartes, façon pierre-papier-ciseaux. "Mystère" (carte secrète)
@@ -99,36 +103,40 @@ const TYPE_CAMP: Record<string, Camp> = {
   'Hors catégorie': 'culture',
 };
 
-/** `beats[a] === b` : le camp `a` a l'avantage sur le camp `b`.
- *
- *  Rééquilibrage : Fiction est en moyenne le camp le plus fort (puissance
- *  moyenne 5,11 sur ses 107 cartes, contre 4,42 pour Culture et 3,61 pour
- *  Pouvoir, le plus faible) — le premier sens retenu (Fiction bat Pouvoir)
- *  cumulait l'écart de puissance ET l'avantage de camp sur le même camp
- *  déjà le plus faible. Sens inversé : c'est maintenant le plus faible
- *  (Pouvoir) qui a l'avantage sur le plus fort (Fiction), qui l'a sur le
- *  camp du milieu (Culture), qui l'a sur le plus faible — chaque camp
- *  n'encaisse plus qu'un seul écart de puissance "naturel" au lieu de deux
- *  qui se cumulent dans le même sens. */
+/** `beats[a] === b` : le camp `a` a l'avantage sur le camp `b`. Pouvoir bat
+ *  Fiction bat Culture bat Pouvoir — sens choisi pour compenser Fiction
+ *  (107 cartes, puissance moyenne 5,11) qui est le camp le plus fort, et
+ *  Pouvoir (70 cartes, 3,61) le plus faible. Voir IDEES_AMIS_COMBAT.md. */
 const CAMP_BEATS: Record<Camp, Camp> = { fiction: 'culture', culture: 'pouvoir', pouvoir: 'fiction' };
 
-/** Multiplicateur d'ATTAQUE pour la carte dont le camp a l'avantage sur
- *  celui de l'adversaire. Calibré par simulation sur le vrai catalogue
- *  (résolution en "percée", voir plus bas) pour qu'une carte avantagée
- *  gagne quasi systématiquement à rareté égale (~100%), redevienne un vrai
- *  coup de dés face à un palier de rareté au-dessus (~59% de victoires),
- *  et reste sans effet réel face à deux paliers ou plus (~0%) — le
- *  contre-jeu compense un désavantage, il ne l'annule pas contre
- *  n'importe quoi. */
-const CAMP_ADVANTAGE_MULTIPLIER = 3.5;
+/** Multiplicateur d'ATTAQUE par tour pour le duel dont le camp a
+ *  l'avantage — plus faible qu'avant le passage au combat à PV (3,5 → 1,4)
+ *  car il s'applique maintenant à CHAQUE tour où ce duel agit (une dizaine
+ *  de fois dans un combat typique), pas une seule fois : un avantage
+ *  modeste qui se répète pèse déjà lourd sur la durée. Calibré par
+ *  simulation pour rester un vrai coup de pouce (~70% de victoires avec 1
+ *  seul duel avantagé sur 5) sans devenir automatique. */
+const CAMP_ADVANTAGE_MULTIPLIER = 1.4;
 
-/** Multiplicateur d'ATTAQUE pour la carte suivante de la même équipe après
- *  une victoire de duel (récompense l'ordre choisi, pas seulement la force
- *  brute des cartes) — ne s'accumule pas au-delà d'un duel, c'est bien la
- *  victoire du duel *précédent* qui compte, pas une série. Calibré pour
- *  ~67% de victoires à rareté égale, seul face à une adversaire sans
- *  aucun bonus — un vrai coup de pouce, pas un rouleau compresseur. */
-const MOMENTUM_MULTIPLIER = 1.3;
+/** Multiplicateur d'ATTAQUE pour un duel qui a infligé plus de dégâts qu'il
+ *  n'en a subi au tour précédent OÙ CE MÊME DUEL A AGI (le fil "carte i
+ *  contre carte i" reste le même sur toute la durée du combat) — même
+ *  logique de "lancée" qu'avant, adaptée aux dégâts au lieu d'une victoire
+ *  de duel entier. */
+const MOMENTUM_MULTIPLIER = 1.15;
+
+/** PV d'équipe = somme de la DÉFENSE DE BASE (non ajustée par la posture)
+ *  des 5 cartes ×HP_MULT. Volontairement basé sur la défense *de base* et
+ *  pas la défense ajustée par la posture : sinon choisir "défense" gonfle
+ *  À LA FOIS les PV et l'encaissement, ce qui la rend strictement
+ *  dominante (vérifié par simulation : 68% de victoires sans ce
+ *  découplage, ~50% avec). */
+const HP_MULTIPLIER = 4;
+
+/** Filet de sécurité — dans les faits jamais atteint (le pire cas observé
+ *  en simulation tourne autour de 100 tours), mais un combat doit toujours
+ *  se terminer. Départagé par PV restants si jamais atteint. */
+const MAX_ROUNDS = 300;
 
 export function campOf(cardId: number): Camp | null {
   const meta = CARD_META[cardId];
@@ -139,22 +147,64 @@ export function campOf(cardId: number): Camp | null {
 export interface TeamSlot {
   cardId: number;
   holo: boolean;
+  stance: Stance;
 }
 
-export interface TeamPower {
-  base: number;
-  synergyBonus: number;
-  total: number;
+/** Un tour de combat — le duel au `slot` indiqué agit, inflige des dégâts
+ *  des deux côtés, PV mis à jour. */
+export interface RoundEvent {
+  round: number;
+  slot: number;
+  challengerCardId: number;
+  opponentCardId: number;
+  /** ATTAQUE finale utilisée ce tour (posture, jitter, camp, momentum). */
+  challengerAtk: number;
+  opponentAtk: number;
+  /** DÉFENSE ajustée par la posture — pas de jitter dessus. */
+  challengerDef: number;
+  opponentDef: number;
+  /** Dégâts infligés par chaque camp ce tour-ci. */
+  challengerDamage: number;
+  opponentDamage: number;
+  /** PV restants de chaque équipe APRÈS ce tour (jamais négatif). */
+  challengerHp: number;
+  opponentHp: number;
+  challengerCamp: Camp | null;
+  opponentCamp: Camp | null;
+  challengerCampAdvantage: boolean;
+  opponentCampAdvantage: boolean;
+  challengerMomentum: boolean;
+  opponentMomentum: boolean;
 }
 
-/** Puissance d'équipe hors-duel (départage à manches égales, affichage) —
- *  somme d'ATTAQUE+DÉFENSE de chaque carte, jamais boostée par le camp ou
- *  le momentum (contextuels à un duel précis, pas à l'équipe entière). */
-export function teamPower(team: TeamSlot[]): TeamPower {
-  const base = team.reduce((sum, s) => {
-    const stats = cardStats(s.cardId, s.holo);
-    return sum + (stats ? stats.atk + stats.def : 0);
-  }, 0);
+export interface BattleResult {
+  rounds: RoundEvent[];
+  challengerMaxHp: number;
+  opponentMaxHp: number;
+  challengerSynergyBonus: number;
+  opponentSynergyBonus: number;
+  winner: 'challenger' | 'opponent' | 'tie';
+}
+
+interface SlotStats {
+  atk: number;
+  def: number;
+  camp: Camp | null;
+}
+
+function slotStats(team: TeamSlot[]): SlotStats[] {
+  return team.map((s) => {
+    const base = cardStats(s.cardId, s.holo) ?? { atk: 0, def: 0 };
+    const mult = STANCE_MULT[s.stance];
+    return { atk: Math.round(base.atk * mult.atk), def: Math.round(base.def * mult.def), camp: campOf(s.cardId) };
+  });
+}
+
+/** Bonus de synergie : 3+ cartes de la même catégorie dans l'équipe → +15%
+ *  de PV max (une équipe "à thème" est plus résiliente, distinct du camp
+ *  qui joue sur l'attaque — deux rôles séparés plutôt qu'un bonus générique
+ *  qui ferait tout à la fois). */
+function synergyBonus(team: TeamSlot[]): number {
   const typeCounts = new Map<string, number>();
   for (const s of team) {
     const meta = CARD_META[s.cardId];
@@ -162,8 +212,12 @@ export function teamPower(team: TeamSlot[]): TeamPower {
     typeCounts.set(meta.type, (typeCounts.get(meta.type) ?? 0) + 1);
   }
   const maxSameType = Math.max(0, ...typeCounts.values());
-  const synergyBonus = maxSameType >= 3 ? 0.15 : 0;
-  return { base, synergyBonus, total: Math.round(base * (1 + synergyBonus)) };
+  return maxSameType >= 3 ? 0.15 : 0;
+}
+
+function baseHp(team: TeamSlot[], synergy: number): number {
+  const raw = team.reduce((sum, s) => sum + (cardStats(s.cardId, s.holo)?.def ?? 0) * HP_MULTIPLIER, 0);
+  return Math.round(raw * (1 + synergy));
 }
 
 // Mulberry32 — petit PRNG déterministe (même graine → même suite), pas
@@ -178,140 +232,101 @@ function mulberry32(seed: number) {
   };
 }
 
-export interface DuelResult {
-  slot: number;
-  challengerCardId: number;
-  opponentCardId: number;
-  /** ATTAQUE finale utilisée pour ce duel (après jitter, camp, momentum). */
-  challengerAtk: number;
-  opponentAtk: number;
-  /** DÉFENSE de base de la carte — pas de jitter ni de bonus dessus,
-   *  c'est la garde fixe du profil de la carte. */
-  challengerDef: number;
-  opponentDef: number;
-  challengerCamp: Camp | null;
-  opponentCamp: Camp | null;
-  challengerCampAdvantage: boolean;
-  opponentCampAdvantage: boolean;
-  challengerMomentum: boolean;
-  opponentMomentum: boolean;
-  winner: 'challenger' | 'opponent' | 'tie';
-}
-
-export interface BattleResult {
-  duels: DuelResult[];
-  challengerRoundsWon: number;
-  opponentRoundsWon: number;
-  challengerTotalPower: number;
-  opponentTotalPower: number;
-  challengerSynergyBonus: number;
-  opponentSynergyBonus: number;
-  winner: 'challenger' | 'opponent' | 'tie';
-}
-
-/** Résolution d'un duel façon "percée" (jeu de cartes classique) plutôt
- *  qu'une simple comparaison de puissance :
- *  - l'ATTAQUE du challenger perce si elle dépasse la DÉFENSE adverse ;
- *  - pareil pour l'ATTAQUE adverse contre la DÉFENSE du challenger ;
- *  - les deux percent → la plus grosse marge (ATTAQUE − DÉFENSE en face)
- *    l'emporte ;
- *  - une seule perce → elle gagne (sa garde a tenu, celle d'en face non) ;
- *  - aucune ne perce → égalité (les deux gardes tiennent). */
-function resolveDuel(atkC: number, defC: number, atkO: number, defO: number): 'challenger' | 'opponent' | 'tie' {
-  const cBreaks = atkC > defO;
-  const oBreaks = atkO > defC;
-  if (cBreaks && oBreaks) {
-    const marginC = atkC - defO;
-    const marginO = atkO - defC;
-    if (marginC === marginO) return 'tie';
-    return marginC > marginO ? 'challenger' : 'opponent';
-  }
-  if (cBreaks) return 'challenger';
-  if (oBreaks) return 'opponent';
-  return 'tie';
-}
-
 /** `battleId` sert de graine — un combat rejoué (ex. affiché à nouveau plus
- *  tard) donne toujours le même résultat, sans avoir à le stocker en plus
- *  du texte des deux équipes (on le stocke quand même, voir schema.sql,
- *  pour ne pas dépendre d'une recomposition à l'identique de CARD_META si
+ *  tard) donne toujours le même résultat, sans avoir à stocker autre chose
+ *  que le texte des deux équipes (stocké quand même dans schema.sql, pour
+ *  ne pas dépendre d'une recomposition à l'identique de CARD_META si
  *  jamais une carte change de rareté après coup). */
 export function resolveBattle(battleId: number, challengerTeam: TeamSlot[], opponentTeam: TeamSlot[]): BattleResult {
   const rand = mulberry32(battleId);
-  const duels: DuelResult[] = [];
-  let challengerRoundsWon = 0;
-  let opponentRoundsWon = 0;
-  let prevWinner: DuelResult['winner'] | null = null;
+  const cStats = slotStats(challengerTeam);
+  const oStats = slotStats(opponentTeam);
+  const cSynergy = synergyBonus(challengerTeam);
+  const oSynergy = synergyBonus(opponentTeam);
+  const challengerMaxHp = baseHp(challengerTeam, cSynergy);
+  const opponentMaxHp = baseHp(opponentTeam, oSynergy);
 
-  for (let i = 0; i < Math.min(challengerTeam.length, opponentTeam.length); i++) {
-    const c = challengerTeam[i];
-    const o = opponentTeam[i];
-    const cStats = cardStats(c.cardId, c.holo) ?? { atk: 0, def: 0 };
-    const oStats = cardStats(o.cardId, o.holo) ?? { atk: 0, def: 0 };
-    const cCamp = campOf(c.cardId);
-    const oCamp = campOf(o.cardId);
-    const cCampAdvantage = cCamp !== null && oCamp !== null && CAMP_BEATS[cCamp] === oCamp;
-    const oCampAdvantage = oCamp !== null && cCamp !== null && CAMP_BEATS[oCamp] === cCamp;
-    const cMomentum = prevWinner === 'challenger';
-    const oMomentum = prevWinner === 'opponent';
+  let hpC = challengerMaxHp;
+  let hpO = opponentMaxHp;
+  const cMomentum: boolean[] = [false, false, false, false, false];
+  const oMomentum: boolean[] = [false, false, false, false, false];
+  const rounds: RoundEvent[] = [];
 
-    let atkC = cStats.atk * (0.9 + rand() * 0.2);
-    let atkO = oStats.atk * (0.9 + rand() * 0.2);
-    if (cCampAdvantage) atkC *= CAMP_ADVANTAGE_MULTIPLIER;
-    if (oCampAdvantage) atkO *= CAMP_ADVANTAGE_MULTIPLIER;
-    if (cMomentum) atkC *= MOMENTUM_MULTIPLIER;
-    if (oMomentum) atkO *= MOMENTUM_MULTIPLIER;
+  const n = Math.min(challengerTeam.length, opponentTeam.length, 5);
+  let round = 0;
+  while (hpC > 0 && hpO > 0 && round < MAX_ROUNDS) {
+    const i = round % n;
+    const cAdv = cStats[i].camp !== null && oStats[i].camp !== null && CAMP_BEATS[cStats[i].camp!] === oStats[i].camp;
+    const oAdv = oStats[i].camp !== null && cStats[i].camp !== null && CAMP_BEATS[oStats[i].camp!] === cStats[i].camp;
+    // Capturés AVANT d'être écrasés plus bas par le résultat de CE tour —
+    // ce sont ces valeurs (issues du tour précédent où ce duel a agi) qui
+    // ont servi à booster l'attaque ci-dessous, et c'est bien elles qu'il
+    // faut afficher pour ce tour.
+    const cHadMomentum = cMomentum[i];
+    const oHadMomentum = oMomentum[i];
 
-    const winner = resolveDuel(atkC, cStats.def, atkO, oStats.def);
-    if (winner === 'challenger') challengerRoundsWon++;
-    if (winner === 'opponent') opponentRoundsWon++;
-    duels.push({
+    let atkC = cStats[i].atk * (0.9 + rand() * 0.2);
+    let atkO = oStats[i].atk * (0.9 + rand() * 0.2);
+    if (cAdv) atkC *= CAMP_ADVANTAGE_MULTIPLIER;
+    if (oAdv) atkO *= CAMP_ADVANTAGE_MULTIPLIER;
+    if (cHadMomentum) atkC *= MOMENTUM_MULTIPLIER;
+    if (oHadMomentum) atkO *= MOMENTUM_MULTIPLIER;
+    atkC = Math.round(atkC);
+    atkO = Math.round(atkO);
+
+    const dmgToO = Math.max(1, atkC - oStats[i].def);
+    const dmgToC = Math.max(1, atkO - cStats[i].def);
+    hpO = Math.max(0, hpO - dmgToO);
+    hpC = Math.max(0, hpC - dmgToC);
+    cMomentum[i] = dmgToO > dmgToC;
+    oMomentum[i] = dmgToC > dmgToO;
+
+    rounds.push({
+      round,
       slot: i,
-      challengerCardId: c.cardId,
-      opponentCardId: o.cardId,
-      challengerAtk: Math.round(atkC),
-      opponentAtk: Math.round(atkO),
-      challengerDef: cStats.def,
-      opponentDef: oStats.def,
-      challengerCamp: cCamp,
-      opponentCamp: oCamp,
-      challengerCampAdvantage: cCampAdvantage,
-      opponentCampAdvantage: oCampAdvantage,
-      challengerMomentum: cMomentum,
-      opponentMomentum: oMomentum,
-      winner,
+      challengerCardId: challengerTeam[i].cardId,
+      opponentCardId: opponentTeam[i].cardId,
+      challengerAtk: atkC,
+      opponentAtk: atkO,
+      challengerDef: cStats[i].def,
+      opponentDef: oStats[i].def,
+      challengerDamage: dmgToO,
+      opponentDamage: dmgToC,
+      challengerHp: hpC,
+      opponentHp: hpO,
+      challengerCamp: cStats[i].camp,
+      opponentCamp: oStats[i].camp,
+      challengerCampAdvantage: cAdv,
+      opponentCampAdvantage: oAdv,
+      challengerMomentum: cHadMomentum,
+      opponentMomentum: oHadMomentum,
     });
-    prevWinner = winner;
+    round++;
   }
 
-  const cTeam = teamPower(challengerTeam);
-  const oTeam = teamPower(opponentTeam);
   let winner: BattleResult['winner'] = 'tie';
-  if (challengerRoundsWon > opponentRoundsWon) winner = 'challenger';
-  else if (opponentRoundsWon > challengerRoundsWon) winner = 'opponent';
-  else if (cTeam.total > oTeam.total) winner = 'challenger';
-  else if (oTeam.total > cTeam.total) winner = 'opponent';
+  if (hpC > 0 && hpO <= 0) winner = 'challenger';
+  else if (hpO > 0 && hpC <= 0) winner = 'opponent';
+  else if (hpC !== hpO) winner = hpC > hpO ? 'challenger' : 'opponent';
 
   return {
-    duels,
-    challengerRoundsWon,
-    opponentRoundsWon,
-    challengerTotalPower: cTeam.total,
-    opponentTotalPower: oTeam.total,
-    challengerSynergyBonus: cTeam.synergyBonus,
-    opponentSynergyBonus: oTeam.synergyBonus,
+    rounds,
+    challengerMaxHp,
+    opponentMaxHp,
+    challengerSynergyBonus: cSynergy,
+    opponentSynergyBonus: oSynergy,
     winner,
   };
 }
 
-/** Juste la forme (5 entrées `{cardId: number, holo: boolean}`) — ne
- *  vérifie ni la possession ni les doublons, voir `teamError` pour ça. */
+/** Juste la forme (5 entrées `{cardId, holo, stance}`) — ne vérifie ni la
+ *  possession ni les doublons, voir `teamError` pour ça. */
 export function isTeamShape(team: unknown): team is TeamSlot[] {
   if (!Array.isArray(team) || team.length !== 5) return false;
   return team.every((s) => {
     if (typeof s !== 'object' || s === null) return false;
     const o = s as Record<string, unknown>;
-    return typeof o.cardId === 'number' && typeof o.holo === 'boolean';
+    return typeof o.cardId === 'number' && typeof o.holo === 'boolean' && (o.stance === 'attaque' || o.stance === 'defense');
   });
 }
 

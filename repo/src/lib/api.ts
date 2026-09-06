@@ -104,10 +104,17 @@ export function apiMarkMailboxRead(ids: number[]) {
 
 /** Combats — voir IDEES_AMIS_COMBAT.md pour la conception et
  *  functions/_lib/battle.ts pour le calcul (côté serveur, jamais côté
- *  client — le résultat n'est jamais fait confiance s'il venait d'ici). */
+ *  client — le résultat n'est jamais fait confiance s'il venait d'ici).
+ *  Combat à points de vie, en plusieurs tours (pas un résultat instantané)
+ *  — voir BattleResult ci-dessous. */
+export type Stance = 'attaque' | 'defense';
+
 export interface TeamSlot {
   cardId: number;
   holo: boolean;
+  /** Posture choisie à la composition — voir functions/_lib/battle.ts
+   *  (STANCE_MULT) pour l'effet exact sur l'attaque et la défense. */
+  stance: Stance;
 }
 
 /** Les 3 "camps" thématiques, façon pierre-papier-ciseaux — Pouvoir bat
@@ -116,36 +123,41 @@ export interface TeamSlot {
  *  précis (rééquilibrage sur la puissance moyenne réelle de chaque camp). */
 export type Camp = 'fiction' | 'pouvoir' | 'culture';
 
-export interface DuelResult {
+/** Un tour de combat — le duel au `slot` indiqué agit ce tour-ci (les 5
+ *  duels tournent en boucle jusqu'à ce qu'une jauge de PV tombe à 0). */
+export interface RoundEvent {
+  round: number;
   slot: number;
   challengerCardId: number;
   opponentCardId: number;
-  /** ATTAQUE finale utilisée pour ce duel (après jitter, camp, momentum). */
+  /** ATTAQUE finale utilisée ce tour (posture, jitter, camp, momentum). */
   challengerAtk: number;
   opponentAtk: number;
-  /** DÉFENSE de base de la carte — pas de jitter ni de bonus dessus. */
+  /** DÉFENSE ajustée par la posture — pas de jitter dessus. */
   challengerDef: number;
   opponentDef: number;
+  /** Dégâts infligés par chaque camp ce tour-ci. */
+  challengerDamage: number;
+  opponentDamage: number;
+  /** PV restants de chaque équipe APRÈS ce tour (jamais négatif). */
+  challengerHp: number;
+  opponentHp: number;
   challengerCamp: Camp | null;
   opponentCamp: Camp | null;
   /** true si le camp de cette carte a l'avantage sur le camp adverse pour
-   *  ce duel précis (déjà pris en compte dans *Atk ci-dessus). */
+   *  ce duel (déjà pris en compte dans *Atk ci-dessus). */
   challengerCampAdvantage: boolean;
   opponentCampAdvantage: boolean;
-  /** true si cette carte profite du bonus de "lancée" (la carte précédente
-   *  de la même équipe a gagné son duel) — déjà pris en compte dans
-   *  *Atk ci-dessus. */
+  /** true si ce duel a infligé plus de dégâts qu'il n'en a subi le tour
+   *  précédent OÙ IL A AGI (déjà pris en compte dans *Atk ci-dessus). */
   challengerMomentum: boolean;
   opponentMomentum: boolean;
-  winner: 'challenger' | 'opponent' | 'tie';
 }
 
 export interface BattleResult {
-  duels: DuelResult[];
-  challengerRoundsWon: number;
-  opponentRoundsWon: number;
-  challengerTotalPower: number;
-  opponentTotalPower: number;
+  rounds: RoundEvent[];
+  challengerMaxHp: number;
+  opponentMaxHp: number;
   challengerSynergyBonus: number;
   opponentSynergyBonus: number;
   winner: 'challenger' | 'opponent' | 'tie';

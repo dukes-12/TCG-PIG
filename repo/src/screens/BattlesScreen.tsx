@@ -6,7 +6,8 @@ import Chip from '../components/Chip';
 import PigCard from '../components/PigCard';
 import { CARDS, SECRET_RARITY_ID, cardById } from '../data/catalog';
 import { apiCreateBattle, apiFetchBattles, apiFetchFriends, apiRespondBattle, type Battle, type TeamSlot } from '../lib/api';
-import { CAMP_INFO, campOf, cardStats, randomBotTeam, resolveBattle as resolveBattleLocally, type BotDifficulty } from '../lib/battle';
+import { CAMP_INFO, STANCE_INFO, campOf, cardStats, cardStatsWithStance, randomBotTeam, resolveBattle as resolveBattleLocally, type BotDifficulty } from '../lib/battle';
+import type { Stance } from '../lib/api';
 import { useAnimations } from '../lib/useAnimations';
 import { useStore } from '../state/store';
 import type { AvatarKey } from '../types';
@@ -99,8 +100,14 @@ export default function BattlesScreen() {
     setTeam((t) => {
       if (t.some((s) => s.cardId === cardId)) return t.filter((s) => s.cardId !== cardId);
       if (t.length >= 5) return t;
-      return [...t, { cardId, holo }];
+      return [...t, { cardId, holo, stance: 'attaque' }];
     });
+  };
+
+  // Posture par carte de l'équipe — choisie à la composition, voir
+  // functions/_lib/battle.ts (STANCE_MULT) pour l'effet exact.
+  const setSlotStance = (i: number, stance: Stance) => {
+    setTeam((t) => t.map((s, idx) => (idx === i ? { ...s, stance } : s)));
   };
 
   // Équipe favorite (proposition C) — proposée d'office à l'ouverture du
@@ -129,7 +136,10 @@ export default function BattlesScreen() {
   };
 
   const isCurrentTeamFavorite =
-    team.length === 5 && !!favoriteTeam && favoriteTeam.length === 5 && team.every((s, i) => favoriteTeam[i]?.cardId === s.cardId && favoriteTeam[i]?.holo === s.holo);
+    team.length === 5 &&
+    !!favoriteTeam &&
+    favoriteTeam.length === 5 &&
+    team.every((s, i) => favoriteTeam[i]?.cardId === s.cardId && favoriteTeam[i]?.holo === s.holo && favoriteTeam[i]?.stance === s.stance);
 
   const toggleFavorite = () => {
     if (isCurrentTeamFavorite) {
@@ -219,10 +229,12 @@ export default function BattlesScreen() {
         <h1 style={{ fontSize: 30, margin: 0, lineHeight: 1 }}>Combats</h1>
         <p style={{ fontSize: 13, opacity: 0.6, margin: '10px 0 0', textWrap: 'pretty' as const }}>
           5 cartes, chacune avec une ⚔️ Attaque et une 🛡️ Défense (rareté = puissance, holo = +50%, profil propre à
-          chaque carte). Un duel se gagne en perçant la défense d'en face. Trois camps se contrent façon
-          pierre-papier-ciseaux ({CAMP_INFO.pouvoir.icon} bat {CAMP_INFO.fiction.icon} bat {CAMP_INFO.culture.icon} bat{' '}
-          {CAMP_INFO.pouvoir.icon}) et gagner un duel donne de la lancée 🔥 à ta carte suivante — l'ordre compte.
-          Asynchrone : ton adversaire répond quand il veut.
+          chaque carte) et une posture à ta discrétion : ⚔️ Attaque (frappe plus fort, encaisse plus) ou 🛡️ Défense
+          (l'inverse). Chaque équipe a une jauge de PV commune, le combat se joue en plusieurs tours — pas un résultat
+          instantané. Trois camps se contrent façon pierre-papier-ciseaux ({CAMP_INFO.pouvoir.icon} bat{' '}
+          {CAMP_INFO.fiction.icon} bat {CAMP_INFO.culture.icon} bat {CAMP_INFO.pouvoir.icon}) et un duel qui inflige
+          plus de dégâts qu'il n'en subit donne de la lancée 🔥 la fois suivante. Asynchrone : ton adversaire répond
+          quand il veut.
         </p>
       </div>
 
@@ -313,44 +325,65 @@ export default function BattlesScreen() {
             </button>
           </div>
 
-          <div style={{ display: 'flex', gap: 8, padding: '10px 0', minHeight: 60 }}>
+          <div style={{ display: 'flex', gap: 8, padding: '10px 0', minHeight: 88 }}>
             {Array.from({ length: 5 }).map((_, i) => {
               const slot = team[i];
               const card = slot ? cardById(slot.cardId) : null;
               const camp = card ? campOf(card.id) : null;
-              const stats = slot ? cardStats(slot.cardId, slot.holo) : null;
+              const stats = slot ? cardStatsWithStance(slot.cardId, slot.holo, slot.stance) : null;
               return (
-                <div key={i} style={{ position: 'relative', width: 46, aspectRatio: '0.72', flex: 'none', borderRadius: 10, background: 'var(--color-neutral-200)', overflow: 'hidden' }}>
-                  {card ? <PigCard card={card} holoAnim={holoAnim} ownedCount={1} isHolo={slot!.holo} /> : null}
-                  {camp && (
-                    <span
-                      title={CAMP_INFO[camp].label}
-                      style={{ position: 'absolute', top: 2, left: 2, fontSize: 11, filter: 'drop-shadow(0 1px 1px rgba(0,0,0,.4))' }}
-                    >
-                      {CAMP_INFO[camp].icon}
-                    </span>
-                  )}
-                  {stats && (
-                    <div
+                <div key={i} style={{ display: 'flex', flexDirection: 'column', gap: 4, width: 46, flex: 'none' }}>
+                  <div style={{ position: 'relative', width: 46, aspectRatio: '0.72', borderRadius: 10, background: 'var(--color-neutral-200)', overflow: 'hidden' }}>
+                    {card ? <PigCard card={card} holoAnim={holoAnim} ownedCount={1} isHolo={slot!.holo} /> : null}
+                    {camp && (
+                      <span
+                        title={CAMP_INFO[camp].label}
+                        style={{ position: 'absolute', top: 2, left: 2, fontSize: 11, filter: 'drop-shadow(0 1px 1px rgba(0,0,0,.4))' }}
+                      >
+                        {CAMP_INFO[camp].icon}
+                      </span>
+                    )}
+                    {stats && (
+                      <div
+                        style={{
+                          position: 'absolute',
+                          bottom: 0,
+                          left: 0,
+                          right: 0,
+                          padding: '2px 0',
+                          fontSize: 8.5,
+                          fontWeight: 700,
+                          textAlign: 'center',
+                          color: '#fff',
+                          background: 'rgba(0,0,0,.45)',
+                          display: 'flex',
+                          justifyContent: 'center',
+                          gap: 5,
+                        }}
+                      >
+                        <span>⚔️{stats.atk}</span>
+                        <span>🛡️{stats.def}</span>
+                      </div>
+                    )}
+                  </div>
+                  {slot && (
+                    <button
+                      className="pressable"
+                      onClick={() => setSlotStance(i, slot.stance === 'attaque' ? 'defense' : 'attaque')}
+                      title="Changer de posture"
                       style={{
-                        position: 'absolute',
-                        bottom: 0,
-                        left: 0,
-                        right: 0,
-                        padding: '2px 0',
-                        fontSize: 8.5,
+                        border: 0,
+                        cursor: 'pointer',
+                        borderRadius: 999,
+                        padding: '3px 0',
+                        fontSize: 9,
                         fontWeight: 700,
-                        textAlign: 'center',
-                        color: '#fff',
-                        background: 'rgba(0,0,0,.45)',
-                        display: 'flex',
-                        justifyContent: 'center',
-                        gap: 5,
+                        background: slot.stance === 'attaque' ? 'var(--color-accent-200)' : 'var(--color-accent-2-200)',
+                        color: slot.stance === 'attaque' ? 'var(--color-accent-800)' : 'var(--color-accent-2-800)',
                       }}
                     >
-                      <span>⚔️{stats.atk}</span>
-                      <span>🛡️{stats.def}</span>
-                    </div>
+                      {STANCE_INFO[slot.stance].icon} {STANCE_INFO[slot.stance].label}
+                    </button>
                   )}
                 </div>
               );
@@ -359,6 +392,7 @@ export default function BattlesScreen() {
           <div style={{ fontSize: 11, opacity: 0.55, marginBottom: 4 }}>{team.length}/5 — {teamPreview.map((c) => c.name).join(', ') || 'aucune carte choisie'}</div>
           <div style={{ fontSize: 10.5, opacity: 0.5, marginBottom: 10 }}>
             L'ordre des cartes ci-dessus est l'ordre des duels — la 1ère carte affronte la 1ère de l'adversaire, etc.
+            Touche la pastille sous une carte pour changer sa posture.
           </div>
 
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,minmax(0,1fr))', gap: 8, maxHeight: '38vh', overflowY: 'auto' }}>

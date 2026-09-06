@@ -62,16 +62,19 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env, params }
     .run();
 
   // Récompense de victoire en glands (aucune en cas d'égalité) — scalée sur
-  // la puissance de l'équipe VAINCUE, pas sur celle du vainqueur : battre un
+  // les PV max de l'équipe VAINCUE, pas sur ceux du vainqueur : battre un
   // adversaire déjà costaud rapporte gros, battre un adversaire famélique
   // presque rien, sinon "défier en boucle le même joueur faible" serait la
   // stratégie optimale. Bornée pour rester un à-côté de l'économie des sacs
-  // (100 glands le moins cher), pas un moyen de la contourner.
+  // (100 glands le moins cher), pas un moyen de la contourner. Facteur
+  // ×0.25 (pas ×0.4 comme avant le passage aux PV) : l'échelle des PV
+  // (def×4 par carte, ~20 à ~440 pour une équipe) est plus large que
+  // l'ancienne puissance totale.
   let reward: { amount: number; toMe: boolean } | undefined;
   if (result.winner !== 'tie') {
     const winnerIsChallenger = result.winner === 'challenger';
-    const loserTotalPower = winnerIsChallenger ? result.opponentTotalPower : result.challengerTotalPower;
-    const amount = Math.min(80, Math.max(8, Math.round(loserTotalPower * 0.4)));
+    const loserMaxHp = winnerIsChallenger ? result.opponentMaxHp : result.challengerMaxHp;
+    const amount = Math.min(80, Math.max(8, Math.round(loserMaxHp * 0.25)));
     const winnerId = winnerIsChallenger ? battle.challenger_id : me.id;
     const winnerRow = winnerIsChallenger ? challengerRow : meRow;
     const winnerState = JSON.parse(winnerRow?.state_json || '{}') as Record<string, unknown>;

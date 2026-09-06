@@ -90,6 +90,58 @@ avec comptes utilisateurs.
 >   a percé la défense adverse) et dans le composeur (`BattlesScreen`, badge
 >   ⚔️/🛡️ sur chaque carte de la sélection et de l'équipe en cours).
 >
+> **Quatrième passage** ("il faut un mode attaque et défense et chaque
+> joueur a un nombre de PV, le combat se déroule progressivement... augmente
+> aussi le niveau des bots") — le combat "5 duels slot à slot, résolu
+> d'un coup" des passages précédents devient un vrai combat à **points de
+> vie**, en **plusieurs tours** :
+> - **Chaque équipe a une jauge de PV commune** (pas par carte) : somme de
+>   la DÉFENSE *de base* de ses 5 cartes ×4, +15% si bonus de synergie. Basé
+>   sur la défense *de base*, pas ajustée par la posture — sinon choisir
+>   "défense" gonflerait à la fois les PV et l'encaissement, une stratégie
+>   strictement dominante (vérifié par simulation : 68% de victoires sans ce
+>   découplage, ~50% avec).
+> - **Posture ⚔️ Attaque / 🛡️ Défense**, choisie PAR CARTE à la composition
+>   de l'équipe (`TeamSlot.stance`) — reste asynchrone, pas de décision en
+>   direct pendant le combat. Attaque : ATTAQUE ×1,15, DÉFENSE ×0,85.
+>   Défense : ATTAQUE ×0,88, DÉFENSE ×1,18. Calibré par simulation pour un
+>   vrai choix (~50/50 entre une équipe "tout attaque" et "tout défense" à
+>   profil de cartes égal par ailleurs), pas une posture strictement
+>   meilleure.
+> - **Résolution en tours** : les 5 duels (carte *i* contre carte *i*)
+>   tournent en boucle — carte 1, carte 2, …, carte 5, puis on reboucle sur
+>   la carte 1 — chaque tour inflige des dégâts des deux côtés (`max(1,
+>   ATTAQUE − DÉFENSE d'en face)`, au moins 1 point de dégâts pour ne jamais
+>   staller), jusqu'à ce qu'une jauge de PV tombe à 0. Une dizaine à une
+>   cinquantaine de tours pour un combat typique (vérifié par simulation),
+>   pas un résultat instantané.
+> - **Camp et momentum recalibrés pour s'appliquer À CHAQUE TOUR** où le
+>   duel concerné agit (pas une fois) — `CAMP_ADVANTAGE_MULTIPLIER` 3,5 → 1,4
+>   et `MOMENTUM_MULTIPLIER` 1,3 → 1,15 : un avantage modeste qui se répète
+>   une dizaine de fois pèse déjà lourd sur la durée d'un combat (~70% de
+>   victoires avec 1 seul duel avantagé sur 5, vérifié par simulation).
+>   Momentum redéfini pour ce modèle : le duel *i* garde en mémoire s'il a
+>   infligé plus de dégâts qu'il n'en a subi la dernière fois qu'IL a agi
+>   (le fil "carte *i* contre carte *i*" reste le même sur toute la durée
+>   du combat).
+> - **`BattleResultOverlay` révèle le combat PROGRESSIVEMENT**, tour par
+>   tour (bouton "Passer" pour sauter l'animation) — deux jauges de PV qui
+>   descendent au fil d'un journal de combat qui se remplit, pas un score
+>   déjà là dès l'ouverture. Vitesse adaptée au nombre de tours (plus rapide
+>   si le combat est long) pour ne pas transformer un combat serré en
+>   attente interminable.
+> - **Niveau des bots relevé** (poids de rareté par difficulté et chance de
+>   holo, tous les trois crans) — les combats à PV durent plus longtemps
+>   qu'avant, un bot trop mou devient vite ennuyeux plutôt que juste facile.
+>   Le bot choisit aussi sa posture par une heuristique simple (Attaque si
+>   son ATTAQUE dépasse sa DÉFENSE, Défense sinon) plutôt qu'un choix
+>   uniforme.
+> - **Rupture de compatibilité assumée** : la forme du résultat stocké
+>   change entièrement (`duels`/`challengerPower` → `rounds`/PV/postures).
+>   Les combats déjà terminés et stockés en base avant ce passage ne se
+>   réafficheront pas correctement depuis l'historique — acceptable sur
+>   cette branche de test, pas de migration prévue.
+>
 > Le reste de ce document (schéma Postgres/Supabase, phasage, questions
 > restées ouvertes) garde sa valeur de référence historique mais ne
 > correspond plus à l'implémentation réelle (Cloudflare D1, pas Supabase —
