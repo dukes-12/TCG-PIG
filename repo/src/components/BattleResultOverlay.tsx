@@ -223,6 +223,9 @@ function RoundRow({
         camp={round.challengerCamp}
         campAdvantage={round.challengerCampAdvantage}
         momentum={round.challengerMomentum}
+        desperation={round.challengerDesperation}
+        crit={round.challengerCrit}
+        blocked={round.challengerBlocked}
         holoAnim={holoAnim}
         align="left"
       />
@@ -237,6 +240,9 @@ function RoundRow({
         camp={round.opponentCamp}
         campAdvantage={round.opponentCampAdvantage}
         momentum={round.opponentMomentum}
+        desperation={round.opponentDesperation}
+        crit={round.opponentCrit}
+        blocked={round.opponentBlocked}
         holoAnim={holoAnim}
         align="right"
       />
@@ -254,6 +260,9 @@ function RoundSide({
   camp,
   campAdvantage,
   momentum,
+  desperation,
+  crit,
+  blocked,
   holoAnim,
   align,
 }: {
@@ -266,6 +275,9 @@ function RoundSide({
   camp: Camp | null;
   campAdvantage: boolean;
   momentum: boolean;
+  desperation: boolean;
+  crit: boolean;
+  blocked: boolean;
   holoAnim: boolean;
   align: 'left' | 'right';
 }) {
@@ -290,8 +302,15 @@ function RoundSide({
           <span title="Attaque">⚔️{atk}</span>
           <span title="Défense">🛡️{def}</span>
           {momentum && <span title="Lancée : bonus d'attaque">🔥</span>}
+          {desperation && <span title="Sursaut du désespoir : bonus d'attaque sous 25% de PV">💢</span>}
         </div>
-        <div style={{ fontSize: 11, fontWeight: 800, color: 'var(--color-accent-800)' }}>-{damage} PV</div>
+        {blocked ? (
+          <div style={{ fontSize: 11, fontWeight: 800, opacity: 0.6 }}>🚫 Bloqué !</div>
+        ) : (
+          <div style={{ fontSize: 11, fontWeight: 800, color: crit ? '#c0503f' : 'var(--color-accent-800)' }}>
+            {crit && '🎯 '}-{damage} PV
+          </div>
+        )}
       </div>
     </div>
   );

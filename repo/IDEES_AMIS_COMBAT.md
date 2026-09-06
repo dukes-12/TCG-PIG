@@ -170,6 +170,33 @@ avec comptes utilisateurs.
 >   l'icône de camp, sur chaque carte de chaque tour) — jusque-là visible
 >   seulement dans le composeur d'équipe, pas dans le récapitulatif.
 >
+> **Sixième passage** (choix parmi des propositions de nouvelles mécaniques
+> — les trois retenues) — s'ajoutent au calcul ci-dessus :
+> - **Sursaut du désespoir** : +30% d'ATTAQUE (additif, comme camp/momentum)
+>   pour une équipe sous 25% de ses PV max — évalué au *début* de chaque
+>   tour sur les PV du moment (pas un état mémorisé comme le momentum) —
+>   pour permettre de vrais retournements de situation en fin de combat.
+> - **Coup critique** : 15% de chances par attaque de doubler les dégâts
+>   infligés ce tour-là.
+> - **Bouclier** : 12% de chances de bloquer complètement une attaque (0
+>   dégâts, sous le minimum de 1 habituel) — vérifié *avant* le coup
+>   critique, un coup bloqué ne peut pas aussi être critique (fréquence de
+>   critique réellement observée : ~13% = 88% × 15%, pas 15% pile).
+>   Symétriques (mêmes chances pour les deux équipes), donc neutres sur
+>   l'équilibre moyen — leur rôle est d'ajouter des moments de tension
+>   visibles, pas de favoriser un camp. Recalibrage vérifié par simulation :
+>   rareté toujours décisive, posture toujours ~50/50, avantage de camp
+>   toujours ~62-70%.
+> - Ces deux derniers réintroduisent de l'aléa par tour (contrairement à
+>   l'ATTAQUE elle-même, restée déterministe) — volontairement, à la
+>   différence de l'ancien ±10% retiré au passage précédent : ce sont des
+>   événements **visibles** (icônes 🎯/🚫 + libellé "Bloqué !" dans le
+>   journal de combat), jamais fondus silencieusement dans le chiffre
+>   d'ATTAQUE affiché.
+> - Affiché dans `BattleResultOverlay` : 💢 (désespoir) à côté des autres
+>   icônes de statut, 🎯 devant les dégâts en cas de critique, "🚫 Bloqué !"
+>   à la place des dégâts en cas de blocage.
+>
 > Le reste de ce document (schéma Postgres/Supabase, phasage, questions
 > restées ouvertes) garde sa valeur de référence historique mais ne
 > correspond plus à l'implémentation réelle (Cloudflare D1, pas Supabase —

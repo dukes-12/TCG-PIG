@@ -17,14 +17,17 @@ import { CARD_META } from './cardMeta';
  *  moins fort, encaisse moins) — un vrai choix, pas un dominant strict
  *  (vérifié par simulation : ~50/50 à profil de cartes égal par ailleurs).
  *
- *  Triangle de camps et momentum s'ADDITIONNENT en un seul bonus d'ATTAQUE
- *  (pas de multiplicateurs enchaînés) : `+50%` si avantage de camp, `+40%`
- *  si en lancée, les deux cumulés donnent simplement `+90%`. Le résultat
- *  est entièrement DÉTERMINISTE — pas d'aléa par tour (l'ancien ±10% a été
- *  retiré : à situation égale, un duel fait toujours les mêmes dégâts,
- *  plus facile à vérifier et à comprendre). La variété vient des vraies
- *  différences entre cartes (stats propres, posture, camp, lancée), pas
- *  d'un tirage caché en plus. */
+ *  Triangle de camps, momentum et sursaut du désespoir s'ADDITIONNENT en un
+ *  seul bonus d'ATTAQUE (pas de multiplicateurs enchaînés) : `+50%` si
+ *  avantage de camp, `+40%` si en lancée, `+30%` sous 25% de PV restants —
+ *  cumulés, ces bonus s'ajoutent simplement (jamais de multiplicateurs
+ *  enchaînés du genre ×1.5×1.4). Le calcul de dégâts lui-même reste
+ *  déterministe (pas d'aléa caché dans l'ATTAQUE affichée — l'ancien ±10%
+ *  a été retiré : à situation égale, un duel fait toujours les mêmes
+ *  dégâts). Deux événements ponctuels restent aléatoires mais sont
+ *  toujours VISIBLES dans le résultat (jamais fondus dans un chiffre) :
+ *  coup critique (double les dégâts) et bouclier (les annule) — voir
+ *  CRIT_CHANCE / BLOCK_CHANCE plus bas. */
 
 const SECRET_RARITY_ID = 7;
 
@@ -132,6 +135,25 @@ const CAMP_ADVANTAGE_BONUS = 0.5;
  *  adversaire sans aucun bonus. */
 const MOMENTUM_BONUS = 0.4;
 
+/** Bonus d'ATTAQUE (additif) pour une équipe tombée sous
+ *  DESPERATION_THRESHOLD de ses PV max — permet de vrais retournements de
+ *  situation en fin de combat plutôt qu'une fin jouée d'avance. Évalué au
+ *  début de CHAQUE tour sur les PV du moment (peut s'activer puis se
+ *  désactiver si l'équipe encaisse un mauvais coup puis en inflige un bon,
+ *  aucun état à mémoriser). Calibré par simulation pour ne pas suffire à
+ *  elle seule à renverser un écart de rareté entière. */
+const DESPERATION_BONUS = 0.3;
+const DESPERATION_THRESHOLD = 0.25;
+
+/** Coup critique : chance de doubler les dégâts d'une attaque. Bouclier :
+ *  chance de les annuler complètement (0, pas même le minimum de 1
+ *  garanti d'habitude) — vérifiée en premier, un coup bloqué ne peut pas
+ *  aussi être critique. Les deux sont symétriques (mêmes chances pour les
+ *  deux équipes) donc neutres sur l'équilibre en moyenne ; leur rôle est
+ *  d'ajouter des moments de tension visibles, pas de favoriser un camp. */
+const CRIT_CHANCE = 0.15;
+const BLOCK_CHANCE = 0.12;
+
 /** PV d'équipe = somme de la DÉFENSE DE BASE (non ajustée par la posture)
  *  des 5 cartes ×HP_MULT. Volontairement basé sur la défense *de base* et
  *  pas la défense ajustée par la posture : sinon choisir "défense" gonfle
@@ -170,7 +192,9 @@ export interface RoundEvent {
   /** DÉFENSE ajustée par la posture — pas de jitter dessus. */
   challengerDef: number;
   opponentDef: number;
-  /** Dégâts infligés par chaque camp ce tour-ci. */
+  /** Dégâts infligés par chaque camp ce tour-ci (après coup critique et
+   *  bouclier éventuels — c'est le nombre qui a vraiment été retranché des
+   *  PV adverses). */
   challengerDamage: number;
   opponentDamage: number;
   /** PV restants de chaque équipe APRÈS ce tour (jamais négatif). */
@@ -182,6 +206,19 @@ export interface RoundEvent {
   opponentCampAdvantage: boolean;
   challengerMomentum: boolean;
   opponentMomentum: boolean;
+  /** true si l'équipe était sous DESPERATION_THRESHOLD de ses PV max au
+   *  début de ce tour (déjà pris en compte dans *Atk ci-dessus). */
+  challengerDesperation: boolean;
+  opponentDesperation: boolean;
+  /** true si l'attaque de cette carte ce tour-ci était un coup critique
+   *  (déjà pris en compte dans *Damage ci-dessus). */
+  challengerCrit: boolean;
+  opponentCrit: boolean;
+  /** true si l'attaque de cette carte ce tour-ci a été bloquée par
+   *  l'adversaire (0 dégâts infligés, sous le minimum de 1 habituel —
+   *  déjà pris en compte dans *Damage ci-dessus). */
+  challengerBlocked: boolean;
+  opponentBlocked: boolean;
 }
 
 export interface BattleResult {
@@ -263,16 +300,34 @@ export function resolveBattle(challengerTeam: TeamSlot[], opponentTeam: TeamSlot
     // faut afficher pour ce tour.
     const cHadMomentum = cMomentum[i];
     const oHadMomentum = oMomentum[i];
+    // Évalué sur les PV du DÉBUT de ce tour, jamais mis à jour après coup
+    // (contrairement au momentum, ce n'est pas un état qui se mémorise
+    // d'un tour à l'autre — juste une lecture de la situation actuelle).
+    const cDesperate = hpC / challengerMaxHp < DESPERATION_THRESHOLD;
+    const oDesperate = hpO / opponentMaxHp < DESPERATION_THRESHOLD;
 
-    // Bonus additionnés, pas multipliés : +50% + +40% cumulés donne +90%,
-    // jamais ×1.5×1.4 (=×2.1) — plus simple à calculer et à prévoir.
-    const cBonus = (cAdv ? CAMP_ADVANTAGE_BONUS : 0) + (cHadMomentum ? MOMENTUM_BONUS : 0);
-    const oBonus = (oAdv ? CAMP_ADVANTAGE_BONUS : 0) + (oHadMomentum ? MOMENTUM_BONUS : 0);
+    // Bonus additionnés, pas multipliés : +50% + +40% + +30% cumulés donne
+    // +120%, jamais un enchaînement de multiplicateurs — plus simple à
+    // calculer et à prévoir.
+    const cBonus = (cAdv ? CAMP_ADVANTAGE_BONUS : 0) + (cHadMomentum ? MOMENTUM_BONUS : 0) + (cDesperate ? DESPERATION_BONUS : 0);
+    const oBonus = (oAdv ? CAMP_ADVANTAGE_BONUS : 0) + (oHadMomentum ? MOMENTUM_BONUS : 0) + (oDesperate ? DESPERATION_BONUS : 0);
     const atkC = Math.round(cStats[i].atk * (1 + cBonus));
     const atkO = Math.round(oStats[i].atk * (1 + oBonus));
 
-    const dmgToO = Math.max(1, atkC - oStats[i].def);
-    const dmgToC = Math.max(1, atkO - cStats[i].def);
+    // Bouclier vérifié avant coup critique — un coup bloqué reste bloqué
+    // même s'il aurait aussi été critique.
+    let dmgToO = Math.max(1, atkC - oStats[i].def);
+    let cCrit = false;
+    const cBlocked = Math.random() < BLOCK_CHANCE;
+    if (cBlocked) dmgToO = 0;
+    else if ((cCrit = Math.random() < CRIT_CHANCE)) dmgToO *= 2;
+
+    let dmgToC = Math.max(1, atkO - cStats[i].def);
+    let oCrit = false;
+    const oBlocked = Math.random() < BLOCK_CHANCE;
+    if (oBlocked) dmgToC = 0;
+    else if ((oCrit = Math.random() < CRIT_CHANCE)) dmgToC *= 2;
+
     hpO = Math.max(0, hpO - dmgToO);
     hpC = Math.max(0, hpC - dmgToC);
     cMomentum[i] = dmgToO > dmgToC;
@@ -297,6 +352,12 @@ export function resolveBattle(challengerTeam: TeamSlot[], opponentTeam: TeamSlot
       opponentCampAdvantage: oAdv,
       challengerMomentum: cHadMomentum,
       opponentMomentum: oHadMomentum,
+      challengerDesperation: cDesperate,
+      opponentDesperation: oDesperate,
+      challengerCrit: cCrit,
+      opponentCrit: oCrit,
+      challengerBlocked: cBlocked,
+      opponentBlocked: oBlocked,
     });
     round++;
   }

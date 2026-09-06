@@ -130,13 +130,15 @@ export interface RoundEvent {
   slot: number;
   challengerCardId: number;
   opponentCardId: number;
-  /** ATTAQUE finale utilisée ce tour (posture, jitter, camp, momentum). */
+  /** ATTAQUE finale utilisée ce tour (posture, camp, momentum, désespoir —
+   *  aucun aléa caché dedans, voir functions/_lib/battle.ts). */
   challengerAtk: number;
   opponentAtk: number;
-  /** DÉFENSE ajustée par la posture — pas de jitter dessus. */
+  /** DÉFENSE ajustée par la posture — jamais boostée en cours de combat. */
   challengerDef: number;
   opponentDef: number;
-  /** Dégâts infligés par chaque camp ce tour-ci. */
+  /** Dégâts infligés par chaque camp ce tour-ci (après coup critique et
+   *  bouclier éventuels). */
   challengerDamage: number;
   opponentDamage: number;
   /** PV restants de chaque équipe APRÈS ce tour (jamais négatif). */
@@ -152,6 +154,18 @@ export interface RoundEvent {
    *  précédent OÙ IL A AGI (déjà pris en compte dans *Atk ci-dessus). */
   challengerMomentum: boolean;
   opponentMomentum: boolean;
+  /** true si l'équipe était sous 25% de ses PV max au début de ce tour
+   *  (déjà pris en compte dans *Atk ci-dessus). */
+  challengerDesperation: boolean;
+  opponentDesperation: boolean;
+  /** true si cette attaque a fait un coup critique (dégâts doublés, déjà
+   *  pris en compte dans *Damage ci-dessus). */
+  challengerCrit: boolean;
+  opponentCrit: boolean;
+  /** true si cette attaque a été bloquée par l'adversaire (0 dégâts, déjà
+   *  pris en compte dans *Damage ci-dessus). */
+  challengerBlocked: boolean;
+  opponentBlocked: boolean;
 }
 
 export interface BattleResult {

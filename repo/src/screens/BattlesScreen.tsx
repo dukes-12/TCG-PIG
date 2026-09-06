@@ -236,9 +236,10 @@ export default function BattlesScreen() {
           chaque carte) et une posture à ta discrétion : ⚔️ Attaque (frappe plus fort, encaisse plus) ou 🛡️ Défense
           (l'inverse). Chaque équipe a une jauge de PV commune, le combat se joue en plusieurs tours — pas un résultat
           instantané. Trois camps se contrent façon pierre-papier-ciseaux ({CAMP_INFO.pouvoir.icon} bat{' '}
-          {CAMP_INFO.fiction.icon} bat {CAMP_INFO.culture.icon} bat {CAMP_INFO.pouvoir.icon}) et un duel qui inflige
-          plus de dégâts qu'il n'en subit donne de la lancée 🔥 la fois suivante. Asynchrone : ton adversaire répond
-          quand il veut.
+          {CAMP_INFO.fiction.icon} bat {CAMP_INFO.culture.icon} bat {CAMP_INFO.pouvoir.icon}), un duel qui inflige plus
+          de dégâts qu'il n'en subit donne de la lancée 🔥 la fois suivante, et une équipe sous 25% de PV se bat avec
+          les tripes (💢 bonus d'attaque). Chaque tour, 🎯 15% de chances de coup critique (double les dégâts) et 🚫
+          12% de bloquer complètement une attaque. Asynchrone : ton adversaire répond quand il veut.
         </p>
       </div>
 

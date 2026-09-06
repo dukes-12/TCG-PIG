@@ -93,6 +93,10 @@ const CAMP_BEATS: Record<Camp, Camp> = { fiction: 'culture', culture: 'pouvoir',
 // le détail et le calibrage.
 const CAMP_ADVANTAGE_BONUS = 0.5;
 const MOMENTUM_BONUS = 0.4;
+const DESPERATION_BONUS = 0.3;
+const DESPERATION_THRESHOLD = 0.25;
+const CRIT_CHANCE = 0.15;
+const BLOCK_CHANCE = 0.12;
 const HP_MULTIPLIER = 4;
 const MAX_ROUNDS = 300;
 
@@ -182,14 +186,26 @@ export function resolveBattle(challengerTeam: TeamSlot[], opponentTeam: TeamSlot
     const oAdv = oStats[i].camp !== null && cStats[i].camp !== null && CAMP_BEATS[oStats[i].camp!] === cStats[i].camp;
     const cHadMomentum = cMomentum[i];
     const oHadMomentum = oMomentum[i];
+    const cDesperate = hpC / challengerMaxHp < DESPERATION_THRESHOLD;
+    const oDesperate = hpO / opponentMaxHp < DESPERATION_THRESHOLD;
 
-    const cBonus = (cAdv ? CAMP_ADVANTAGE_BONUS : 0) + (cHadMomentum ? MOMENTUM_BONUS : 0);
-    const oBonus = (oAdv ? CAMP_ADVANTAGE_BONUS : 0) + (oHadMomentum ? MOMENTUM_BONUS : 0);
+    const cBonus = (cAdv ? CAMP_ADVANTAGE_BONUS : 0) + (cHadMomentum ? MOMENTUM_BONUS : 0) + (cDesperate ? DESPERATION_BONUS : 0);
+    const oBonus = (oAdv ? CAMP_ADVANTAGE_BONUS : 0) + (oHadMomentum ? MOMENTUM_BONUS : 0) + (oDesperate ? DESPERATION_BONUS : 0);
     const atkC = Math.round(cStats[i].atk * (1 + cBonus));
     const atkO = Math.round(oStats[i].atk * (1 + oBonus));
 
-    const dmgToO = Math.max(1, atkC - oStats[i].def);
-    const dmgToC = Math.max(1, atkO - cStats[i].def);
+    let dmgToO = Math.max(1, atkC - oStats[i].def);
+    let cCrit = false;
+    const cBlocked = Math.random() < BLOCK_CHANCE;
+    if (cBlocked) dmgToO = 0;
+    else if ((cCrit = Math.random() < CRIT_CHANCE)) dmgToO *= 2;
+
+    let dmgToC = Math.max(1, atkO - cStats[i].def);
+    let oCrit = false;
+    const oBlocked = Math.random() < BLOCK_CHANCE;
+    if (oBlocked) dmgToC = 0;
+    else if ((oCrit = Math.random() < CRIT_CHANCE)) dmgToC *= 2;
+
     hpO = Math.max(0, hpO - dmgToO);
     hpC = Math.max(0, hpC - dmgToC);
     cMomentum[i] = dmgToO > dmgToC;
@@ -214,6 +230,12 @@ export function resolveBattle(challengerTeam: TeamSlot[], opponentTeam: TeamSlot
       opponentCampAdvantage: oAdv,
       challengerMomentum: cHadMomentum,
       opponentMomentum: oHadMomentum,
+      challengerDesperation: cDesperate,
+      opponentDesperation: oDesperate,
+      challengerCrit: cCrit,
+      opponentCrit: oCrit,
+      challengerBlocked: cBlocked,
+      opponentBlocked: oBlocked,
     });
     round++;
   }
