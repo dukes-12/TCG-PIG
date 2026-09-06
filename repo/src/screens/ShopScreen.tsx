@@ -2,7 +2,7 @@ import { useNavigate } from 'react-router-dom';
 import DailyBoosterBanner from '../components/DailyBoosterBanner';
 import FreeBoosterBanner from '../components/FreeBoosterBanner';
 import GlandsPill from '../components/GlandsPill';
-import LotteryBanner from '../components/LotteryBanner';
+import SlotMachineBanner from '../components/SlotMachineBanner';
 import Snout from '../components/Snout';
 import WheelBanner from '../components/WheelBanner';
 import { PACKS } from '../data/catalog';
@@ -119,7 +119,7 @@ export default function ShopScreen() {
       </div>
 
       <div style={{ padding: '13px 18px 20px' }}>
-        <LotteryBanner />
+        <SlotMachineBanner />
       </div>
     </div>
   );
