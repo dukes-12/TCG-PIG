@@ -1,6 +1,7 @@
 import type { PointerEvent as ReactPointerEvent } from 'react';
 import { useNavigate } from 'react-router-dom';
 import CardBack from '../components/CardBack';
+import HoloPullFx from '../components/HoloPullFx';
 import PackPicker from '../components/PackPicker';
 import PigCard from '../components/PigCard';
 import QtyPicker from '../components/QtyPicker';
@@ -381,6 +382,11 @@ export default function OpenScreen() {
                 RarePullFx se fier seul à son test `rarity < 4`. */}
             <RarePullFx key={`fx-${pullIndex}`} rarity={card.rarity} active={revealed && !isSecret} enabled={holoAnim} />
             <SecretRevealFx key={`sfx-${pullIndex}`} active={revealed && isSecret} enabled={holoAnim} />
+            {/* Peut se jouer en même temps que RarePullFx (carte à la fois
+                rare et holo) — holo et secrète sont mutuellement exclusifs
+                côté tirage (voir store.ts), donc pas besoin d'un `!isSecret`
+                ici comme pour RarePullFx. */}
+            <HoloPullFx key={`hfx-${pullIndex}`} active={revealed && isHolo} enabled={holoAnim} />
 
             <div
               style={{
