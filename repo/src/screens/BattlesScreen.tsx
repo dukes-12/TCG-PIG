@@ -167,10 +167,10 @@ export default function BattlesScreen() {
       if (compose.bot) {
         // Zone de test — tout se passe en local, jamais d'appel serveur ni
         // de ligne ajoutée à l'historique (pas un vrai adversaire, pas de
-        // compte). Graine aléatoire à chaque défi pour ne pas rejouer
-        // toujours le même combat contre la même équipe de bot.
+        // compte). randomBotTeam() tire une équipe différente à chaque
+        // défi (resolveBattle lui-même est déterministe, sans aléa).
         const opponentTeam = randomBotTeam(compose.bot);
-        const result = resolveBattleLocally(Math.floor(Math.random() * 2 ** 31), team, opponentTeam);
+        const result = resolveBattleLocally(team, opponentTeam);
         setViewing({
           id: -1,
           challengerUsername: account ?? 'Toi',

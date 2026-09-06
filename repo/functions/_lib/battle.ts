@@ -16,8 +16,15 @@ import { CARD_META } from './cardMeta';
  *  l'équipe — Attaque (frappe plus fort, encaisse plus) ou Défense (frappe
  *  moins fort, encaisse moins) — un vrai choix, pas un dominant strict
  *  (vérifié par simulation : ~50/50 à profil de cartes égal par ailleurs).
- *  Triangle de camps et momentum s'appliquent à l'ATTAQUE, à chaque tour où
- *  le duel concerné agit (pas juste une fois). */
+ *
+ *  Triangle de camps et momentum s'ADDITIONNENT en un seul bonus d'ATTAQUE
+ *  (pas de multiplicateurs enchaînés) : `+50%` si avantage de camp, `+40%`
+ *  si en lancée, les deux cumulés donnent simplement `+90%`. Le résultat
+ *  est entièrement DÉTERMINISTE — pas d'aléa par tour (l'ancien ±10% a été
+ *  retiré : à situation égale, un duel fait toujours les mêmes dégâts,
+ *  plus facile à vérifier et à comprendre). La variété vient des vraies
+ *  différences entre cartes (stats propres, posture, camp, lancée), pas
+ *  d'un tirage caché en plus. */
 
 const SECRET_RARITY_ID = 7;
 
@@ -109,21 +116,21 @@ const TYPE_CAMP: Record<string, Camp> = {
  *  Pouvoir (70 cartes, 3,61) le plus faible. Voir IDEES_AMIS_COMBAT.md. */
 const CAMP_BEATS: Record<Camp, Camp> = { fiction: 'culture', culture: 'pouvoir', pouvoir: 'fiction' };
 
-/** Multiplicateur d'ATTAQUE par tour pour le duel dont le camp a
- *  l'avantage — plus faible qu'avant le passage au combat à PV (3,5 → 1,4)
- *  car il s'applique maintenant à CHAQUE tour où ce duel agit (une dizaine
- *  de fois dans un combat typique), pas une seule fois : un avantage
- *  modeste qui se répète pèse déjà lourd sur la durée. Calibré par
- *  simulation pour rester un vrai coup de pouce (~70% de victoires avec 1
- *  seul duel avantagé sur 5) sans devenir automatique. */
-const CAMP_ADVANTAGE_MULTIPLIER = 1.4;
+/** Bonus d'ATTAQUE (additif, pas multiplicatif) pour le duel dont le camp a
+ *  l'avantage, à chaque tour où il agit. Cumulé simplement avec le bonus de
+ *  lancée ci-dessous s'ils sont actifs tous les deux (+50% + 40% = +90%,
+ *  jamais ×1.5×1.4). Calibré par simulation (sans aléa) pour un vrai coup
+ *  de pouce à rareté égale (~65% de victoires avec 1 seul duel avantagé
+ *  sur 5) sans devenir automatique, et sans suffire seul à renverser un
+ *  écart de rareté entière (la rareté reste le facteur dominant). */
+const CAMP_ADVANTAGE_BONUS = 0.5;
 
-/** Multiplicateur d'ATTAQUE pour un duel qui a infligé plus de dégâts qu'il
- *  n'en a subi au tour précédent OÙ CE MÊME DUEL A AGI (le fil "carte i
- *  contre carte i" reste le même sur toute la durée du combat) — même
- *  logique de "lancée" qu'avant, adaptée aux dégâts au lieu d'une victoire
- *  de duel entier. */
-const MOMENTUM_MULTIPLIER = 1.15;
+/** Bonus d'ATTAQUE (additif) pour un duel qui a infligé plus de dégâts
+ *  qu'il n'en a subi au tour précédent OÙ CE MÊME DUEL A AGI (le fil
+ *  "carte i contre carte i" reste le même sur toute la durée du combat).
+ *  Calibré pour ~68% de victoires à rareté égale, seul face à un
+ *  adversaire sans aucun bonus. */
+const MOMENTUM_BONUS = 0.4;
 
 /** PV d'équipe = somme de la DÉFENSE DE BASE (non ajustée par la posture)
  *  des 5 cartes ×HP_MULT. Volontairement basé sur la défense *de base* et
@@ -224,25 +231,13 @@ function baseHp(team: TeamSlot[], synergy: number): number {
   return Math.round(raw * (1 + synergy));
 }
 
-// Mulberry32 — petit PRNG déterministe (même graine → même suite), pas
-// besoin de plus pour un jitter de combat reproductible.
-function mulberry32(seed: number) {
-  let s = seed | 0;
-  return () => {
-    s = (s + 0x6d2b79f5) | 0;
-    let t = Math.imul(s ^ (s >>> 15), 1 | s);
-    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
-    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
-  };
-}
-
-/** `battleId` sert de graine — un combat rejoué (ex. affiché à nouveau plus
- *  tard) donne toujours le même résultat, sans avoir à stocker autre chose
- *  que le texte des deux équipes (stocké quand même dans schema.sql, pour
- *  ne pas dépendre d'une recomposition à l'identique de CARD_META si
- *  jamais une carte change de rareté après coup). */
-export function resolveBattle(battleId: number, challengerTeam: TeamSlot[], opponentTeam: TeamSlot[]): BattleResult {
-  const rand = mulberry32(battleId);
+/** Entièrement déterministe (pas d'aléa) — même équipes en entrée, même
+ *  résultat en sortie à chaque appel, ce qui permet de rejouer un combat
+ *  déjà résolu (ex. le rouvrir depuis l'historique) sans avoir à stocker
+ *  autre chose que le texte des deux équipes (stocké quand même dans
+ *  schema.sql, pour ne pas dépendre d'une recomposition à l'identique de
+ *  CARD_META si jamais une carte change de rareté après coup). */
+export function resolveBattle(challengerTeam: TeamSlot[], opponentTeam: TeamSlot[]): BattleResult {
   const cStats = slotStats(challengerTeam);
   const oStats = slotStats(opponentTeam);
   const cSynergy = synergyBonus(challengerTeam);
@@ -269,14 +264,12 @@ export function resolveBattle(battleId: number, challengerTeam: TeamSlot[], oppo
     const cHadMomentum = cMomentum[i];
     const oHadMomentum = oMomentum[i];
 
-    let atkC = cStats[i].atk * (0.9 + rand() * 0.2);
-    let atkO = oStats[i].atk * (0.9 + rand() * 0.2);
-    if (cAdv) atkC *= CAMP_ADVANTAGE_MULTIPLIER;
-    if (oAdv) atkO *= CAMP_ADVANTAGE_MULTIPLIER;
-    if (cHadMomentum) atkC *= MOMENTUM_MULTIPLIER;
-    if (oHadMomentum) atkO *= MOMENTUM_MULTIPLIER;
-    atkC = Math.round(atkC);
-    atkO = Math.round(atkO);
+    // Bonus additionnés, pas multipliés : +50% + +40% cumulés donne +90%,
+    // jamais ×1.5×1.4 (=×2.1) — plus simple à calculer et à prévoir.
+    const cBonus = (cAdv ? CAMP_ADVANTAGE_BONUS : 0) + (cHadMomentum ? MOMENTUM_BONUS : 0);
+    const oBonus = (oAdv ? CAMP_ADVANTAGE_BONUS : 0) + (oHadMomentum ? MOMENTUM_BONUS : 0);
+    const atkC = Math.round(cStats[i].atk * (1 + cBonus));
+    const atkO = Math.round(oStats[i].atk * (1 + oBonus));
 
     const dmgToO = Math.max(1, atkC - oStats[i].def);
     const dmgToC = Math.max(1, atkO - cStats[i].def);

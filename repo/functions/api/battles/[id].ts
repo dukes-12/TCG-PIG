@@ -55,7 +55,7 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env, params }
   const theirErr = teamError(challengerTeam, challengerState.owned ?? {}, challengerState.ownedHolo ?? {});
   if (theirErr) return json({ error: "L'équipe du défieur n'est plus valide (une carte a été recyclée ou échangée depuis) — il doit relancer un défi." }, 409);
 
-  const result = resolveBattle(id, challengerTeam, body.team);
+  const result = resolveBattle(challengerTeam, body.team);
   const now = Date.now();
   await env.DB.prepare('UPDATE battles SET opponent_team_json = ?, result_json = ?, status = ?, resolved_at = ? WHERE id = ?')
     .bind(JSON.stringify(body.team), JSON.stringify(result), 'completed', now, id)

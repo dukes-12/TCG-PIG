@@ -11,7 +11,8 @@ import type { TeamSlot, BattleResult, RoundEvent, Camp, Stance } from './api';
  *  n'important pas le catalogue front-end) alors qu'ici `CARDS` est déjà
  *  disponible directement. Si le barème change d'un côté, le changer de
  *  l'autre aussi — y compris le triangle de camps, les stats ATK/DEF, les
- *  PV/postures et le momentum ci-dessous. */
+ *  PV/postures et le momentum ci-dessous. Entièrement déterministe (pas
+ *  d'aléa par tour) depuis le passage aux bonus additifs. */
 
 const RARITY_POWER: Record<number, number> = { 1: 1, 2: 2, 3: 4, 4: 8, 5: 16, 6: 32 };
 
@@ -88,8 +89,10 @@ const TYPE_CAMP: Record<string, Camp> = {
 // (Fiction bat Pouvoir) cumulait l'écart de puissance et l'avantage de camp
 // sur le même camp déjà en difficulté. Sens inversé : Pouvoir bat Fiction.
 const CAMP_BEATS: Record<Camp, Camp> = { fiction: 'culture', culture: 'pouvoir', pouvoir: 'fiction' };
-const CAMP_ADVANTAGE_MULTIPLIER = 1.4;
-const MOMENTUM_MULTIPLIER = 1.15;
+// Bonus additionnés (pas multipliés) — voir functions/_lib/battle.ts pour
+// le détail et le calibrage.
+const CAMP_ADVANTAGE_BONUS = 0.5;
+const MOMENTUM_BONUS = 0.4;
 const HP_MULTIPLIER = 4;
 const MAX_ROUNDS = 300;
 
@@ -156,21 +159,8 @@ function baseHp(team: TeamSlot[], synergy: number): number {
   return Math.round(raw * (1 + synergy));
 }
 
-function mulberry32(seed: number) {
-  let s = seed | 0;
-  return () => {
-    s = (s + 0x6d2b79f5) | 0;
-    let t = Math.imul(s ^ (s >>> 15), 1 | s);
-    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
-    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
-  };
-}
-
-/** `seed` : un combat de test n'a pas d'id de ligne en base à réutiliser —
- *  n'importe quel entier fait l'affaire (voir botTeam ci-dessous, qui en
- *  tire un au hasard à chaque défi pour ne pas rejouer le même combat). */
-export function resolveBattle(seed: number, challengerTeam: TeamSlot[], opponentTeam: TeamSlot[]): BattleResult {
-  const rand = mulberry32(seed);
+/** Entièrement déterministe — voir functions/_lib/battle.ts. */
+export function resolveBattle(challengerTeam: TeamSlot[], opponentTeam: TeamSlot[]): BattleResult {
   const cStats = slotStats(challengerTeam);
   const oStats = slotStats(opponentTeam);
   const cSynergy = synergyBonus(challengerTeam);
@@ -193,14 +183,10 @@ export function resolveBattle(seed: number, challengerTeam: TeamSlot[], opponent
     const cHadMomentum = cMomentum[i];
     const oHadMomentum = oMomentum[i];
 
-    let atkC = cStats[i].atk * (0.9 + rand() * 0.2);
-    let atkO = oStats[i].atk * (0.9 + rand() * 0.2);
-    if (cAdv) atkC *= CAMP_ADVANTAGE_MULTIPLIER;
-    if (oAdv) atkO *= CAMP_ADVANTAGE_MULTIPLIER;
-    if (cHadMomentum) atkC *= MOMENTUM_MULTIPLIER;
-    if (oHadMomentum) atkO *= MOMENTUM_MULTIPLIER;
-    atkC = Math.round(atkC);
-    atkO = Math.round(atkO);
+    const cBonus = (cAdv ? CAMP_ADVANTAGE_BONUS : 0) + (cHadMomentum ? MOMENTUM_BONUS : 0);
+    const oBonus = (oAdv ? CAMP_ADVANTAGE_BONUS : 0) + (oHadMomentum ? MOMENTUM_BONUS : 0);
+    const atkC = Math.round(cStats[i].atk * (1 + cBonus));
+    const atkO = Math.round(oStats[i].atk * (1 + oBonus));
 
     const dmgToO = Math.max(1, atkC - oStats[i].def);
     const dmgToC = Math.max(1, atkO - cStats[i].def);

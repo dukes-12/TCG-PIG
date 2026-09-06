@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
 import PigCard from './PigCard';
 import { cardById } from '../data/catalog';
-import type { Battle, Camp, RoundEvent } from '../lib/api';
-import { CAMP_INFO } from '../lib/battle';
+import type { Battle, Camp, RoundEvent, Stance } from '../lib/api';
+import { CAMP_INFO, STANCE_INFO } from '../lib/battle';
 import { useAnimations } from '../lib/useAnimations';
 
 /** Résultat d'un combat résolu — combat à PV, révélé PROGRESSIVEMENT tour
@@ -96,6 +96,8 @@ export default function BattleResultOverlay({ battle, myUsername, onClose }: { b
                 opponentCard={oCard}
                 challengerHolo={battle.challengerTeam[r.slot]?.holo ?? false}
                 opponentHolo={battle.opponentTeam![r.slot]?.holo ?? false}
+                challengerStance={battle.challengerTeam[r.slot]?.stance ?? 'attaque'}
+                opponentStance={battle.opponentTeam![r.slot]?.stance ?? 'attaque'}
                 holoAnim={holoAnim}
               />
             );
@@ -184,6 +186,8 @@ function RoundRow({
   opponentCard,
   challengerHolo,
   opponentHolo,
+  challengerStance,
+  opponentStance,
   holoAnim,
 }: {
   round: RoundEvent;
@@ -191,6 +195,8 @@ function RoundRow({
   opponentCard: ReturnType<typeof cardById>;
   challengerHolo: boolean;
   opponentHolo: boolean;
+  challengerStance: Stance;
+  opponentStance: Stance;
   holoAnim: boolean;
 }) {
   if (!challengerCard || !opponentCard) return null;
@@ -210,6 +216,7 @@ function RoundRow({
       <RoundSide
         card={challengerCard}
         holo={challengerHolo}
+        stance={challengerStance}
         atk={round.challengerAtk}
         def={round.challengerDef}
         damage={round.challengerDamage}
@@ -223,6 +230,7 @@ function RoundRow({
       <RoundSide
         card={opponentCard}
         holo={opponentHolo}
+        stance={opponentStance}
         atk={round.opponentAtk}
         def={round.opponentDef}
         damage={round.opponentDamage}
@@ -239,6 +247,7 @@ function RoundRow({
 function RoundSide({
   card,
   holo,
+  stance,
   atk,
   def,
   damage,
@@ -250,6 +259,7 @@ function RoundSide({
 }: {
   card: ReturnType<typeof cardById>;
   holo: boolean;
+  stance: Stance;
   atk: number;
   def: number;
   damage: number;
@@ -261,6 +271,7 @@ function RoundSide({
 }) {
   if (!card) return null;
   const campInfo = camp ? CAMP_INFO[camp] : null;
+  const stanceInfo = STANCE_INFO[stance];
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: 7, flexDirection: align === 'right' ? 'row-reverse' : 'row' }}>
       <div style={{ width: 32, aspectRatio: '0.72', flex: 'none', borderRadius: 8, position: 'relative' }}>
@@ -275,6 +286,7 @@ function RoundSide({
         <div style={{ fontSize: 10, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{card.name}</div>
         <div style={{ fontSize: 9.5, opacity: 0.55, display: 'flex', alignItems: 'center', gap: 4, justifyContent: align === 'right' ? 'flex-end' : 'flex-start', flexWrap: 'wrap' }}>
           {campInfo && <span title={campInfo.label}>{campInfo.icon}</span>}
+          <span title={`Posture : ${stanceInfo.label}`}>{stanceInfo.icon}</span>
           <span title="Attaque">⚔️{atk}</span>
           <span title="Défense">🛡️{def}</span>
           {momentum && <span title="Lancée : bonus d'attaque">🔥</span>}

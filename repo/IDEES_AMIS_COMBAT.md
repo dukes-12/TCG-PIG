@@ -141,6 +141,34 @@ avec comptes utilisateurs.
 >   Les combats déjà terminés et stockés en base avant ce passage ne se
 >   réafficheront pas correctement depuis l'historique — acceptable sur
 >   cette branche de test, pas de migration prévue.
+> - **Bug corrigé après coup** : un défi créé avant ce passage a son équipe
+>   stockée sans `stance` — y répondre plantait la résolution (500) plutôt
+>   que de s'afficher. Fix : repli sur la posture "Attaque" partout où elle
+>   est lue (`slotStats`, `cardStatsWithStance`, équipe favorite) quand elle
+>   est absente ou invalide.
+>
+> **Cinquième passage** (retour : "je trouve que les multiplicateurs
+> compliquent le jeu") — le calcul d'ATTAQUE enchaînait jusqu'à 4 facteurs
+> multiplicatifs (posture × aléa ±10% × camp ×1,4 × momentum ×1,15),
+> difficile à suivre même en décortiquant un combat réel à la main. Deux
+> simplifications :
+> - **Bonus additifs, pas multiplicatifs** : camp et momentum s'ajoutent
+>   maintenant en un seul pourcentage (`+50%` si avantage de camp, `+40%`
+>   si en lancée, les deux cumulés donnent `+90%`, jamais `×1,5×1,4=×2,1`).
+>   Recalibré par simulation pour les mêmes garde-fous qu'avant : rareté
+>   toujours décisive, posture ~50/50, avantage de camp sur 1 duel/5 donne
+>   ~65-70% de victoires (fort mais pas automatique) sans suffire seul à
+>   renverser un écart de rareté entière.
+> - **Aléa ±10% par tour supprimé** : `resolveBattle` est maintenant
+>   entièrement déterministe (mêmes équipes → même résultat, à chaque
+>   appel) — `battleId`/`seed` ont disparu de sa signature, devenus inutiles
+>   sans tirage à amorcer. Un duel donné fait toujours les mêmes dégâts à
+>   situation égale ; la variété vient des vraies différences entre cartes
+>   (profil ATK/DEF propre, posture, camp, lancée), pas d'un tirage caché
+>   en plus qui rendait les nombres affichés difficiles à vérifier.
+> - **Posture affichée dans `BattleResultOverlay`** (icône ⚔️/🛡️ à côté de
+>   l'icône de camp, sur chaque carte de chaque tour) — jusque-là visible
+>   seulement dans le composeur d'équipe, pas dans le récapitulatif.
 >
 > Le reste de ce document (schéma Postgres/Supabase, phasage, questions
 > restées ouvertes) garde sa valeur de référence historique mais ne
