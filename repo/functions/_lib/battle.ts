@@ -6,28 +6,27 @@ import { CARD_META } from './cardMeta';
  *  fois pour toutes via un hash déterministe de son id — pas stocké,
  *  recalculé à la volée. +50% (les deux stats) si la carte est en holo.
  *
- *  Combat à POINTS DE VIE : chaque équipe a une jauge de PV commune (somme
- *  de la DÉFENSE de base de ses 5 cartes ×HP_MULT, +15% si bonus de
- *  synergie). Le combat se déroule en PLUSIEURS TOURS (pas un résultat
- *  instantané) : les 5 duels tournent en boucle (carte 1 vs carte 1, carte
- *  2 vs carte 2, …, puis on reboucle sur la carte 1), chaque tour inflige
- *  des dégâts de part et d'autre, jusqu'à ce qu'une jauge de PV tombe à 0.
- *  Chaque carte est engagée dans une POSTURE choisie à la composition de
- *  l'équipe — Attaque (frappe plus fort, encaisse plus) ou Défense (frappe
- *  moins fort, encaisse moins) — un vrai choix, pas un dominant strict
- *  (vérifié par simulation : ~50/50 à profil de cartes égal par ailleurs).
+ *  Combat à PV FIXES avec ÉCRAN DE DÉFENSEURS (façon "position défense" —
+ *  Yu-Gi-Oh) : chaque équipe est composée d'EXACTEMENT 2 cartes en posture
+ *  Attaque et 3 en posture Défense (plus de répartition libre). Chaque
+ *  camp a une jauge de PV FIXE (500, +15% si bonus de synergie) — mais on
+ *  ne peut PAS taper dedans directement : les 3 cartes en Défense de
+ *  l'adversaire forment un écran, dans l'ordre où elles ont été alignées
+ *  (la première ajoutée à l'équipe est la première visée). Une attaque
+ *  cible toujours la première carte-écran adverse ENCORE DEBOUT ; une fois
+ *  celle-ci détruite (durabilité — dérivée de sa DÉFENSE — tombée à 0),
+ *  les coups suivants visent la suivante, et seulement quand LES TROIS
+ *  sont détruites les attaques atteignent enfin les PV. Les 2 cartes en
+ *  Attaque de chaque équipe cyclent chacune leur tour (comme avant), et ne
+ *  sont jamais elles-mêmes une cible (l'écran, ce sont les défenseurs).
  *
- *  Triangle de camps, momentum et sursaut du désespoir s'ADDITIONNENT en un
- *  seul bonus d'ATTAQUE (pas de multiplicateurs enchaînés) : `+50%` si
- *  avantage de camp, `+40%` si en lancée, `+30%` sous 25% de PV restants —
- *  cumulés, ces bonus s'ajoutent simplement (jamais de multiplicateurs
- *  enchaînés du genre ×1.5×1.4). Le calcul de dégâts lui-même reste
- *  déterministe (pas d'aléa caché dans l'ATTAQUE affichée — l'ancien ±10%
- *  a été retiré : à situation égale, un duel fait toujours les mêmes
- *  dégâts). Deux événements ponctuels restent aléatoires mais sont
- *  toujours VISIBLES dans le résultat (jamais fondus dans un chiffre) :
- *  coup critique (double les dégâts) et bouclier (les annule) — voir
- *  CRIT_CHANCE / BLOCK_CHANCE plus bas. */
+ *  Camp, momentum, sursaut du désespoir s'ADDITIONNENT en un seul bonus
+ *  d'ATTAQUE (pas de multiplicateurs enchaînés). Camp ne s'applique QUE
+ *  face à un défenseur précis (l'attaquant a-t-il l'avantage sur CETTE
+ *  carte-écran ?) — sans objet une fois qu'on tape directement dans les PV
+ *  (qui n'ont pas de camp). Coup critique et bouclier restent des
+ *  événements ponctuels aléatoires mais toujours VISIBLES dans le
+ *  résultat, jamais fondus dans un chiffre. */
 
 const SECRET_RARITY_ID = 7;
 
@@ -66,13 +65,18 @@ export function cardStats(cardId: number, holo: boolean): CardStats | null {
 }
 
 /** Posture choisie pour une carte à la composition de l'équipe — voir
- *  STANCE_MULT plus bas pour les multiplicateurs. */
+ *  STANCE_MULT plus bas pour les multiplicateurs. Contrainte : EXACTEMENT
+ *  2 "attaque" et 3 "defense" par équipe (voir isTeamShape). */
 export type Stance = 'attaque' | 'defense';
 
 const STANCE_MULT: Record<Stance, { atk: number; def: number }> = {
   attaque: { atk: 1.15, def: 0.85 },
   defense: { atk: 0.88, def: 1.18 },
 };
+
+/** Nombre de cartes en Attaque / en Défense imposé à chaque équipe. */
+const ATTACKER_COUNT = 2;
+const DEFENDER_COUNT = 3;
 
 /** Triangle de camps — 3 regroupements thématiques des ~28 catégories de
  *  cartes, façon pierre-papier-ciseaux. "Mystère" (carte secrète)
@@ -119,53 +123,44 @@ const TYPE_CAMP: Record<string, Camp> = {
  *  Pouvoir (70 cartes, 3,61) le plus faible. Voir IDEES_AMIS_COMBAT.md. */
 const CAMP_BEATS: Record<Camp, Camp> = { fiction: 'culture', culture: 'pouvoir', pouvoir: 'fiction' };
 
-/** Bonus d'ATTAQUE (additif, pas multiplicatif) pour le duel dont le camp a
- *  l'avantage, à chaque tour où il agit. Cumulé simplement avec le bonus de
- *  lancée ci-dessous s'ils sont actifs tous les deux (+50% + 40% = +90%,
- *  jamais ×1.5×1.4). Calibré par simulation (sans aléa) pour un vrai coup
- *  de pouce à rareté égale (~65% de victoires avec 1 seul duel avantagé
- *  sur 5) sans devenir automatique, et sans suffire seul à renverser un
- *  écart de rareté entière (la rareté reste le facteur dominant). */
+/** Bonus d'ATTAQUE (additif) pour un attaquant qui a l'avantage de camp
+ *  sur le DÉFENSEUR qu'il vise précisément ce tour-ci — sans objet une
+ *  fois les PV visés directement (ils n'ont pas de camp). */
 const CAMP_ADVANTAGE_BONUS = 0.5;
 
-/** Bonus d'ATTAQUE (additif) pour un duel qui a infligé plus de dégâts
- *  qu'il n'en a subi au tour précédent OÙ CE MÊME DUEL A AGI (le fil
- *  "carte i contre carte i" reste le même sur toute la durée du combat).
- *  Calibré pour ~68% de victoires à rareté égale, seul face à un
- *  adversaire sans aucun bonus. */
+/** Bonus d'ATTAQUE (additif) pour un attaquant dont le tour précédent a
+ *  atteint les PV adverses directement (écran déjà percé) — récompense la
+ *  percée plutôt qu'une simple comparaison de dégâts (qui n'a plus de sens
+ *  ici : les défenseurs ne ripostent jamais). */
 const MOMENTUM_BONUS = 0.4;
 
 /** Bonus d'ATTAQUE (additif) pour une équipe tombée sous
  *  DESPERATION_THRESHOLD de ses PV max — permet de vrais retournements de
- *  situation en fin de combat plutôt qu'une fin jouée d'avance. Évalué au
- *  début de CHAQUE tour sur les PV du moment (peut s'activer puis se
- *  désactiver si l'équipe encaisse un mauvais coup puis en inflige un bon,
- *  aucun état à mémoriser). Calibré par simulation pour ne pas suffire à
- *  elle seule à renverser un écart de rareté entière. */
+ *  situation en fin de combat. Évalué au début de chaque tour sur les PV
+ *  du moment. */
 const DESPERATION_BONUS = 0.3;
 const DESPERATION_THRESHOLD = 0.25;
 
 /** Coup critique : chance de doubler les dégâts d'une attaque. Bouclier :
  *  chance de les annuler complètement (0, pas même le minimum de 1
  *  garanti d'habitude) — vérifiée en premier, un coup bloqué ne peut pas
- *  aussi être critique. Les deux sont symétriques (mêmes chances pour les
- *  deux équipes) donc neutres sur l'équilibre en moyenne ; leur rôle est
- *  d'ajouter des moments de tension visibles, pas de favoriser un camp. */
+ *  aussi être critique. */
 const CRIT_CHANCE = 0.15;
 const BLOCK_CHANCE = 0.12;
 
-/** PV d'équipe = somme de la DÉFENSE DE BASE (non ajustée par la posture)
- *  des 5 cartes ×HP_MULT. Volontairement basé sur la défense *de base* et
- *  pas la défense ajustée par la posture : sinon choisir "défense" gonfle
- *  À LA FOIS les PV et l'encaissement, ce qui la rend strictement
- *  dominante (vérifié par simulation : 68% de victoires sans ce
- *  découplage, ~50% avec). */
-const HP_MULTIPLIER = 4;
+/** PV fixes (pas dérivés des cartes) — 500, +15% si bonus de synergie. */
+const BASE_PV = 500;
 
-/** Filet de sécurité — dans les faits jamais atteint (le pire cas observé
- *  en simulation tourne autour de 100 tours), mais un combat doit toujours
- *  se terminer. Départagé par PV restants si jamais atteint. */
-const MAX_ROUNDS = 300;
+/** Durabilité d'une carte-écran = sa DÉFENSE (ajustée par la posture) ×
+ *  DEFENDER_DURABILITY_MULT. Calibré par simulation pour un combat typique
+ *  d'une cinquantaine à une centaine de tours (PV fixes à 500 obligent —
+ *  avec seulement 2 attaquants qui cyclent par équipe, chaque tour pèse
+ *  moins qu'avant, d'où des combats plus longs que la version précédente). */
+const DEFENDER_DURABILITY_MULT = 4;
+
+/** Filet de sécurité — un combat doit toujours se terminer. Départagé par
+ *  PV restants si jamais atteint. */
+const MAX_ROUNDS = 1000;
 
 export function campOf(cardId: number): Camp | null {
   const meta = CARD_META[cardId];
@@ -179,22 +174,30 @@ export interface TeamSlot {
   stance: Stance;
 }
 
-/** Un tour de combat — le duel au `slot` indiqué agit, inflige des dégâts
- *  des deux côtés, PV mis à jour. */
+/** Un tour de combat : l'attaquant en cycle de chaque équipe agit
+ *  simultanément — le challenger vise le camp adverse, l'adversaire vise
+ *  le camp du challenger. La cible est soit une carte-écran précise
+ *  (`*TargetCardId`), soit `null` si l'écran adverse est déjà percé (les
+ *  PV sont visés directement). */
 export interface RoundEvent {
   round: number;
-  slot: number;
-  challengerCardId: number;
-  opponentCardId: number;
-  /** ATTAQUE finale utilisée ce tour (posture, jitter, camp, momentum). */
+  /** Carte "Attaque" qui agit ce tour, de chaque côté. */
+  challengerAttackerId: number;
+  opponentAttackerId: number;
+  /** ATTAQUE finale utilisée ce tour (posture, camp, momentum, désespoir —
+   *  aucun aléa caché dedans). */
   challengerAtk: number;
   opponentAtk: number;
-  /** DÉFENSE ajustée par la posture — pas de jitter dessus. */
-  challengerDef: number;
-  opponentDef: number;
-  /** Dégâts infligés par chaque camp ce tour-ci (après coup critique et
-   *  bouclier éventuels — c'est le nombre qui a vraiment été retranché des
-   *  PV adverses). */
+  /** Carte-écran visée par CETTE attaque, ou `null` si l'écran adverse est
+   *  déjà percé et que les PV sont visés directement. */
+  challengerTargetCardId: number | null;
+  opponentTargetCardId: number | null;
+  /** true si cette attaque vient de détruire la carte-écran visée. */
+  challengerTargetDestroyed: boolean;
+  opponentTargetDestroyed: boolean;
+  /** Dégâts infligés par chaque attaquant ce tour-ci (après coup critique
+   *  et bouclier éventuels) — à la carte-écran visée, ou aux PV si l'écran
+   *  est percé. */
   challengerDamage: number;
   opponentDamage: number;
   /** PV restants de chaque équipe APRÈS ce tour (jamais négatif). */
@@ -202,21 +205,25 @@ export interface RoundEvent {
   opponentHp: number;
   challengerCamp: Camp | null;
   opponentCamp: Camp | null;
+  /** true si l'attaquant a l'avantage de camp sur SA cible précise
+   *  (toujours false si les PV sont visés directement — déjà pris en
+   *  compte dans *Atk ci-dessus). */
   challengerCampAdvantage: boolean;
   opponentCampAdvantage: boolean;
+  /** true si le tour précédent DE CET ATTAQUANT a atteint les PV adverses
+   *  directement (déjà pris en compte dans *Atk ci-dessus). */
   challengerMomentum: boolean;
   opponentMomentum: boolean;
   /** true si l'équipe était sous DESPERATION_THRESHOLD de ses PV max au
    *  début de ce tour (déjà pris en compte dans *Atk ci-dessus). */
   challengerDesperation: boolean;
   opponentDesperation: boolean;
-  /** true si l'attaque de cette carte ce tour-ci était un coup critique
-   *  (déjà pris en compte dans *Damage ci-dessus). */
+  /** true si cette attaque était un coup critique (déjà pris en compte
+   *  dans *Damage ci-dessus). */
   challengerCrit: boolean;
   opponentCrit: boolean;
-  /** true si l'attaque de cette carte ce tour-ci a été bloquée par
-   *  l'adversaire (0 dégâts infligés, sous le minimum de 1 habituel —
-   *  déjà pris en compte dans *Damage ci-dessus). */
+  /** true si cette attaque a été bloquée par l'adversaire (0 dégâts, déjà
+   *  pris en compte dans *Damage ci-dessus). */
   challengerBlocked: boolean;
   opponentBlocked: boolean;
 }
@@ -231,27 +238,23 @@ export interface BattleResult {
 }
 
 interface SlotStats {
+  cardId: number;
   atk: number;
   def: number;
   camp: Camp | null;
 }
 
-function slotStats(team: TeamSlot[]): SlotStats[] {
-  return team.map((s) => {
-    const base = cardStats(s.cardId, s.holo) ?? { atk: 0, def: 0 };
-    // `?? STANCE_MULT.attaque` : un défi créé avant l'ajout des postures a
-    // une équipe stockée sans `stance` — sans ce filet, ce combat plante à
-    // la résolution (`STANCE_MULT[undefined]` est `undefined`) et ne
-    // s'affiche jamais. Repli sur "Attaque" plutôt qu'un plantage.
-    const mult = STANCE_MULT[s.stance] ?? STANCE_MULT.attaque;
-    return { atk: Math.round(base.atk * mult.atk), def: Math.round(base.def * mult.def), camp: campOf(s.cardId) };
-  });
+function slotStats(s: TeamSlot): SlotStats {
+  const base = cardStats(s.cardId, s.holo) ?? { atk: 0, def: 0 };
+  // `?? STANCE_MULT.attaque` : un défi créé avant l'ajout des postures a
+  // une équipe stockée sans `stance` — sans ce filet, ce combat plante à
+  // la résolution. Repli sur "Attaque" plutôt qu'un plantage.
+  const mult = STANCE_MULT[s.stance] ?? STANCE_MULT.attaque;
+  return { cardId: s.cardId, atk: Math.round(base.atk * mult.atk), def: Math.round(base.def * mult.def), camp: campOf(s.cardId) };
 }
 
 /** Bonus de synergie : 3+ cartes de la même catégorie dans l'équipe → +15%
- *  de PV max (une équipe "à thème" est plus résiliente, distinct du camp
- *  qui joue sur l'attaque — deux rôles séparés plutôt qu'un bonus générique
- *  qui ferait tout à la fois). */
+ *  de PV max. */
 function synergyBonus(team: TeamSlot[]): number {
   const typeCounts = new Map<string, number>();
   for (const s of team) {
@@ -263,91 +266,125 @@ function synergyBonus(team: TeamSlot[]): number {
   return maxSameType >= 3 ? 0.15 : 0;
 }
 
-function baseHp(team: TeamSlot[], synergy: number): number {
-  const raw = team.reduce((sum, s) => sum + (cardStats(s.cardId, s.holo)?.def ?? 0) * HP_MULTIPLIER, 0);
-  return Math.round(raw * (1 + synergy));
+interface Side {
+  attackers: SlotStats[];
+  defenders: SlotStats[];
+  maxHp: number;
+  synergy: number;
 }
 
-/** Entièrement déterministe (pas d'aléa) — même équipes en entrée, même
- *  résultat en sortie à chaque appel, ce qui permet de rejouer un combat
- *  déjà résolu (ex. le rouvrir depuis l'historique) sans avoir à stocker
- *  autre chose que le texte des deux équipes (stocké quand même dans
- *  schema.sql, pour ne pas dépendre d'une recomposition à l'identique de
- *  CARD_META si jamais une carte change de rareté après coup). */
-export function resolveBattle(challengerTeam: TeamSlot[], opponentTeam: TeamSlot[]): BattleResult {
-  const cStats = slotStats(challengerTeam);
-  const oStats = slotStats(opponentTeam);
-  const cSynergy = synergyBonus(challengerTeam);
-  const oSynergy = synergyBonus(opponentTeam);
-  const challengerMaxHp = baseHp(challengerTeam, cSynergy);
-  const opponentMaxHp = baseHp(opponentTeam, oSynergy);
+function buildSide(team: TeamSlot[]): Side {
+  const stats = team.map(slotStats);
+  const attackers = team.map((s, i) => (s.stance === 'attaque' ? stats[i] : null)).filter((s): s is SlotStats => s !== null);
+  const defenders = team.map((s, i) => (s.stance === 'defense' ? stats[i] : null)).filter((s): s is SlotStats => s !== null);
+  // Filet de sécurité : une équipe stockée avant l'ajout de la contrainte
+  // 2 attaque / 3 défense (isTeamShape) pourrait n'avoir aucune carte en
+  // Attaque — sans ce filet, `attackers[round % 0]` planterait la
+  // résolution. Un combat qui tombe dans ce cas légitime dégrade
+  // proprement (attaquant fantôme à 0 ATK) plutôt que de ne pas s'afficher.
+  if (attackers.length === 0) attackers.push({ cardId: 0, atk: 0, def: 0, camp: null });
+  const synergy = synergyBonus(team);
+  return { attackers, defenders, maxHp: Math.round(BASE_PV * (1 + synergy)), synergy };
+}
 
-  let hpC = challengerMaxHp;
-  let hpO = opponentMaxHp;
-  const cMomentum: boolean[] = [false, false, false, false, false];
-  const oMomentum: boolean[] = [false, false, false, false, false];
+/** Entièrement déterministe pour l'ATTAQUE elle-même (pas d'aléa caché
+ *  dedans) ; coup critique et bouclier restent des tirages au sort, mais
+ *  toujours VISIBLES dans le résultat (icônes dédiées côté client), jamais
+ *  fondus dans un chiffre. */
+export function resolveBattle(challengerTeam: TeamSlot[], opponentTeam: TeamSlot[]): BattleResult {
+  const c = buildSide(challengerTeam);
+  const o = buildSide(opponentTeam);
+
+  let hpC = c.maxHp;
+  let hpO = o.maxHp;
+  // Durabilité restante de chaque carte-écran, dans l'ordre où elles ont
+  // été alignées (front[0] = première visée).
+  const defHpC = c.defenders.map((d) => d.def * DEFENDER_DURABILITY_MULT);
+  const defHpO = o.defenders.map((d) => d.def * DEFENDER_DURABILITY_MULT);
+  let frontC = 0; // index de la prochaine carte-écran du CHALLENGER encore debout (visée par l'adversaire)
+  let frontO = 0;
+  const momC = c.attackers.map(() => false);
+  const momO = o.attackers.map(() => false);
   const rounds: RoundEvent[] = [];
 
-  const n = Math.min(challengerTeam.length, opponentTeam.length, 5);
+  const nC = c.attackers.length || 1;
+  const nO = o.attackers.length || 1;
   let round = 0;
   while (hpC > 0 && hpO > 0 && round < MAX_ROUNDS) {
-    const i = round % n;
-    const cAdv = cStats[i].camp !== null && oStats[i].camp !== null && CAMP_BEATS[cStats[i].camp!] === oStats[i].camp;
-    const oAdv = oStats[i].camp !== null && cStats[i].camp !== null && CAMP_BEATS[oStats[i].camp!] === cStats[i].camp;
+    const ai = round % nC;
+    const oi = round % nO;
+    const attC = c.attackers[ai];
+    const attO = o.attackers[oi];
+    const cDesperate = hpC / c.maxHp < DESPERATION_THRESHOLD;
+    const oDesperate = hpO / o.maxHp < DESPERATION_THRESHOLD;
+
     // Capturés AVANT d'être écrasés plus bas par le résultat de CE tour —
-    // ce sont ces valeurs (issues du tour précédent où ce duel a agi) qui
+    // ce sont ces valeurs (issues du tour précédent de CET attaquant) qui
     // ont servi à booster l'attaque ci-dessous, et c'est bien elles qu'il
     // faut afficher pour ce tour.
-    const cHadMomentum = cMomentum[i];
-    const oHadMomentum = oMomentum[i];
-    // Évalué sur les PV du DÉBUT de ce tour, jamais mis à jour après coup
-    // (contrairement au momentum, ce n'est pas un état qui se mémorise
-    // d'un tour à l'autre — juste une lecture de la situation actuelle).
-    const cDesperate = hpC / challengerMaxHp < DESPERATION_THRESHOLD;
-    const oDesperate = hpO / opponentMaxHp < DESPERATION_THRESHOLD;
+    const cHadMomentum = momC[ai];
+    const oHadMomentum = momO[oi];
 
-    // Bonus additionnés, pas multipliés : +50% + +40% + +30% cumulés donne
-    // +120%, jamais un enchaînement de multiplicateurs — plus simple à
-    // calculer et à prévoir.
+    // ── Attaque du challenger, vise le camp adverse ──
+    const targetO = frontO < o.defenders.length ? o.defenders[frontO] : null;
+    const cAdv = !!targetO && attC.camp !== null && targetO.camp !== null && CAMP_BEATS[attC.camp] === targetO.camp;
     const cBonus = (cAdv ? CAMP_ADVANTAGE_BONUS : 0) + (cHadMomentum ? MOMENTUM_BONUS : 0) + (cDesperate ? DESPERATION_BONUS : 0);
-    const oBonus = (oAdv ? CAMP_ADVANTAGE_BONUS : 0) + (oHadMomentum ? MOMENTUM_BONUS : 0) + (oDesperate ? DESPERATION_BONUS : 0);
-    const atkC = Math.round(cStats[i].atk * (1 + cBonus));
-    const atkO = Math.round(oStats[i].atk * (1 + oBonus));
-
-    // Bouclier vérifié avant coup critique — un coup bloqué reste bloqué
-    // même s'il aurait aussi été critique.
-    let dmgToO = Math.max(1, atkC - oStats[i].def);
+    const atkC = Math.round(attC.atk * (1 + cBonus));
+    let cDmg = Math.max(1, atkC - (targetO ? targetO.def : 0));
     let cCrit = false;
     const cBlocked = Math.random() < BLOCK_CHANCE;
-    if (cBlocked) dmgToO = 0;
-    else if ((cCrit = Math.random() < CRIT_CHANCE)) dmgToO *= 2;
+    if (cBlocked) cDmg = 0;
+    else if ((cCrit = Math.random() < CRIT_CHANCE)) cDmg *= 2;
+    let cDestroyed = false;
+    if (targetO) {
+      defHpO[frontO] -= cDmg;
+      if (defHpO[frontO] <= 0) {
+        cDestroyed = true;
+        frontO++;
+      }
+    } else {
+      hpO = Math.max(0, hpO - cDmg);
+    }
+    momC[ai] = targetO === null; // a atteint les PV directement ce tour
 
-    let dmgToC = Math.max(1, atkO - cStats[i].def);
+    // ── Attaque de l'adversaire, vise le camp du challenger ──
+    const targetC = frontC < c.defenders.length ? c.defenders[frontC] : null;
+    const oAdv = !!targetC && attO.camp !== null && targetC.camp !== null && CAMP_BEATS[attO.camp] === targetC.camp;
+    const oBonus = (oAdv ? CAMP_ADVANTAGE_BONUS : 0) + (oHadMomentum ? MOMENTUM_BONUS : 0) + (oDesperate ? DESPERATION_BONUS : 0);
+    const atkO = Math.round(attO.atk * (1 + oBonus));
+    let oDmg = Math.max(1, atkO - (targetC ? targetC.def : 0));
     let oCrit = false;
     const oBlocked = Math.random() < BLOCK_CHANCE;
-    if (oBlocked) dmgToC = 0;
-    else if ((oCrit = Math.random() < CRIT_CHANCE)) dmgToC *= 2;
-
-    hpO = Math.max(0, hpO - dmgToO);
-    hpC = Math.max(0, hpC - dmgToC);
-    cMomentum[i] = dmgToO > dmgToC;
-    oMomentum[i] = dmgToC > dmgToO;
+    if (oBlocked) oDmg = 0;
+    else if ((oCrit = Math.random() < CRIT_CHANCE)) oDmg *= 2;
+    let oDestroyed = false;
+    if (targetC) {
+      defHpC[frontC] -= oDmg;
+      if (defHpC[frontC] <= 0) {
+        oDestroyed = true;
+        frontC++;
+      }
+    } else {
+      hpC = Math.max(0, hpC - oDmg);
+    }
+    momO[oi] = targetC === null;
 
     rounds.push({
       round,
-      slot: i,
-      challengerCardId: challengerTeam[i].cardId,
-      opponentCardId: opponentTeam[i].cardId,
+      challengerAttackerId: attC.cardId,
+      opponentAttackerId: attO.cardId,
       challengerAtk: atkC,
       opponentAtk: atkO,
-      challengerDef: cStats[i].def,
-      opponentDef: oStats[i].def,
-      challengerDamage: dmgToO,
-      opponentDamage: dmgToC,
+      challengerTargetCardId: targetO ? targetO.cardId : null,
+      opponentTargetCardId: targetC ? targetC.cardId : null,
+      challengerTargetDestroyed: cDestroyed,
+      opponentTargetDestroyed: oDestroyed,
+      challengerDamage: cDmg,
+      opponentDamage: oDmg,
       challengerHp: hpC,
       opponentHp: hpO,
-      challengerCamp: cStats[i].camp,
-      opponentCamp: oStats[i].camp,
+      challengerCamp: attC.camp,
+      opponentCamp: attO.camp,
       challengerCampAdvantage: cAdv,
       opponentCampAdvantage: oAdv,
       challengerMomentum: cHadMomentum,
@@ -369,23 +406,29 @@ export function resolveBattle(challengerTeam: TeamSlot[], opponentTeam: TeamSlot
 
   return {
     rounds,
-    challengerMaxHp,
-    opponentMaxHp,
-    challengerSynergyBonus: cSynergy,
-    opponentSynergyBonus: oSynergy,
+    challengerMaxHp: c.maxHp,
+    opponentMaxHp: o.maxHp,
+    challengerSynergyBonus: c.synergy,
+    opponentSynergyBonus: o.synergy,
     winner,
   };
 }
 
-/** Juste la forme (5 entrées `{cardId, holo, stance}`) — ne vérifie ni la
- *  possession ni les doublons, voir `teamError` pour ça. */
+/** Juste la forme (5 entrées `{cardId, holo, stance}`, EXACTEMENT
+ *  ATTACKER_COUNT en "attaque" et DEFENDER_COUNT en "defense") — ne
+ *  vérifie ni la possession ni les doublons, voir `teamError` pour ça. */
 export function isTeamShape(team: unknown): team is TeamSlot[] {
   if (!Array.isArray(team) || team.length !== 5) return false;
-  return team.every((s) => {
+  const ok = team.every((s) => {
     if (typeof s !== 'object' || s === null) return false;
     const o = s as Record<string, unknown>;
     return typeof o.cardId === 'number' && typeof o.holo === 'boolean' && (o.stance === 'attaque' || o.stance === 'defense');
   });
+  if (!ok) return false;
+  const t = team as TeamSlot[];
+  const attackers = t.filter((s) => s.stance === 'attaque').length;
+  const defenders = t.filter((s) => s.stance === 'defense').length;
+  return attackers === ATTACKER_COUNT && defenders === DEFENDER_COUNT;
 }
 
 /** Revérifie une équipe contre la vraie collection du joueur (jamais fait

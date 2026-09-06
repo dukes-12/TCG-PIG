@@ -197,6 +197,66 @@ avec comptes utilisateurs.
 >   icônes de statut, 🎯 devant les dégâts en cas de critique, "🚫 Bloqué !"
 >   à la place des dégâts en cas de blocage.
 >
+> **Septième passage** ("il faudrait que les 2 joueurs aient 500pv que 3
+> cartes soient en défense et 2 en attaque, quand les cartes défense sont
+> brisées par les attaques adverses alors on passe aux PV adverses") —
+> **rupture de compatibilité assumée** avec tous les combats déjà stockés
+> (`result_json` change complètement de forme) : refonte du modèle de PV,
+> de la répartition Attaque/Défense libre vers un **écran de défenseurs
+> façon "position défense"** (Yu-Gi-Oh) :
+> - Les deux équipes ont désormais **500 PV fixes** (+15% synergie comme
+>   avant), au lieu d'une jauge dérivée de la DÉFENSE totale de l'équipe.
+> - La répartition posture n'est plus libre : **exactement 2 cartes en
+>   Attaque et 3 en Défense** par équipe (`isTeamShape` le vérifie
+>   maintenant en plus de la forme générale ; le composeur, côté
+>   `BattlesScreen`, bloque l'envoi tant que ce n'est pas respecté et
+>   affiche un compteur ⚔️2/2 · 🛡️3/3).
+> - Les 3 cartes en Défense forment un **écran ordonné** (l'ordre où elles
+>   ont été alignées à la composition = ordre de l'écran, la 1ère encaisse
+>   en premier) : chaque coup subi réduit sa **durabilité**
+>   (`DEF × DEFENDER_DURABILITY_MULT`, calibré à **×4** par simulation —
+>   assez pour que l'écran tienne plusieurs tours sans rendre le combat
+>   interminable). Une fois détruite, l'attaque suivante vise l'écran
+>   suivant ; une fois les 3 détruites, les attaques atteignent enfin les
+>   PV directement — plus aucune protection après ça.
+> - Les 2 cartes en Attaque de chaque équipe cyclent chacune leur tour
+>   (round-robin, comme avant), et ne sont jamais elles-mêmes une cible —
+>   l'écran, ce sont les défenseurs, qui eux-mêmes n'attaquent jamais.
+> - **Camp** ne s'applique plus que face à une carte-écran précise (l'
+>   attaquant a-t-il l'avantage sur CETTE carte ?) — sans objet une fois
+>   que les PV sont visés directement (ils n'ont pas de camp). **Momentum**
+>   change aussi de sens : ce n'est plus "a fait plus de dégâts qu'il n'en
+>   a subi au tour précédent" (les défenseurs ne ripostent jamais, la
+>   comparaison n'a plus de sens) mais "a atteint les PV adverses
+>   directement au tour précédent" (l'écran adverse était déjà percé).
+>   Désespoir, coup critique et bouclier sont inchangés.
+> - `RoundEvent` change de forme en conséquence : `*AttackerId` (la carte
+>   en Attaque qui agit ce tour) remplace l'ancien `*CardId` par slot,
+>   `*TargetCardId` (carte-écran visée, `null` si PV visés directement) et
+>   `*TargetDestroyed` sont nouveaux. `BattleResultOverlay` affiche
+>   maintenant chaque attaque comme "attaquant → cible" (icône ❤️ si PV
+>   visés directement, badge "💥 brisée" si le coup vient de détruire la
+>   carte-écran) plutôt que l'ancien face-à-face symétrique "carte i contre
+>   carte i".
+> - **Calibrage vérifié par simulation** (prototype à la main, puis
+>   ré-exécuté contre le vrai code serveur/client bundlé, 200 combats en
+>   parité stricte RNG seedée — identiques à 100%) : rareté toujours très
+>   décisive (3v3 ≈ 48%/52%, 4v3 et 5v3 → 100% pour la rareté supérieure,
+>   plus tranché qu'avant du fait de l'échelle de DEF appliquée deux fois,
+>   à la durabilité de l'écran et à la mitigation par coup), coup
+>   critique/bouclier toujours conformes (~13,2%/12%).
+> - **Deux effets de bord assumés, pas des bugs** : (1) les combats durent
+>   nettement plus longtemps qu'avant (une centaine de tours en moyenne à
+>   rareté égale, contre une dizaine avant) — mécanique de la jauge fixe à
+>   500 PV combinée à seulement 2 attaquants qui cyclent, pas un problème
+>   de performance (10-20ms par combat, `MAX_ROUNDS=1000` en filet de
+>   sécurité, jamais atteint en pratique) ; (2) l'avantage de camp pèse
+>   beaucoup moins qu'avant dans le résultat final (~50% observé sur "avoir
+>   l'avantage sur le premier défenseur adverse", contre 62-70% au passage
+>   précédent) puisqu'il ne s'applique plus que pendant la brève fenêtre où
+>   un attaquant affronte précisément cette carte-écran, jamais sur
+>   l'ensemble d'un combat de plusieurs dizaines de tours.
+>
 > Le reste de ce document (schéma Postgres/Supabase, phasage, questions
 > restées ouvertes) garde sa valeur de référence historique mais ne
 > correspond plus à l'implémentation réelle (Cloudflare D1, pas Supabase —

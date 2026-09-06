@@ -105,15 +105,17 @@ export function apiMarkMailboxRead(ids: number[]) {
 /** Combats — voir IDEES_AMIS_COMBAT.md pour la conception et
  *  functions/_lib/battle.ts pour le calcul (côté serveur, jamais côté
  *  client — le résultat n'est jamais fait confiance s'il venait d'ici).
- *  Combat à points de vie, en plusieurs tours (pas un résultat instantané)
- *  — voir BattleResult ci-dessous. */
+ *  Combat à PV FIXES (500) avec écran de défenseurs façon "position
+ *  défense" — chaque équipe a EXACTEMENT 2 cartes en Attaque et 3 en
+ *  Défense (plus de répartition libre), voir BattleResult ci-dessous. */
 export type Stance = 'attaque' | 'defense';
 
 export interface TeamSlot {
   cardId: number;
   holo: boolean;
-  /** Posture choisie à la composition — voir functions/_lib/battle.ts
-   *  (STANCE_MULT) pour l'effet exact sur l'attaque et la défense. */
+  /** Posture choisie à la composition — EXACTEMENT 2 "attaque" et 3
+   *  "defense" par équipe (voir functions/_lib/battle.ts, isTeamShape).
+   *  STANCE_MULT y détaille l'effet exact sur l'attaque et la défense. */
   stance: Stance;
 }
 
@@ -123,22 +125,30 @@ export interface TeamSlot {
  *  précis (rééquilibrage sur la puissance moyenne réelle de chaque camp). */
 export type Camp = 'fiction' | 'pouvoir' | 'culture';
 
-/** Un tour de combat — le duel au `slot` indiqué agit ce tour-ci (les 5
- *  duels tournent en boucle jusqu'à ce qu'une jauge de PV tombe à 0). */
+/** Un tour de combat — l'attaquant en cycle de chaque équipe agit
+ *  simultanément, chacun visant le camp adverse : soit une carte-écran
+ *  précise (`*TargetCardId`, encore debout), soit `null` si l'écran
+ *  adverse est déjà entièrement détruit et que les PV sont visés
+ *  directement. */
 export interface RoundEvent {
   round: number;
-  slot: number;
-  challengerCardId: number;
-  opponentCardId: number;
+  /** Carte "Attaque" qui agit ce tour, de chaque côté. */
+  challengerAttackerId: number;
+  opponentAttackerId: number;
   /** ATTAQUE finale utilisée ce tour (posture, camp, momentum, désespoir —
    *  aucun aléa caché dedans, voir functions/_lib/battle.ts). */
   challengerAtk: number;
   opponentAtk: number;
-  /** DÉFENSE ajustée par la posture — jamais boostée en cours de combat. */
-  challengerDef: number;
-  opponentDef: number;
-  /** Dégâts infligés par chaque camp ce tour-ci (après coup critique et
-   *  bouclier éventuels). */
+  /** Carte-écran visée par cette attaque, ou `null` si l'écran adverse est
+   *  déjà percé (les PV sont visés directement). */
+  challengerTargetCardId: number | null;
+  opponentTargetCardId: number | null;
+  /** true si cette attaque vient de détruire la carte-écran visée. */
+  challengerTargetDestroyed: boolean;
+  opponentTargetDestroyed: boolean;
+  /** Dégâts infligés par chaque attaquant ce tour-ci (après coup critique
+   *  et bouclier éventuels) — à la carte-écran visée, ou aux PV si l'écran
+   *  est percé. */
   challengerDamage: number;
   opponentDamage: number;
   /** PV restants de chaque équipe APRÈS ce tour (jamais négatif). */
@@ -146,12 +156,13 @@ export interface RoundEvent {
   opponentHp: number;
   challengerCamp: Camp | null;
   opponentCamp: Camp | null;
-  /** true si le camp de cette carte a l'avantage sur le camp adverse pour
-   *  ce duel (déjà pris en compte dans *Atk ci-dessus). */
+  /** true si l'attaquant a l'avantage de camp sur SA cible précise
+   *  (toujours false si les PV sont visés directement — déjà pris en
+   *  compte dans *Atk ci-dessus). */
   challengerCampAdvantage: boolean;
   opponentCampAdvantage: boolean;
-  /** true si ce duel a infligé plus de dégâts qu'il n'en a subi le tour
-   *  précédent OÙ IL A AGI (déjà pris en compte dans *Atk ci-dessus). */
+  /** true si le tour précédent DE CET ATTAQUANT a atteint les PV adverses
+   *  directement (déjà pris en compte dans *Atk ci-dessus). */
   challengerMomentum: boolean;
   opponentMomentum: boolean;
   /** true si l'équipe était sous 25% de ses PV max au début de ce tour

@@ -10,9 +10,8 @@ import type { TeamSlot, BattleResult, RoundEvent, Camp, Stance } from './api';
  *  rareté/catégorie depuis CARD_META (généré, les Pages Functions
  *  n'important pas le catalogue front-end) alors qu'ici `CARDS` est déjà
  *  disponible directement. Si le barème change d'un côté, le changer de
- *  l'autre aussi — y compris le triangle de camps, les stats ATK/DEF, les
- *  PV/postures et le momentum ci-dessous. Entièrement déterministe (pas
- *  d'aléa par tour) depuis le passage aux bonus additifs. */
+ *  l'autre aussi — y compris le triangle de camps, les stats ATK/DEF,
+ *  l'écran de défenseurs et le momentum ci-dessous. */
 
 const RARITY_POWER: Record<number, number> = { 1: 1, 2: 2, 3: 4, 4: 8, 5: 16, 6: 32 };
 
@@ -51,6 +50,10 @@ const STANCE_MULT: Record<Stance, { atk: number; def: number }> = {
   attaque: { atk: 1.15, def: 0.85 },
   defense: { atk: 0.88, def: 1.18 },
 };
+
+/** Nombre de cartes en Attaque / en Défense imposé à chaque équipe. */
+const ATTACKER_COUNT = 2;
+const DEFENDER_COUNT = 3;
 
 /** Triangle de camps — voir functions/_lib/battle.ts pour l'explication
  *  complète. Doit rester identique côté serveur et côté client. */
@@ -97,13 +100,28 @@ const DESPERATION_BONUS = 0.3;
 const DESPERATION_THRESHOLD = 0.25;
 const CRIT_CHANCE = 0.15;
 const BLOCK_CHANCE = 0.12;
-const HP_MULTIPLIER = 4;
-const MAX_ROUNDS = 300;
+const BASE_PV = 500;
+const DEFENDER_DURABILITY_MULT = 4;
+const MAX_ROUNDS = 1000;
 
 export function campOf(cardId: number): Camp | null {
   const card = cardById(cardId);
   if (!card) return null;
   return TYPE_CAMP[card.type] ?? null;
+}
+
+/** Nombre de cartes en Attaque / en Défense attendu dans une équipe —
+ *  utilisé par le composeur (BattlesScreen) pour bloquer l'envoi tant que
+ *  la répartition n'est pas EXACTEMENT ATTACKER_COUNT/DEFENDER_COUNT (voir
+ *  functions/_lib/battle.ts, isTeamShape, pour la revérification serveur
+ *  qui fait foi). */
+export const TEAM_SHAPE = { attackers: ATTACKER_COUNT, defenders: DEFENDER_COUNT };
+
+export function teamShapeOk(team: TeamSlot[]): boolean {
+  if (team.length !== ATTACKER_COUNT + DEFENDER_COUNT) return false;
+  const attackers = team.filter((s) => s.stance === 'attaque').length;
+  const defenders = team.filter((s) => s.stance === 'defense').length;
+  return attackers === ATTACKER_COUNT && defenders === DEFENDER_COUNT;
 }
 
 /** Icône + libellé par camp, pour l'affichage (composeur d'équipe,
@@ -132,19 +150,18 @@ export function cardStatsWithStance(cardId: number, holo: boolean, stance: Stanc
 }
 
 interface SlotStats {
+  cardId: number;
   atk: number;
   def: number;
   camp: Camp | null;
 }
 
-function slotStats(team: TeamSlot[]): SlotStats[] {
-  return team.map((s) => {
-    const base = cardStats(s.cardId, s.holo) ?? { atk: 0, def: 0 };
-    // Filet de sécurité — voir functions/_lib/battle.ts pour l'explication
-    // (une équipe stockée avant l'ajout des postures n'a pas de `stance`).
-    const mult = STANCE_MULT[s.stance] ?? STANCE_MULT.attaque;
-    return { atk: Math.round(base.atk * mult.atk), def: Math.round(base.def * mult.def), camp: campOf(s.cardId) };
-  });
+function slotStats(s: TeamSlot): SlotStats {
+  const base = cardStats(s.cardId, s.holo) ?? { atk: 0, def: 0 };
+  // Filet de sécurité — voir functions/_lib/battle.ts pour l'explication
+  // (une équipe stockée avant l'ajout des postures n'a pas de `stance`).
+  const mult = STANCE_MULT[s.stance] ?? STANCE_MULT.attaque;
+  return { cardId: s.cardId, atk: Math.round(base.atk * mult.atk), def: Math.round(base.def * mult.def), camp: campOf(s.cardId) };
 }
 
 function synergyBonus(team: TeamSlot[]): number {
@@ -158,74 +175,112 @@ function synergyBonus(team: TeamSlot[]): number {
   return maxSameType >= 3 ? 0.15 : 0;
 }
 
-function baseHp(team: TeamSlot[], synergy: number): number {
-  const raw = team.reduce((sum, s) => sum + (cardStats(s.cardId, s.holo)?.def ?? 0) * HP_MULTIPLIER, 0);
-  return Math.round(raw * (1 + synergy));
+interface Side {
+  attackers: SlotStats[];
+  defenders: SlotStats[];
+  maxHp: number;
+  synergy: number;
 }
 
-/** Entièrement déterministe — voir functions/_lib/battle.ts. */
-export function resolveBattle(challengerTeam: TeamSlot[], opponentTeam: TeamSlot[]): BattleResult {
-  const cStats = slotStats(challengerTeam);
-  const oStats = slotStats(opponentTeam);
-  const cSynergy = synergyBonus(challengerTeam);
-  const oSynergy = synergyBonus(opponentTeam);
-  const challengerMaxHp = baseHp(challengerTeam, cSynergy);
-  const opponentMaxHp = baseHp(opponentTeam, oSynergy);
+function buildSide(team: TeamSlot[]): Side {
+  const stats = team.map(slotStats);
+  const attackers = team.map((s, i) => (s.stance === 'attaque' ? stats[i] : null)).filter((s): s is SlotStats => s !== null);
+  const defenders = team.map((s, i) => (s.stance === 'defense' ? stats[i] : null)).filter((s): s is SlotStats => s !== null);
+  // Filet de sécurité — voir functions/_lib/battle.ts pour l'explication.
+  if (attackers.length === 0) attackers.push({ cardId: 0, atk: 0, def: 0, camp: null });
+  const synergy = synergyBonus(team);
+  return { attackers, defenders, maxHp: Math.round(BASE_PV * (1 + synergy)), synergy };
+}
 
-  let hpC = challengerMaxHp;
-  let hpO = opponentMaxHp;
-  const cMomentum: boolean[] = [false, false, false, false, false];
-  const oMomentum: boolean[] = [false, false, false, false, false];
+/** Entièrement déterministe pour l'ATTAQUE elle-même — voir
+ *  functions/_lib/battle.ts. */
+export function resolveBattle(challengerTeam: TeamSlot[], opponentTeam: TeamSlot[]): BattleResult {
+  const c = buildSide(challengerTeam);
+  const o = buildSide(opponentTeam);
+
+  let hpC = c.maxHp;
+  let hpO = o.maxHp;
+  const defHpC = c.defenders.map((d) => d.def * DEFENDER_DURABILITY_MULT);
+  const defHpO = o.defenders.map((d) => d.def * DEFENDER_DURABILITY_MULT);
+  let frontC = 0;
+  let frontO = 0;
+  const momC = c.attackers.map(() => false);
+  const momO = o.attackers.map(() => false);
   const rounds: RoundEvent[] = [];
 
-  const n = Math.min(challengerTeam.length, opponentTeam.length, 5);
+  const nC = c.attackers.length || 1;
+  const nO = o.attackers.length || 1;
   let round = 0;
   while (hpC > 0 && hpO > 0 && round < MAX_ROUNDS) {
-    const i = round % n;
-    const cAdv = cStats[i].camp !== null && oStats[i].camp !== null && CAMP_BEATS[cStats[i].camp!] === oStats[i].camp;
-    const oAdv = oStats[i].camp !== null && cStats[i].camp !== null && CAMP_BEATS[oStats[i].camp!] === cStats[i].camp;
-    const cHadMomentum = cMomentum[i];
-    const oHadMomentum = oMomentum[i];
-    const cDesperate = hpC / challengerMaxHp < DESPERATION_THRESHOLD;
-    const oDesperate = hpO / opponentMaxHp < DESPERATION_THRESHOLD;
+    const ai = round % nC;
+    const oi = round % nO;
+    const attC = c.attackers[ai];
+    const attO = o.attackers[oi];
+    const cDesperate = hpC / c.maxHp < DESPERATION_THRESHOLD;
+    const oDesperate = hpO / o.maxHp < DESPERATION_THRESHOLD;
+    const cHadMomentum = momC[ai];
+    const oHadMomentum = momO[oi];
 
+    // ── Attaque du challenger, vise le camp adverse ──
+    const targetO = frontO < o.defenders.length ? o.defenders[frontO] : null;
+    const cAdv = !!targetO && attC.camp !== null && targetO.camp !== null && CAMP_BEATS[attC.camp] === targetO.camp;
     const cBonus = (cAdv ? CAMP_ADVANTAGE_BONUS : 0) + (cHadMomentum ? MOMENTUM_BONUS : 0) + (cDesperate ? DESPERATION_BONUS : 0);
-    const oBonus = (oAdv ? CAMP_ADVANTAGE_BONUS : 0) + (oHadMomentum ? MOMENTUM_BONUS : 0) + (oDesperate ? DESPERATION_BONUS : 0);
-    const atkC = Math.round(cStats[i].atk * (1 + cBonus));
-    const atkO = Math.round(oStats[i].atk * (1 + oBonus));
-
-    let dmgToO = Math.max(1, atkC - oStats[i].def);
+    const atkC = Math.round(attC.atk * (1 + cBonus));
+    let cDmg = Math.max(1, atkC - (targetO ? targetO.def : 0));
     let cCrit = false;
     const cBlocked = Math.random() < BLOCK_CHANCE;
-    if (cBlocked) dmgToO = 0;
-    else if ((cCrit = Math.random() < CRIT_CHANCE)) dmgToO *= 2;
+    if (cBlocked) cDmg = 0;
+    else if ((cCrit = Math.random() < CRIT_CHANCE)) cDmg *= 2;
+    let cDestroyed = false;
+    if (targetO) {
+      defHpO[frontO] -= cDmg;
+      if (defHpO[frontO] <= 0) {
+        cDestroyed = true;
+        frontO++;
+      }
+    } else {
+      hpO = Math.max(0, hpO - cDmg);
+    }
+    momC[ai] = targetO === null;
 
-    let dmgToC = Math.max(1, atkO - cStats[i].def);
+    // ── Attaque de l'adversaire, vise le camp du challenger ──
+    const targetC = frontC < c.defenders.length ? c.defenders[frontC] : null;
+    const oAdv = !!targetC && attO.camp !== null && targetC.camp !== null && CAMP_BEATS[attO.camp] === targetC.camp;
+    const oBonus = (oAdv ? CAMP_ADVANTAGE_BONUS : 0) + (oHadMomentum ? MOMENTUM_BONUS : 0) + (oDesperate ? DESPERATION_BONUS : 0);
+    const atkO = Math.round(attO.atk * (1 + oBonus));
+    let oDmg = Math.max(1, atkO - (targetC ? targetC.def : 0));
     let oCrit = false;
     const oBlocked = Math.random() < BLOCK_CHANCE;
-    if (oBlocked) dmgToC = 0;
-    else if ((oCrit = Math.random() < CRIT_CHANCE)) dmgToC *= 2;
-
-    hpO = Math.max(0, hpO - dmgToO);
-    hpC = Math.max(0, hpC - dmgToC);
-    cMomentum[i] = dmgToO > dmgToC;
-    oMomentum[i] = dmgToC > dmgToO;
+    if (oBlocked) oDmg = 0;
+    else if ((oCrit = Math.random() < CRIT_CHANCE)) oDmg *= 2;
+    let oDestroyed = false;
+    if (targetC) {
+      defHpC[frontC] -= oDmg;
+      if (defHpC[frontC] <= 0) {
+        oDestroyed = true;
+        frontC++;
+      }
+    } else {
+      hpC = Math.max(0, hpC - oDmg);
+    }
+    momO[oi] = targetC === null;
 
     rounds.push({
       round,
-      slot: i,
-      challengerCardId: challengerTeam[i].cardId,
-      opponentCardId: opponentTeam[i].cardId,
+      challengerAttackerId: attC.cardId,
+      opponentAttackerId: attO.cardId,
       challengerAtk: atkC,
       opponentAtk: atkO,
-      challengerDef: cStats[i].def,
-      opponentDef: oStats[i].def,
-      challengerDamage: dmgToO,
-      opponentDamage: dmgToC,
+      challengerTargetCardId: targetO ? targetO.cardId : null,
+      opponentTargetCardId: targetC ? targetC.cardId : null,
+      challengerTargetDestroyed: cDestroyed,
+      opponentTargetDestroyed: oDestroyed,
+      challengerDamage: cDmg,
+      opponentDamage: oDmg,
       challengerHp: hpC,
       opponentHp: hpO,
-      challengerCamp: cStats[i].camp,
-      opponentCamp: oStats[i].camp,
+      challengerCamp: attC.camp,
+      opponentCamp: attO.camp,
       challengerCampAdvantage: cAdv,
       opponentCampAdvantage: oAdv,
       challengerMomentum: cHadMomentum,
@@ -247,10 +302,10 @@ export function resolveBattle(challengerTeam: TeamSlot[], opponentTeam: TeamSlot
 
   return {
     rounds,
-    challengerMaxHp,
-    opponentMaxHp,
-    challengerSynergyBonus: cSynergy,
-    opponentSynergyBonus: oSynergy,
+    challengerMaxHp: c.maxHp,
+    opponentMaxHp: o.maxHp,
+    challengerSynergyBonus: c.synergy,
+    opponentSynergyBonus: o.synergy,
     winner,
   };
 }
@@ -261,10 +316,7 @@ export type BotDifficulty = 'facile' | 'moyen' | 'difficile';
 // mêmes que le taux de tirage des sacs (RARITIES dans cards.json) : le bot
 // "Facile" doit perdre plus souvent qu'il ne gagne pour un premier essai,
 // donc tiré vers les raretés basses ; "Difficile" vers le haut, pour
-// éprouver une équipe déjà bien montée. Relevé un cran par rapport à la
-// version précédente (combats à PV/postures : les parties durent plus
-// longtemps maintenant, un bot trop mou devient vite ennuyeux plutôt que
-// juste facile).
+// éprouver une équipe déjà bien montée.
 const BOT_RARITY_WEIGHTS: Record<BotDifficulty, Record<number, number>> = {
   facile: { 1: 50, 2: 30, 3: 15, 4: 4, 5: 0.8, 6: 0.2 },
   moyen: { 1: 20, 2: 22, 3: 25, 4: 20, 5: 9, 6: 4 },
@@ -284,19 +336,13 @@ function pickWeighted<T>(entries: [T, number][]): T {
   return entries[entries.length - 1][0];
 }
 
-/** Posture du bot : simple heuristique — plutôt "attaque" si son ATTAQUE
- *  dépasse sa DÉFENSE de base, "défense" sinon, joue donc au profil
- *  naturel de chaque carte plutôt qu'un choix uniforme ou aléatoire. */
-function botStance(cardId: number, holo: boolean): Stance {
-  const stats = cardStats(cardId, holo);
-  if (!stats) return 'attaque';
-  return stats.atk >= stats.def ? 'attaque' : 'defense';
-}
-
 /** Équipe aléatoire pour le bot — parmi TOUTES les cartes du jeu, pas
  *  seulement une collection possédée (un bot n'a pas de compte). Jamais la
  *  secrète, jamais deux fois la même carte (même contrainte que teamError
- *  côté serveur pour un vrai combat). */
+ *  côté serveur pour un vrai combat). EXACTEMENT ATTACKER_COUNT cartes en
+ *  Attaque et DEFENDER_COUNT en Défense — le bot met en Attaque ses cartes
+ *  dont l'ATTAQUE dépasse le plus la DÉFENSE (ses meilleures attaquantes),
+ *  le reste en Défense, plutôt qu'un choix uniforme ou aléatoire. */
 export function randomBotTeam(difficulty: BotDifficulty): TeamSlot[] {
   const weights = BOT_RARITY_WEIGHTS[difficulty];
   const holoChance = BOT_HOLO_CHANCE[difficulty];
@@ -307,17 +353,20 @@ export function randomBotTeam(difficulty: BotDifficulty): TeamSlot[] {
     byRarity.get(c.rarity)!.push(c.id);
   }
 
-  const team: TeamSlot[] = [];
+  const picks: { cardId: number; holo: boolean }[] = [];
   const used = new Set<number>();
   let guard = 0;
-  while (team.length < 5 && guard++ < 200) {
+  while (picks.length < 5 && guard++ < 200) {
     const rarity = pickWeighted(Object.entries(weights).map(([r, w]) => [Number(r), w] as [number, number]));
     const pool = (byRarity.get(rarity) ?? []).filter((id) => !used.has(id));
     if (pool.length === 0) continue;
     const cardId = pool[Math.floor(Math.random() * pool.length)];
     used.add(cardId);
-    const holo = Math.random() < holoChance;
-    team.push({ cardId, holo, stance: botStance(cardId, holo) });
+    picks.push({ cardId, holo: Math.random() < holoChance });
   }
-  return team;
+
+  const ranked = picks
+    .map((p) => ({ ...p, stats: cardStats(p.cardId, p.holo) ?? { atk: 0, def: 0 } }))
+    .sort((a, b) => b.stats.atk - b.stats.def - (a.stats.atk - a.stats.def));
+  return ranked.map((p, i) => ({ cardId: p.cardId, holo: p.holo, stance: i < ATTACKER_COUNT ? 'attaque' : 'defense' }));
 }

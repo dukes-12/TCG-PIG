@@ -6,7 +6,7 @@ import Chip from '../components/Chip';
 import PigCard from '../components/PigCard';
 import { CARDS, SECRET_RARITY_ID, cardById } from '../data/catalog';
 import { apiCreateBattle, apiFetchBattles, apiFetchFriends, apiRespondBattle, type Battle, type TeamSlot } from '../lib/api';
-import { CAMP_INFO, STANCE_INFO, campOf, cardStats, cardStatsWithStance, randomBotTeam, resolveBattle as resolveBattleLocally, type BotDifficulty } from '../lib/battle';
+import { CAMP_INFO, STANCE_INFO, TEAM_SHAPE, campOf, cardStats, cardStatsWithStance, randomBotTeam, resolveBattle as resolveBattleLocally, teamShapeOk, type BotDifficulty } from '../lib/battle';
 import type { Stance } from '../lib/api';
 import { useAnimations } from '../lib/useAnimations';
 import { useStore } from '../state/store';
@@ -96,11 +96,17 @@ export default function BattlesScreen() {
     [owned, ownedHolo],
   );
 
+  // Nouvelle carte : posture proposée par défaut selon ce qu'il manque
+  // encore à l'équipe (2 Attaque, 3 Défense — voir TEAM_SHAPE), plutôt que
+  // toujours "Attaque" — sinon la 3e carte ajoutée serait toujours en trop
+  // et il faudrait systématiquement la retoucher à la main.
   const toggleCard = (cardId: number, holo: boolean) => {
     setTeam((t) => {
       if (t.some((s) => s.cardId === cardId)) return t.filter((s) => s.cardId !== cardId);
       if (t.length >= 5) return t;
-      return [...t, { cardId, holo, stance: 'attaque' }];
+      const attackers = t.filter((s) => s.stance === 'attaque').length;
+      const stance: Stance = attackers < TEAM_SHAPE.attackers ? 'attaque' : 'defense';
+      return [...t, { cardId, holo, stance }];
     });
   };
 
@@ -161,7 +167,7 @@ export default function BattlesScreen() {
   };
 
   const submit = async () => {
-    if (!compose || team.length !== 5) return;
+    if (!compose || !teamShapeOk(team)) return;
     setBusy(true);
     try {
       if (compose.bot) {
@@ -226,6 +232,8 @@ export default function BattlesScreen() {
   const pending = battles.filter((b) => b.status === 'pending');
   const resolved = battles.filter((b) => b.status !== 'pending');
   const teamPreview = team.map((s) => cardById(s.cardId)).filter((c): c is NonNullable<typeof c> => !!c);
+  const teamAttackers = team.filter((s) => s.stance === 'attaque').length;
+  const teamDefenders = team.filter((s) => s.stance === 'defense').length;
 
   return (
     <div className="screen">
@@ -233,11 +241,13 @@ export default function BattlesScreen() {
         <h1 style={{ fontSize: 30, margin: 0, lineHeight: 1 }}>Combats</h1>
         <p style={{ fontSize: 13, opacity: 0.6, margin: '10px 0 0', textWrap: 'pretty' as const }}>
           5 cartes, chacune avec une ⚔️ Attaque et une 🛡️ Défense (rareté = puissance, holo = +50%, profil propre à
-          chaque carte) et une posture à ta discrétion : ⚔️ Attaque (frappe plus fort, encaisse plus) ou 🛡️ Défense
-          (l'inverse). Chaque équipe a une jauge de PV commune, le combat se joue en plusieurs tours — pas un résultat
-          instantané. Trois camps se contrent façon pierre-papier-ciseaux ({CAMP_INFO.pouvoir.icon} bat{' '}
-          {CAMP_INFO.fiction.icon} bat {CAMP_INFO.culture.icon} bat {CAMP_INFO.pouvoir.icon}), un duel qui inflige plus
-          de dégâts qu'il n'en subit donne de la lancée 🔥 la fois suivante, et une équipe sous 25% de PV se bat avec
+          chaque carte) — EXACTEMENT {TEAM_SHAPE.attackers} en posture ⚔️ Attaque et {TEAM_SHAPE.defenders} en 🛡️
+          Défense. Les deux équipes ont 500 PV. Les cartes en Défense forment un écran : les Attaque adverses doivent
+          d'abord les briser une par une, dans l'ordre, avant de pouvoir toucher les PV directement — une fois l'écran
+          percé, plus rien ne protège les PV. Trois camps se contrent façon pierre-papier-ciseaux ({CAMP_INFO.pouvoir.icon}{' '}
+          bat {CAMP_INFO.fiction.icon} bat {CAMP_INFO.culture.icon} bat {CAMP_INFO.pouvoir.icon}) : un avantage de camp
+          ne compte que face à la carte-écran visée, plus une fois les PV atteints directement. Toucher les PV
+          adverses donne de la lancée 🔥 au prochain tour de cet attaquant, et une équipe sous 25% de PV se bat avec
           les tripes (💢 bonus d'attaque). Chaque tour, 🎯 15% de chances de coup critique (double les dégâts) et 🚫
           12% de bloquer complètement une attaque. Asynchrone : ton adversaire répond quand il veut.
         </p>
@@ -310,15 +320,15 @@ export default function BattlesScreen() {
             <button
               className="pressable"
               onClick={toggleFavorite}
-              disabled={!isCurrentTeamFavorite && team.length !== 5}
+              disabled={!isCurrentTeamFavorite && !teamShapeOk(team)}
               title={isCurrentTeamFavorite ? 'Retirer cette équipe des favoris' : 'Sauvegarder comme équipe favorite'}
               style={{
                 marginLeft: 'auto',
                 border: 0,
                 background: 'none',
-                cursor: isCurrentTeamFavorite || team.length === 5 ? 'pointer' : 'default',
+                cursor: isCurrentTeamFavorite || teamShapeOk(team) ? 'pointer' : 'default',
                 fontSize: 15,
-                opacity: isCurrentTeamFavorite ? 1 : team.length === 5 ? 0.6 : 0.25,
+                opacity: isCurrentTeamFavorite ? 1 : teamShapeOk(team) ? 0.6 : 0.25,
                 padding: 4,
                 lineHeight: 1,
               }}
@@ -394,10 +404,21 @@ export default function BattlesScreen() {
               );
             })}
           </div>
-          <div style={{ fontSize: 11, opacity: 0.55, marginBottom: 4 }}>{team.length}/5 — {teamPreview.map((c) => c.name).join(', ') || 'aucune carte choisie'}</div>
+          <div style={{ fontSize: 11, marginBottom: 4, display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+            <span style={{ opacity: 0.55 }}>{team.length}/5 — {teamPreview.map((c) => c.name).join(', ') || 'aucune carte choisie'}</span>
+            <span
+              style={{
+                fontWeight: 700,
+                color: teamShapeOk(team) ? 'var(--color-accent-2-800)' : 'var(--color-neutral-600)',
+              }}
+            >
+              {STANCE_INFO.attaque.icon} {teamAttackers}/{TEAM_SHAPE.attackers} · {STANCE_INFO.defense.icon} {teamDefenders}/{TEAM_SHAPE.defenders}
+            </span>
+          </div>
           <div style={{ fontSize: 10.5, opacity: 0.5, marginBottom: 10 }}>
-            L'ordre des cartes ci-dessus est l'ordre des duels — la 1ère carte affronte la 1ère de l'adversaire, etc.
-            Touche la pastille sous une carte pour changer sa posture.
+            Il faut exactement {TEAM_SHAPE.attackers} cartes en Attaque et {TEAM_SHAPE.defenders} en Défense — touche
+            la pastille sous une carte pour changer sa posture. L'ordre des cartes en Défense fixe l'ordre de l'écran
+            (la 1ère encaisse en premier).
           </div>
 
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,minmax(0,1fr))', gap: 8, maxHeight: '38vh', overflowY: 'auto' }}>
@@ -474,7 +495,7 @@ export default function BattlesScreen() {
           <button
             className="pressable"
             onClick={submit}
-            disabled={busy || team.length !== 5}
+            disabled={busy || !teamShapeOk(team)}
             style={{
               marginTop: 14,
               cursor: 'pointer',
@@ -486,7 +507,7 @@ export default function BattlesScreen() {
               width: '100%',
               background: 'var(--color-accent)',
               color: 'var(--color-bg)',
-              opacity: busy || team.length !== 5 ? 0.5 : 1,
+              opacity: busy || !teamShapeOk(team) ? 0.5 : 1,
             }}
           >
             {compose.respondTo ? 'Répondre au défi' : compose.bot ? 'Lancer le combat' : 'Lancer le défi'}
