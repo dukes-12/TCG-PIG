@@ -195,7 +195,11 @@ interface SlotStats {
 function slotStats(team: TeamSlot[]): SlotStats[] {
   return team.map((s) => {
     const base = cardStats(s.cardId, s.holo) ?? { atk: 0, def: 0 };
-    const mult = STANCE_MULT[s.stance];
+    // `?? STANCE_MULT.attaque` : un défi créé avant l'ajout des postures a
+    // une équipe stockée sans `stance` — sans ce filet, ce combat plante à
+    // la résolution (`STANCE_MULT[undefined]` est `undefined`) et ne
+    // s'affiche jamais. Repli sur "Attaque" plutôt qu'un plantage.
+    const mult = STANCE_MULT[s.stance] ?? STANCE_MULT.attaque;
     return { atk: Math.round(base.atk * mult.atk), def: Math.round(base.def * mult.def), camp: campOf(s.cardId) };
   });
 }

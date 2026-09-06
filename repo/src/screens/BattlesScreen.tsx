@@ -117,7 +117,11 @@ export default function BattlesScreen() {
   const favoriteIfValid = (): TeamSlot[] => {
     if (!favoriteTeam || favoriteTeam.length !== 5) return [];
     const stillOwned = favoriteTeam.every((s) => ((s.holo ? ownedHolo : owned)[s.cardId] || 0) > 0);
-    return stillOwned ? favoriteTeam : [];
+    if (!stillOwned) return [];
+    // Une équipe favorite sauvegardée avant l'ajout des postures n'a pas de
+    // `stance` — sans ce repli, elle serait rejetée par le serveur
+    // (isTeamShape) dès qu'on tente de la relancer telle quelle.
+    return favoriteTeam.map((s) => (s.stance === 'attaque' || s.stance === 'defense' ? s : { ...s, stance: 'attaque' }));
   };
 
   const startChallenge = (username: string) => {

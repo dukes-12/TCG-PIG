@@ -120,7 +120,7 @@ export const STANCE_INFO: Record<Stance, { icon: string; label: string }> = {
 export function cardStatsWithStance(cardId: number, holo: boolean, stance: Stance): CardStats | null {
   const base = cardStats(cardId, holo);
   if (!base) return null;
-  const mult = STANCE_MULT[stance];
+  const mult = STANCE_MULT[stance] ?? STANCE_MULT.attaque;
   return { atk: Math.round(base.atk * mult.atk), def: Math.round(base.def * mult.def) };
 }
 
@@ -133,7 +133,9 @@ interface SlotStats {
 function slotStats(team: TeamSlot[]): SlotStats[] {
   return team.map((s) => {
     const base = cardStats(s.cardId, s.holo) ?? { atk: 0, def: 0 };
-    const mult = STANCE_MULT[s.stance];
+    // Filet de sécurité — voir functions/_lib/battle.ts pour l'explication
+    // (une équipe stockée avant l'ajout des postures n'a pas de `stance`).
+    const mult = STANCE_MULT[s.stance] ?? STANCE_MULT.attaque;
     return { atk: Math.round(base.atk * mult.atk), def: Math.round(base.def * mult.def), camp: campOf(s.cardId) };
   });
 }
