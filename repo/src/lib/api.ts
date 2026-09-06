@@ -110,26 +110,31 @@ export interface TeamSlot {
   holo: boolean;
 }
 
-/** Les 3 "camps" thématiques, façon pierre-papier-ciseaux — Fiction bat
- *  Pouvoir bat Culture bat Fiction. Voir functions/_lib/battle.ts pour le
- *  détail de la répartition des catégories et le calcul. */
+/** Les 3 "camps" thématiques, façon pierre-papier-ciseaux — Pouvoir bat
+ *  Fiction bat Culture bat Pouvoir. Voir functions/_lib/battle.ts pour le
+ *  détail de la répartition des catégories, le calcul, et pourquoi ce sens
+ *  précis (rééquilibrage sur la puissance moyenne réelle de chaque camp). */
 export type Camp = 'fiction' | 'pouvoir' | 'culture';
 
 export interface DuelResult {
   slot: number;
   challengerCardId: number;
   opponentCardId: number;
-  challengerPower: number;
-  opponentPower: number;
+  /** ATTAQUE finale utilisée pour ce duel (après jitter, camp, momentum). */
+  challengerAtk: number;
+  opponentAtk: number;
+  /** DÉFENSE de base de la carte — pas de jitter ni de bonus dessus. */
+  challengerDef: number;
+  opponentDef: number;
   challengerCamp: Camp | null;
   opponentCamp: Camp | null;
   /** true si le camp de cette carte a l'avantage sur le camp adverse pour
-   *  ce duel précis (déjà pris en compte dans *Power ci-dessus). */
+   *  ce duel précis (déjà pris en compte dans *Atk ci-dessus). */
   challengerCampAdvantage: boolean;
   opponentCampAdvantage: boolean;
   /** true si cette carte profite du bonus de "lancée" (la carte précédente
    *  de la même équipe a gagné son duel) — déjà pris en compte dans
-   *  *Power ci-dessus. */
+   *  *Atk ci-dessus. */
   challengerMomentum: boolean;
   opponentMomentum: boolean;
   winner: 'challenger' | 'opponent' | 'tie';

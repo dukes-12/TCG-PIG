@@ -66,7 +66,9 @@ export default function BattleResultOverlay({ battle, myUsername, onClose }: { b
                 <DuelSide
                   card={cCard}
                   holo={cTeam?.holo ?? false}
-                  power={d.challengerPower}
+                  atk={d.challengerAtk}
+                  def={d.challengerDef}
+                  broke={d.challengerAtk > d.opponentDef}
                   won={d.winner === 'challenger'}
                   camp={d.challengerCamp}
                   campAdvantage={d.challengerCampAdvantage}
@@ -78,7 +80,9 @@ export default function BattleResultOverlay({ battle, myUsername, onClose }: { b
                 <DuelSide
                   card={oCard}
                   holo={oTeam?.holo ?? false}
-                  power={d.opponentPower}
+                  atk={d.opponentAtk}
+                  def={d.opponentDef}
+                  broke={d.opponentAtk > d.challengerDef}
                   won={d.winner === 'opponent'}
                   camp={d.opponentCamp}
                   campAdvantage={d.opponentCampAdvantage}
@@ -127,7 +131,9 @@ export default function BattleResultOverlay({ battle, myUsername, onClose }: { b
 function DuelSide({
   card,
   holo,
-  power,
+  atk,
+  def,
+  broke,
   won,
   camp,
   campAdvantage,
@@ -137,7 +143,13 @@ function DuelSide({
 }: {
   card: ReturnType<typeof cardById>;
   holo: boolean;
-  power: number;
+  atk: number;
+  def: number;
+  /** true si l'ATTAQUE de cette carte a percé la DÉFENSE d'en face (voir
+   *  resolveDuel dans lib/battle.ts) — n'implique pas forcément la victoire
+   *  du duel : les deux camps peuvent percer, seule la plus grosse marge
+   *  gagne alors. */
+  broke: boolean;
   won: boolean;
   camp: Camp | null;
   campAdvantage: boolean;
@@ -165,16 +177,18 @@ function DuelSide({
             title="Avantage de camp"
             style={{ position: 'absolute', top: -4, [align === 'right' ? 'left' : 'right']: -4, fontSize: 13 }}
           >
-            ⚔️
+            💫
           </span>
         )}
       </div>
       <div style={{ minWidth: 0, textAlign: align }}>
         <div style={{ fontSize: 11, fontWeight: won ? 700 : 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{card.name}</div>
-        <div style={{ fontSize: 10, opacity: 0.55, display: 'flex', alignItems: 'center', gap: 4, justifyContent: align === 'right' ? 'flex-end' : 'flex-start' }}>
+        <div style={{ fontSize: 10, opacity: 0.55, display: 'flex', alignItems: 'center', gap: 4, justifyContent: align === 'right' ? 'flex-end' : 'flex-start', flexWrap: 'wrap' }}>
           {campInfo && <span title={campInfo.label}>{campInfo.icon}</span>}
-          <span>{power} pts</span>
-          {momentum && <span title="Lancée : bonus de puissance">🔥</span>}
+          <span title="Attaque">⚔️{atk}</span>
+          <span title="Défense">🛡️{def}</span>
+          {momentum && <span title="Lancée : bonus d'attaque">🔥</span>}
+          {broke && <span title="A percé la défense adverse">💥</span>}
         </div>
       </div>
     </div>

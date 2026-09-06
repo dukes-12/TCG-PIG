@@ -10,10 +10,38 @@ import type { TeamSlot, BattleResult, DuelResult, Camp } from './api';
  *  rareté/catégorie depuis CARD_META (généré, les Pages Functions
  *  n'important pas le catalogue front-end) alors qu'ici `CARDS` est déjà
  *  disponible directement. Si le barème change d'un côté, le changer de
- *  l'autre aussi — y compris le triangle de camps et le momentum
- *  ci-dessous. */
+ *  l'autre aussi — y compris le triangle de camps, les stats ATK/DEF et le
+ *  momentum ci-dessous. */
 
 const RARITY_POWER: Record<number, number> = { 1: 1, 2: 2, 3: 4, 4: 8, 5: 16, 6: 32 };
+
+/** ATTAQUE et DÉFENSE d'une carte — voir functions/_lib/battle.ts pour
+ *  l'explication complète de pourquoi ces deux stats sont tirées
+ *  INDÉPENDAMMENT plutôt que de sommer à un total fixe (sinon le profil
+ *  attaque/défense d'une carte n'aurait aucun effet sur qui gagne). */
+function hash01(seed: string): number {
+  let h = 2166136261;
+  for (let i = 0; i < seed.length; i++) {
+    h ^= seed.charCodeAt(i);
+    h = Math.imul(h, 16777619);
+  }
+  return ((h >>> 0) % 100000) / 100000;
+}
+
+export interface CardStats {
+  atk: number;
+  def: number;
+}
+
+export function cardStats(cardId: number, holo: boolean): CardStats | null {
+  const card = cardById(cardId);
+  if (!card || card.rarity === SECRET_RARITY_ID) return null;
+  const base = RARITY_POWER[card.rarity] ?? 0;
+  const P = holo ? base * 1.5 : base;
+  const atk = Math.max(1, Math.round(P * (0.65 + hash01(`${cardId}:atk`) * 0.7)));
+  const def = Math.max(1, Math.round(P * (0.65 + hash01(`${cardId}:def`) * 0.7)));
+  return { atk, def };
+}
 
 /** Triangle de camps — voir functions/_lib/battle.ts pour l'explication
  *  complète. Doit rester identique côté serveur et côté client. */
@@ -47,9 +75,13 @@ const TYPE_CAMP: Record<string, Camp> = {
   'Eléments chimique': 'culture',
   'Hors catégorie': 'culture',
 };
-const CAMP_BEATS: Record<Camp, Camp> = { fiction: 'pouvoir', pouvoir: 'culture', culture: 'fiction' };
-const CAMP_ADVANTAGE_MULTIPLIER = 2;
-const MOMENTUM_BONUS = 0.12;
+// Rééquilibrage : Fiction (107 cartes, puissance moyenne 5,11) est le camp
+// le plus fort, Pouvoir (70 cartes, 3,61) le plus faible — le premier sens
+// (Fiction bat Pouvoir) cumulait l'écart de puissance et l'avantage de camp
+// sur le même camp déjà en difficulté. Sens inversé : Pouvoir bat Fiction.
+const CAMP_BEATS: Record<Camp, Camp> = { fiction: 'culture', culture: 'pouvoir', pouvoir: 'fiction' };
+const CAMP_ADVANTAGE_MULTIPLIER = 3.5;
+const MOMENTUM_MULTIPLIER = 1.3;
 
 export function campOf(cardId: number): Camp | null {
   const card = cardById(cardId);
@@ -65,21 +97,20 @@ export const CAMP_INFO: Record<Camp, { icon: string; label: string }> = {
   culture: { icon: '🌿', label: 'Culture' },
 };
 
-export function cardPower(cardId: number, holo: boolean): number | null {
-  const card = cardById(cardId);
-  if (!card || card.rarity === SECRET_RARITY_ID) return null;
-  const base = RARITY_POWER[card.rarity] ?? 0;
-  return holo ? Math.round(base * 1.5) : base;
-}
-
 export interface TeamPower {
   base: number;
   synergyBonus: number;
   total: number;
 }
 
+/** Puissance d'équipe hors-duel (départage à manches égales, affichage) —
+ *  somme d'ATTAQUE+DÉFENSE de chaque carte, jamais boostée par le camp ou
+ *  le momentum (contextuels à un duel précis, pas à l'équipe entière). */
 export function teamPower(team: TeamSlot[]): TeamPower {
-  const base = team.reduce((sum, s) => sum + (cardPower(s.cardId, s.holo) ?? 0), 0);
+  const base = team.reduce((sum, s) => {
+    const stats = cardStats(s.cardId, s.holo);
+    return sum + (stats ? stats.atk + stats.def : 0);
+  }, 0);
   const typeCounts = new Map<string, number>();
   for (const s of team) {
     const card = cardById(s.cardId);
@@ -101,6 +132,23 @@ function mulberry32(seed: number) {
   };
 }
 
+/** Résolution d'un duel façon "percée" — voir functions/_lib/battle.ts
+ *  pour l'explication complète (et pourquoi une simple comparaison de
+ *  puissance ne suffit plus). */
+function resolveDuel(atkC: number, defC: number, atkO: number, defO: number): 'challenger' | 'opponent' | 'tie' {
+  const cBreaks = atkC > defO;
+  const oBreaks = atkO > defC;
+  if (cBreaks && oBreaks) {
+    const marginC = atkC - defO;
+    const marginO = atkO - defC;
+    if (marginC === marginO) return 'tie';
+    return marginC > marginO ? 'challenger' : 'opponent';
+  }
+  if (cBreaks) return 'challenger';
+  if (oBreaks) return 'opponent';
+  return 'tie';
+}
+
 /** `seed` : un combat de test n'a pas d'id de ligne en base à réutiliser —
  *  n'importe quel entier fait l'affaire (voir botTeam ci-dessous, qui en
  *  tire un au hasard à chaque défi pour ne pas rejouer le même combat). */
@@ -114,6 +162,8 @@ export function resolveBattle(seed: number, challengerTeam: TeamSlot[], opponent
   for (let i = 0; i < Math.min(challengerTeam.length, opponentTeam.length); i++) {
     const c = challengerTeam[i];
     const o = opponentTeam[i];
+    const cStats = cardStats(c.cardId, c.holo) ?? { atk: 0, def: 0 };
+    const oStats = cardStats(o.cardId, o.holo) ?? { atk: 0, def: 0 };
     const cCamp = campOf(c.cardId);
     const oCamp = campOf(o.cardId);
     const cCampAdvantage = cCamp !== null && oCamp !== null && CAMP_BEATS[cCamp] === oCamp;
@@ -121,24 +171,24 @@ export function resolveBattle(seed: number, challengerTeam: TeamSlot[], opponent
     const cMomentum = prevWinner === 'challenger';
     const oMomentum = prevWinner === 'opponent';
 
-    let cRoll = (cardPower(c.cardId, c.holo) ?? 0) * (0.9 + rand() * 0.2);
-    let oRoll = (cardPower(o.cardId, o.holo) ?? 0) * (0.9 + rand() * 0.2);
-    if (cCampAdvantage) cRoll *= CAMP_ADVANTAGE_MULTIPLIER;
-    if (oCampAdvantage) oRoll *= CAMP_ADVANTAGE_MULTIPLIER;
-    if (cMomentum) cRoll *= 1 + MOMENTUM_BONUS;
-    if (oMomentum) oRoll *= 1 + MOMENTUM_BONUS;
+    let atkC = cStats.atk * (0.9 + rand() * 0.2);
+    let atkO = oStats.atk * (0.9 + rand() * 0.2);
+    if (cCampAdvantage) atkC *= CAMP_ADVANTAGE_MULTIPLIER;
+    if (oCampAdvantage) atkO *= CAMP_ADVANTAGE_MULTIPLIER;
+    if (cMomentum) atkC *= MOMENTUM_MULTIPLIER;
+    if (oMomentum) atkO *= MOMENTUM_MULTIPLIER;
 
-    let winner: DuelResult['winner'] = 'tie';
-    if (cRoll > oRoll) winner = 'challenger';
-    else if (oRoll > cRoll) winner = 'opponent';
+    const winner = resolveDuel(atkC, cStats.def, atkO, oStats.def);
     if (winner === 'challenger') challengerRoundsWon++;
     if (winner === 'opponent') opponentRoundsWon++;
     duels.push({
       slot: i,
       challengerCardId: c.cardId,
       opponentCardId: o.cardId,
-      challengerPower: Math.round(cRoll),
-      opponentPower: Math.round(oRoll),
+      challengerAtk: Math.round(atkC),
+      opponentAtk: Math.round(atkO),
+      challengerDef: cStats.def,
+      opponentDef: oStats.def,
       challengerCamp: cCamp,
       opponentCamp: oCamp,
       challengerCampAdvantage: cCampAdvantage,

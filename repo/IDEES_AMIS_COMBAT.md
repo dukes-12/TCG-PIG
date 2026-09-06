@@ -35,15 +35,11 @@ avec comptes utilisateurs.
 > `src/lib/battle.ts` (mode bot) :
 > - **Triangle de camps** : les ~28 catégories de cartes sont regroupées en
 >   3 camps thématiques (Fiction, Pouvoir, Culture) façon
->   pierre-papier-ciseaux — Fiction bat Pouvoir bat Culture bat Fiction. La
->   carte dont le camp a l'avantage voit sa puissance ×2 pour ce duel :
->   assez pour gagner à coup sûr à puissance égale ou inférieure, pour que
->   l'issue redevienne un vrai coup de dés face à un palier de rareté
->   au-dessus, et pour rester sans effet face à deux paliers ou plus d'écart.
-> - **Momentum** : gagner un duel donne +12% de puissance à la carte
+>   pierre-papier-ciseaux.
+> - **Momentum** : gagner un duel donne un bonus d'ATTAQUE à la carte
 >   suivante de la *même* équipe pour le duel suivant — l'ordre dans lequel
->   on aligne ses 5 cartes compte, pas seulement leur puissance individuelle.
-> - Affiché dans `BattleResultOverlay` (icône de camp, ⚔️ si avantage, 🔥 si
+>   on aligne ses 5 cartes compte, pas seulement la force brute des cartes.
+> - Affiché dans `BattleResultOverlay` (icône de camp, 💫 si avantage, 🔥 si
 >   lancée) et dans le composeur d'équipe de `BattlesScreen` (icône de camp
 >   par carte).
 >
@@ -56,6 +52,43 @@ avec comptes utilisateurs.
 > - **C** — équipe favorite : un bouton ★ dans le composeur sauvegarde la
 >   composition actuelle, reproposée d'office au prochain défi si les 5
 >   cartes sont toujours possédées.
+>
+> **Troisième passage** ("le système est trop simple" restait vrai à
+> puissance égale — un tirage au sort pur — et un déséquilibre des camps
+> était réel) — deux changements plus profonds :
+> - **ATTAQUE et DÉFENSE remplacent la puissance unique**. Chaque carte a
+>   maintenant deux stats, dérivées **indépendamment** l'une de l'autre
+>   (±35% de bruit chacune autour de sa puissance de rareté habituelle,
+>   tiré une fois pour toutes par un hash déterministe de son id — jamais
+>   stocké, jamais re-tiré, recalculé à la volée comme l'ancienne
+>   `cardPower`). Le duel se résout en "percée" plutôt qu'en simple
+>   comparaison : l'ATTAQUE d'un camp doit dépasser la DÉFENSE d'en face
+>   pour "percer" ; si les deux percent, la plus grosse marge gagne ; si
+>   aucune ne perce, égalité. **Indépendamment**, pas une somme fixe par
+>   carte : sinon le profil attaque/défense n'aurait mathématiquement aucun
+>   effet sur qui gagne entre deux cartes de même rareté (démontré par le
+>   calcul — toute formule symétrique se ramène alors à comparer les
+>   totaux, qui sont égaux par construction). Vérifié par simulation sur le
+>   vrai catalogue : à rareté égale, le profil seul tranche désormais un
+>   duel dans la quasi-totalité des cas (contre un pur tirage au sort par
+>   jitter avant ce passage), tout en gardant la rareté décisive au global
+>   (rareté+1 bat rareté quasi systématiquement). Le camp et le momentum
+>   s'appliquent maintenant à l'ATTAQUE uniquement (un avantage ou une
+>   lancée fait taper plus fort, pas devenir plus solide) — recalibrés en
+>   conséquence (`CAMP_ADVANTAGE_MULTIPLIER = 3.5`, `MOMENTUM_MULTIPLIER =
+>   1.3`) pour retrouver les mêmes garanties qu'avant (quasi 100% à rareté
+>   égale, ~59% face à un palier au-dessus, ~0% à deux paliers ou plus).
+> - **Rééquilibrage du triangle de camps** : Fiction s'est révélé être en
+>   moyenne le camp le plus fort (puissance moyenne 5,11 sur ses 107
+>   cartes, contre 4,42 pour Culture et 3,61 pour Pouvoir, le plus faible),
+>   et le premier sens retenu (Fiction bat Pouvoir) cumulait l'écart de
+>   puissance et l'avantage de camp sur le même camp déjà en difficulté.
+>   Sens inversé : **Pouvoir bat Fiction bat Culture bat Pouvoir** — chaque
+>   camp n'encaisse plus qu'un seul écart de puissance "naturel" dans le
+>   même sens au lieu de deux qui se cumulaient.
+> - Affiché dans `BattleResultOverlay` (⚔️ATTAQUE, 🛡️DÉFENSE, 💥 si la carte
+>   a percé la défense adverse) et dans le composeur (`BattlesScreen`, badge
+>   ⚔️/🛡️ sur chaque carte de la sélection et de l'équipe en cours).
 >
 > Le reste de ce document (schéma Postgres/Supabase, phasage, questions
 > restées ouvertes) garde sa valeur de référence historique mais ne

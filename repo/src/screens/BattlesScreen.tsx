@@ -6,7 +6,7 @@ import Chip from '../components/Chip';
 import PigCard from '../components/PigCard';
 import { CARDS, SECRET_RARITY_ID, cardById } from '../data/catalog';
 import { apiCreateBattle, apiFetchBattles, apiFetchFriends, apiRespondBattle, type Battle, type TeamSlot } from '../lib/api';
-import { CAMP_INFO, campOf, randomBotTeam, resolveBattle as resolveBattleLocally, type BotDifficulty } from '../lib/battle';
+import { CAMP_INFO, campOf, cardStats, randomBotTeam, resolveBattle as resolveBattleLocally, type BotDifficulty } from '../lib/battle';
 import { useAnimations } from '../lib/useAnimations';
 import { useStore } from '../state/store';
 import type { AvatarKey } from '../types';
@@ -218,9 +218,11 @@ export default function BattlesScreen() {
       <div className="screen-inner">
         <h1 style={{ fontSize: 30, margin: 0, lineHeight: 1 }}>Combats</h1>
         <p style={{ fontSize: 13, opacity: 0.6, margin: '10px 0 0', textWrap: 'pretty' as const }}>
-          5 cartes, la rareté fait la puissance (holo = +50%). Trois camps se contrent façon pierre-papier-ciseaux
-          ({CAMP_INFO.fiction.icon} bat {CAMP_INFO.pouvoir.icon} bat {CAMP_INFO.culture.icon} bat {CAMP_INFO.fiction.icon}) et
-          gagner un duel donne de la lancée 🔥 à ta carte suivante — l'ordre compte. Asynchrone : ton adversaire répond quand il veut.
+          5 cartes, chacune avec une ⚔️ Attaque et une 🛡️ Défense (rareté = puissance, holo = +50%, profil propre à
+          chaque carte). Un duel se gagne en perçant la défense d'en face. Trois camps se contrent façon
+          pierre-papier-ciseaux ({CAMP_INFO.pouvoir.icon} bat {CAMP_INFO.fiction.icon} bat {CAMP_INFO.culture.icon} bat{' '}
+          {CAMP_INFO.pouvoir.icon}) et gagner un duel donne de la lancée 🔥 à ta carte suivante — l'ordre compte.
+          Asynchrone : ton adversaire répond quand il veut.
         </p>
       </div>
 
@@ -316,6 +318,7 @@ export default function BattlesScreen() {
               const slot = team[i];
               const card = slot ? cardById(slot.cardId) : null;
               const camp = card ? campOf(card.id) : null;
+              const stats = slot ? cardStats(slot.cardId, slot.holo) : null;
               return (
                 <div key={i} style={{ position: 'relative', width: 46, aspectRatio: '0.72', flex: 'none', borderRadius: 10, background: 'var(--color-neutral-200)', overflow: 'hidden' }}>
                   {card ? <PigCard card={card} holoAnim={holoAnim} ownedCount={1} isHolo={slot!.holo} /> : null}
@@ -326,6 +329,28 @@ export default function BattlesScreen() {
                     >
                       {CAMP_INFO[camp].icon}
                     </span>
+                  )}
+                  {stats && (
+                    <div
+                      style={{
+                        position: 'absolute',
+                        bottom: 0,
+                        left: 0,
+                        right: 0,
+                        padding: '2px 0',
+                        fontSize: 8.5,
+                        fontWeight: 700,
+                        textAlign: 'center',
+                        color: '#fff',
+                        background: 'rgba(0,0,0,.45)',
+                        display: 'flex',
+                        justifyContent: 'center',
+                        gap: 5,
+                      }}
+                    >
+                      <span>⚔️{stats.atk}</span>
+                      <span>🛡️{stats.def}</span>
+                    </div>
                   )}
                 </div>
               );
@@ -340,6 +365,7 @@ export default function BattlesScreen() {
             {eligible.map(({ card, holo }) => {
               const active = team.some((s) => s.cardId === card.id);
               const camp = campOf(card.id);
+              const stats = cardStats(card.id, holo);
               return (
                 <div
                   key={card.id}
@@ -356,12 +382,35 @@ export default function BattlesScreen() {
                       {CAMP_INFO[camp].icon}
                     </span>
                   )}
+                  {stats && (
+                    <div
+                      style={{
+                        position: 'absolute',
+                        bottom: 0,
+                        left: 0,
+                        right: 0,
+                        padding: '2px 0',
+                        fontSize: 9,
+                        fontWeight: 700,
+                        textAlign: 'center',
+                        color: '#fff',
+                        background: 'rgba(0,0,0,.45)',
+                        display: 'flex',
+                        justifyContent: 'center',
+                        gap: 6,
+                        borderRadius: '0 0 15px 15px',
+                      }}
+                    >
+                      <span>⚔️{stats.atk}</span>
+                      <span>🛡️{stats.def}</span>
+                    </div>
+                  )}
                   {active && (
                     <span
                       style={{
                         position: 'absolute',
-                        bottom: 4,
-                        right: 4,
+                        top: 3,
+                        right: 3,
                         width: 17,
                         height: 17,
                         borderRadius: '50%',
