@@ -87,6 +87,23 @@
   100% { transform: scale(1); }
 }
 
+/* ── Tirage holo (orthogonal à la rareté — voir HOLO_CHANCE) ──────
+   Utilisées par src/components/HoloPullFx.tsx. Volontairement plus discret
+   que pigRareRing/pigSecretRing (un seul anneau, un seul pulse de halo,
+   pas de gerbe) : cet effet peut se déclencher EN PLUS de celui de la
+   rareté sur une carte qui est à la fois rare et holo, il ne doit pas
+   lui faire concurrence. */
+@keyframes pigHoloHalo {
+  0% { opacity: 0; transform: scale(.85); }
+  35% { opacity: .85; transform: scale(1.05); }
+  100% { opacity: 0; transform: scale(1.15); }
+}
+@keyframes pigHoloRing {
+  0% { transform: scale(.4); opacity: 0; }
+  20% { opacity: .9; }
+  100% { transform: scale(1.7); opacity: 0; }
+}
+
 /* Loterie — la carte tourne sur elle-même pendant le tirage (suspense).
    Utilisée par src/components/LotteryOverlay.tsx. */
 @keyframes pigSpin {
