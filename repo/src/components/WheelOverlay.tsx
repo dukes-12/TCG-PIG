@@ -22,7 +22,7 @@ const wheelFace = (
 );
 
 /** Roue de la chance : la roue tourne pendant `spinning` (même famille
- *  visuelle que LotteryOverlay — suspense d'abord, résultat ensuite),
+ *  visuelle que SlotMachineOverlay — suspense d'abord, résultat ensuite),
  *  gagné = un Sac de glands ajouté en poche, perdu = juste un message pour
  *  la peine. Pas de sous-écran de règles : le nombre d'essais restants
  *  suffit, affiché sur WheelBanner. */

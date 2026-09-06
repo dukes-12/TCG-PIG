@@ -3,9 +3,10 @@ import { persist } from 'zustand/middleware';
 import { CARDS, PACKS, SECRET_CARD, SECRET_RARITY_ID, packByKey, rarityById } from '../data/catalog';
 import { CARD_BACKS, DEFAULT_CARD_BACK, cardBackByKey } from '../data/cardBacks';
 import { DEFAULT_AVATAR } from '../data/avatars';
-import { openPack, roll } from '../lib/draw';
+import { openPack } from '../lib/draw';
 import { playSfx, revealSfx, setSfxEnabled } from '../lib/sfx';
 import { trackCardPulled, trackGlandsEarned, trackGlandsSpent, trackPackOpened } from '../lib/analytics';
+import { SLOT_BETS, spinSlotMachine, type SlotBet, type SlotResult } from '../lib/slot';
 import {
   apiFetchMailbox,
   apiFetchState,
@@ -62,11 +63,13 @@ export const FREE_BOOSTER_INTERVAL_MS = 60 * 60 * 1000;
 export const FREE_BOOSTER_MAX = 3;
 const FREE_BOOSTER_PACK: PackKey = 'basic';
 
-/** Loterie de la boutique : une carte garantie Épique ou mieux, effet carte
- *  qui tourne pour le suspense (voir LotteryOverlay). */
-export const LOTTERY_PRICE = 1000;
-export const LOTTERY_FLOOR: RarityId = 4;
-const LOTTERY_SPIN_MS = 1800;
+/** Machine à sous de la boutique — remplace l'ancienne loterie (une carte
+ *  garantie contre glands fixes) par un vrai jeu d'argent glands contre
+ *  glands : 3 rouleaux, aligner 3 fois le même symbole multiplie la mise
+ *  (voir lib/slot.ts pour le barème). Le suspense de l'animation dure
+ *  SLOT_SPIN_MS ; le résultat est déjà tiré au clic sur "Tirer" (comme
+ *  l'ancienne loterie), juste révélé après ce délai. */
+const SLOT_SPIN_MS = 1900;
 
 /** Roue de la chance : 3 essais gratuits, rechargés toutes les 24 h. Une
  *  victoire (1 chance sur 3) ajoute un Sac de glands en poche ; une défaite
@@ -143,10 +146,11 @@ interface UiState {
   dragX: number;
   dragging: boolean;
   toast: string | null;
-  lotteryState: 'idle' | 'spinning' | 'result';
-  lotteryCard: Card | null;
-  lotteryIsNew: boolean;
-  lotteryIsHolo: boolean;
+  /** 'closed' : overlay masqué. 'ready' : overlay ouvert, rouleaux au repos,
+   *  on choisit sa mise avant de tirer. */
+  slotState: 'closed' | 'ready' | 'spinning' | 'result';
+  slotBet: SlotBet;
+  slotResult: SlotResult | null;
   wheelState: WheelState;
   wheelWon: boolean;
   mailbox: MailboxMessage[];
@@ -197,8 +201,10 @@ interface Actions {
   recycleHolo: (cardId: number) => void;
   say: (msg: string) => void;
 
-  buyLottery: () => void;
-  closeLottery: () => void;
+  openSlot: () => void;
+  setSlotBet: (bet: SlotBet) => void;
+  spinSlot: () => void;
+  closeSlot: () => void;
 
   spinWheel: () => void;
   closeWheel: () => void;
@@ -223,7 +229,7 @@ let advanceTimer: ReturnType<typeof setTimeout> | undefined;
 let toastTimer: ReturnType<typeof setTimeout> | undefined;
 let revealTimer: ReturnType<typeof setTimeout> | undefined;
 let syncTimer: ReturnType<typeof setTimeout> | undefined;
-let lotteryTimer: ReturnType<typeof setTimeout> | undefined;
+let slotTimer: ReturnType<typeof setTimeout> | undefined;
 let wheelTimer: ReturnType<typeof setTimeout> | undefined;
 let dragStartX = 0;
 
@@ -383,10 +389,9 @@ export const useStore = create<Store>()(
       dragX: 0,
       dragging: false,
       toast: null,
-      lotteryState: 'idle',
-      lotteryCard: null,
-      lotteryIsNew: false,
-      lotteryIsHolo: false,
+      slotState: 'closed',
+      slotBet: SLOT_BETS[0],
+      slotResult: null,
       wheelState: 'idle',
       wheelWon: false,
       mailbox: [],
@@ -637,36 +642,40 @@ export const useStore = create<Store>()(
         toastTimer = setTimeout(() => set({ toast: null }), TOAST_MS);
       },
 
-      // ── loterie ──
-      buyLottery: () => {
+      // ── machine à sous ──
+      openSlot: () => set({ slotState: 'ready', slotResult: null }),
+      setSlotBet: (slotBet) => set({ slotBet }),
+
+      spinSlot: () => {
         const s = get();
-        if (s.glands < LOTTERY_PRICE) {
-          s.say(`Pas assez de glands (${LOTTERY_PRICE} requis).`);
+        if (s.glands < s.slotBet) {
+          s.say(`Pas assez de glands (${s.slotBet} requis).`);
           return;
         }
-        set({ glands: s.glands - LOTTERY_PRICE, lotteryState: 'spinning', lotteryCard: null, lotteryIsNew: false, lotteryIsHolo: false });
-        trackGlandsSpent(LOTTERY_PRICE, 'lottery', 'lottery');
+        // La mise est retirée tout de suite (comme le prix d'un sac) — le
+        // résultat est déjà tiré ici aussi (posé dans `slotResult` dès le
+        // départ, `slotState` reste 'spinning' le temps du suspense) :
+        // SlotMachineOverlay s'en sert pour caler l'arrêt de chaque
+        // rouleau sur la vraie réponse, plutôt que de tirer au sort une
+        // fois l'animation finie.
+        const result = spinSlotMachine(s.slotBet);
+        set({ glands: s.glands - s.slotBet, slotState: 'spinning', slotResult: result });
+        trackGlandsSpent(s.slotBet, 'slot', 'slot');
         playSfx('coin');
-        clearTimeout(lotteryTimer);
-        lotteryTimer = setTimeout(() => {
+        clearTimeout(slotTimer);
+        slotTimer = setTimeout(() => {
           const s2 = get();
-          const card = roll(LOTTERY_FLOOR);
-          const isHolo = card.rarity !== SECRET_RARITY_ID && Math.random() < HOLO_CHANCE;
-          // Comme un sac : un tirage holo va uniquement dans `ownedHolo`,
-          // jamais dans `owned` (deux collections indépendantes).
-          const patch = isHolo
-            ? { ownedHolo: { ...s2.ownedHolo, [card.id]: (s2.ownedHolo[card.id] || 0) + 1 } }
-            : { owned: { ...s2.owned, [card.id]: (s2.owned[card.id] || 0) + 1 } };
-          const wasOwned = isHolo ? !!s2.ownedHolo[card.id] : !!s2.owned[card.id];
-          set({ ...patch, lotteryCard: card, lotteryIsNew: !wasOwned, lotteryIsHolo: isHolo, lotteryState: 'result', openedCount: s2.openedCount + 1 });
-          trackCardPulled(card, 'lottery');
-          playSfx(revealSfx(card.rarity));
-        }, LOTTERY_SPIN_MS);
+          set({ glands: result.win ? s2.glands + result.payout : s2.glands, slotState: 'result' });
+          if (result.win) {
+            trackGlandsEarned(result.payout, 'slot_win');
+            playSfx(revealSfx(result.reels[0].rarity));
+          }
+        }, SLOT_SPIN_MS);
       },
 
-      closeLottery: () => {
-        clearTimeout(lotteryTimer);
-        set({ lotteryState: 'idle', lotteryCard: null, lotteryIsNew: false, lotteryIsHolo: false });
+      closeSlot: () => {
+        clearTimeout(slotTimer);
+        set({ slotState: 'closed', slotResult: null });
       },
 
       // ── roue de la chance ──

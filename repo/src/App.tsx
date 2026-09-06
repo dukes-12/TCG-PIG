@@ -1,7 +1,7 @@
 import { useEffect } from 'react';
 import { Navigate, Route, Routes } from 'react-router-dom';
 import CardDetailOverlay from './components/CardDetailOverlay';
-import LotteryOverlay from './components/LotteryOverlay';
+import SlotMachineOverlay from './components/SlotMachineOverlay';
 import WheelOverlay from './components/WheelOverlay';
 import TabBar from './components/TabBar';
 import Toast from './components/Toast';
@@ -82,7 +82,7 @@ export default function App() {
 
       <TabBar />
       <CardDetailOverlay />
-      <LotteryOverlay />
+      <SlotMachineOverlay />
       <WheelOverlay />
       <Toast />
     </div>
