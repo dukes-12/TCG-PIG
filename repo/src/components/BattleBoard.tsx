@@ -2,7 +2,7 @@ import { memo } from 'react';
 import PigCard from './PigCard';
 import { cardById } from '../data/catalog';
 import type { RoundEvent, TeamSlot } from '../lib/api';
-import { STANCE_INFO } from '../lib/battle';
+import { CAMP_INFO, STANCE_INFO, campOf, campTooltip } from '../lib/battle';
 import { categoryAbilityFor } from '../lib/categoryAbilities';
 
 /** Le plateau de combat — partagé entre `BattleResultOverlay` (PvP,
@@ -411,6 +411,7 @@ const BoardSlot = memo(function BoardSlot({
   const card = cardById(slot.cardId);
   if (!card) return null;
   const stanceInfo = STANCE_INFO[slot.stance];
+  const camp = campOf(slot.cardId);
   const ring = slot.stance === 'attaque' ? 'var(--color-accent-500)' : 'var(--color-accent-2-500)';
   const cardH = cardW / CARD_ASPECT;
   const footprintW = rotated ? cardH : cardW;
@@ -487,6 +488,19 @@ const BoardSlot = memo(function BoardSlot({
               qu'on joue) garde encore le mouvement. */}
           <PigCard card={card} holoAnim={false} ownedCount={1} isHolo={slot.holo} />
         </div>
+        {/* Camp en pierre-feuille-ciseaux (✊/✌️/✋ — voir CAMP_INFO) : quel
+            avantage cette carte a-t-elle en attaquant l'écran adverse ?
+            Déjà sur la fiche (BattleCardStats) et le composeur, mais pas
+            encore sur le plateau lui-même pendant le combat — coin
+            opposé à la posture pour ne pas se marcher dessus. */}
+        {camp && (
+          <span
+            title={campTooltip(camp)}
+            style={{ position: 'absolute', top: -3, left: -3, fontSize: 13, background: 'var(--color-bg)', borderRadius: '50%', lineHeight: 1, padding: 2, boxShadow: 'var(--shadow-sm)', zIndex: 1 }}
+          >
+            {CAMP_INFO[camp].icon}
+          </span>
+        )}
         <span
           title={`Posture : ${stanceInfo.label}`}
           style={{ position: 'absolute', bottom: -3, right: -3, fontSize: 13, background: 'var(--color-bg)', borderRadius: '50%', lineHeight: 1, padding: 2, boxShadow: 'var(--shadow-sm)', zIndex: 1 }}

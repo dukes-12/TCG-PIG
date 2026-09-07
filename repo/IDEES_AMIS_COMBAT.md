@@ -668,6 +668,15 @@ avec comptes utilisateurs.
 >   dédié pour la fiche de pouvoir, le flourish du tour 1 et le MVP en fin
 >   de combat.
 >
+> **Dix-huitième passage** ("ajoute aussi sur les cartes le symbole pierre
+> feuille ciseaux en combat") : le camp (✊/✌️/✋) était déjà visible sur la
+> fiche d'une carte et le composeur, mais pas sur le PLATEAU pendant le
+> combat lui-même — ajouté en pastille coin haut-gauche de chaque carte
+> (même style que la pastille de posture, déjà en bas-droite, pour ne pas
+> se marcher dessus), sur `BoardSlot` (`BattleBoard.tsx`) donc gratuit pour
+> les deux overlays (bot et PvP). Vérifié : tsc/build/eslint propres,
+> suite Playwright existante toujours verte à 390×844/360×700.
+>
 > Le reste de ce document (schéma Postgres/Supabase, phasage, questions
 > restées ouvertes) garde sa valeur de référence historique mais ne
 > correspond plus à l'implémentation réelle (Cloudflare D1, pas Supabase —
