@@ -265,14 +265,19 @@ interface HitInfo {
   crit: boolean;
 }
 
+/** Aspect carte (largeur/hauteur), identique partout dans l'app. */
+const CARD_ASPECT = 0.72;
+
 /** Le plateau — les 5 cartes de chaque équipe, toujours visibles dans
- *  l'ordre où elles ont été alignées (façon plateau Yu-Gi-Oh), avec un
- *  badge de posture (⚔️/🛡️) plutôt qu'une rotation de carte. Contrairement
- *  au journal en dessous (qui défile), ce plateau ne montre que l'état
- *  ACTUEL : une carte-écran détruite s'assombrit et reste à sa place (façon
- *  "cimetière visible"), la carte en Attaque qui vient d'agir s'élance vers
- *  le centre, sa cible tressaute, se brise ou s'entoure d'un halo bleu si
- *  bloquée — une seule fois par tour révélé (voir animations.css). */
+ *  l'ordre où elles ont été alignées (façon plateau Yu-Gi-Oh) : les 3
+ *  cartes en Défense forment un écran à l'HORIZONTALE (façon "position
+ *  défense"), les 2 cartes en Attaque restent à la verticale, DERRIÈRE cet
+ *  écran (plus loin du centre du plateau). Contrairement au journal en
+ *  dessous (qui défile), ce plateau ne montre que l'état ACTUEL : une
+ *  carte-écran détruite s'assombrit et reste à sa place (façon "cimetière
+ *  visible"), la carte en Attaque qui vient d'agir s'élance vers le centre,
+ *  sa cible tressaute, se brise ou s'entoure d'un halo bleu si bloquée —
+ *  une seule fois par tour révélé (voir animations.css). */
 function BattleBoard({
   opponentTeam,
   challengerTeam,
@@ -298,17 +303,40 @@ function BattleBoard({
   revealed: number;
   holoAnim: boolean;
 }) {
+  const rowProps = (destroyed: Set<number>, targetInfo: Record<number, HitInfo>, activeAttackerId: number | null, lunge: 'battle-lunge-down' | 'battle-lunge-up') => ({
+    destroyed,
+    targetInfo,
+    activeAttackerId,
+    lunge,
+    revealed,
+    holoAnim,
+  });
+  // Cartes en Attaque un peu plus grandes que celles en Défense : la rangée
+  // Défense doit loger 3 cartes tournées à l'horizontale côte à côte (donc
+  // leur largeur visuelle = la hauteur de la carte) sans provoquer de
+  // défilement horizontal sur un téléphone étroit, alors que la rangée
+  // Attaque n'en a que 2 — beaucoup plus de marge.
+  const DEFENSE_CARD_W = 70;
+  const ATTACK_CARD_W = 84;
   return (
-    <div style={{ padding: '10px 20px 4px', flex: 'none' }}>
-      <TeamRow team={opponentTeam} destroyed={opponentDestroyed} targetInfo={opponentTargetInfo} activeAttackerId={activeOpponentAttackerId} lunge="battle-lunge-down" revealed={revealed} holoAnim={holoAnim} />
-      <div style={{ textAlign: 'center', fontSize: 9, fontWeight: 700, opacity: 0.35, letterSpacing: '.06em', textTransform: 'uppercase', margin: '5px 0' }}>{roundLabel}</div>
-      <TeamRow team={challengerTeam} destroyed={challengerDestroyed} targetInfo={challengerTargetInfo} activeAttackerId={activeChallengerAttackerId} lunge="battle-lunge-up" revealed={revealed} holoAnim={holoAnim} />
+    <div style={{ padding: '10px 10px 4px', flex: 'none', display: 'flex', flexDirection: 'column', gap: 6 }}>
+      {/* Attaque de l'adversaire — la plus loin du centre (derrière son écran). */}
+      <TeamRow team={opponentTeam.filter((s) => s.stance === 'attaque')} rotated={false} cardW={ATTACK_CARD_W} {...rowProps(opponentDestroyed, opponentTargetInfo, activeOpponentAttackerId, 'battle-lunge-down')} />
+      {/* Écran de défense de l'adversaire — à l'horizontale, plus proche du centre. */}
+      <TeamRow team={opponentTeam.filter((s) => s.stance === 'defense')} rotated cardW={DEFENSE_CARD_W} {...rowProps(opponentDestroyed, opponentTargetInfo, activeOpponentAttackerId, 'battle-lunge-down')} />
+      <div style={{ textAlign: 'center', fontSize: 9, fontWeight: 700, opacity: 0.35, letterSpacing: '.06em', textTransform: 'uppercase', margin: '2px 0' }}>{roundLabel}</div>
+      {/* Écran de défense du challenger — à l'horizontale, plus proche du centre. */}
+      <TeamRow team={challengerTeam.filter((s) => s.stance === 'defense')} rotated cardW={DEFENSE_CARD_W} {...rowProps(challengerDestroyed, challengerTargetInfo, activeChallengerAttackerId, 'battle-lunge-up')} />
+      {/* Attaque du challenger — la plus loin du centre (derrière son écran). */}
+      <TeamRow team={challengerTeam.filter((s) => s.stance === 'attaque')} rotated={false} cardW={ATTACK_CARD_W} {...rowProps(challengerDestroyed, challengerTargetInfo, activeChallengerAttackerId, 'battle-lunge-up')} />
     </div>
   );
 }
 
 function TeamRow({
   team,
+  rotated,
+  cardW,
   destroyed,
   targetInfo,
   activeAttackerId,
@@ -317,6 +345,8 @@ function TeamRow({
   holoAnim,
 }: {
   team: TeamSlot[];
+  rotated: boolean;
+  cardW: number;
   destroyed: Set<number>;
   targetInfo: Record<number, HitInfo>;
   activeAttackerId: number | null;
@@ -325,7 +355,7 @@ function TeamRow({
   holoAnim: boolean;
 }) {
   return (
-    <div style={{ display: 'flex', gap: 5, justifyContent: 'center' }}>
+    <div style={{ display: 'flex', gap: 7, justifyContent: 'center' }}>
       {team.map((slot) => {
         const hit = targetInfo[slot.cardId];
         const isActiveAttacker = slot.stance === 'attaque' && slot.cardId === activeAttackerId;
@@ -344,6 +374,8 @@ function TeamRow({
           <BoardSlot
             key={slot.cardId}
             slot={slot}
+            rotated={rotated}
+            cardW={cardW}
             isDestroyed={destroyed.has(slot.cardId)}
             animClass={animClass}
             animKey={animKey}
@@ -358,6 +390,8 @@ function TeamRow({
 
 function BoardSlot({
   slot,
+  rotated,
+  cardW,
   isDestroyed,
   animClass,
   animKey,
@@ -365,6 +399,8 @@ function BoardSlot({
   holoAnim,
 }: {
   slot: TeamSlot;
+  rotated: boolean;
+  cardW: number;
   isDestroyed: boolean;
   animClass: string | undefined;
   animKey: string;
@@ -375,31 +411,45 @@ function BoardSlot({
   if (!card) return null;
   const stanceInfo = STANCE_INFO[slot.stance];
   const ring = slot.stance === 'attaque' ? 'var(--color-accent-500)' : 'var(--color-accent-2-500)';
+  const cardH = cardW / CARD_ASPECT;
+  const footprintW = rotated ? cardH : cardW;
+  const footprintH = rotated ? cardW : cardH;
   return (
-    <div style={{ position: 'relative', width: 42, flex: 'none' }}>
+    <div style={{ position: 'relative', width: footprintW, flex: 'none' }}>
       <div
         key={animKey}
         className={animClass}
         style={{
-          width: 42,
-          aspectRatio: '0.72',
-          borderRadius: 9,
+          width: footprintW,
+          height: footprintH,
           position: 'relative',
-          boxShadow: `0 0 0 1.5px ${ring}`,
           opacity: isDestroyed ? 0.4 : 1,
           filter: isDestroyed ? 'grayscale(1)' : 'none',
           transition: 'opacity .4s ease, filter .4s ease',
         }}
       >
-        <PigCard card={card} holoAnim={holoAnim} ownedCount={1} isHolo={slot.holo} />
+        <div
+          style={{
+            position: 'absolute',
+            width: cardW,
+            height: cardH,
+            top: '50%',
+            left: '50%',
+            transform: `translate(-50%, -50%) ${rotated ? 'rotate(90deg)' : ''}`,
+            boxShadow: `0 0 0 2px ${ring}`,
+            borderRadius: 15,
+          }}
+        >
+          <PigCard card={card} holoAnim={holoAnim} ownedCount={1} isHolo={slot.holo} />
+        </div>
         <span
           title={`Posture : ${stanceInfo.label}`}
-          style={{ position: 'absolute', bottom: -3, right: -3, fontSize: 11, background: 'var(--color-bg)', borderRadius: '50%', lineHeight: 1, padding: 1.5, boxShadow: 'var(--shadow-sm)' }}
+          style={{ position: 'absolute', bottom: -3, right: -3, fontSize: 13, background: 'var(--color-bg)', borderRadius: '50%', lineHeight: 1, padding: 2, boxShadow: 'var(--shadow-sm)', zIndex: 1 }}
         >
           {stanceInfo.icon}
         </span>
         {isDestroyed && (
-          <span style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 16 }}>💥</span>
+          <span style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 20, zIndex: 1 }}>💥</span>
         )}
       </div>
       {hit && (
@@ -408,13 +458,14 @@ function BoardSlot({
           className="battle-float"
           style={{
             position: 'absolute',
-            top: -6,
+            top: -8,
             left: '50%',
-            fontSize: 10.5,
+            fontSize: 12.5,
             fontWeight: 800,
             whiteSpace: 'nowrap',
             color: hit.crit ? '#c0503f' : hit.blocked ? 'var(--color-text)' : 'var(--color-accent-800)',
             pointerEvents: 'none',
+            zIndex: 2,
           }}
         >
           {hit.blocked ? '🚫' : `${hit.crit ? '🎯 ' : ''}-${hit.damage}`}

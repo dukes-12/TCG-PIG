@@ -291,6 +291,34 @@ avec comptes utilisateurs.
 >   bien grisés, halo de blocage et nombres flottants visibles, aucune
 >   erreur console sur un combat complet de bot.
 >
+> **Neuvième passage** ("agrandis les cartes mieux pour qu'on puisse voir
+> les détails, les cartes défense doivent être à l'horizontale et attaque
+> vertical derrière") — affine le plateau du passage précédent :
+> - Les 3 cartes en Défense et les 2 en Attaque n'occupent plus une seule
+>   rangée mixte : chaque équipe a maintenant DEUX rangées, l'écran de
+>   Défense (tournée à 90°, façon "position défense") au plus près du
+>   centre du plateau, les cartes en Attaque à la verticale juste derrière
+>   (plus loin du centre) — quatre rangées au total (Attaque adverse, Écran
+>   adverse, Écran perso, Attaque perso), symétriques de part et d'autre du
+>   repère "Tour N".
+> - Cartes nettement agrandies (70px de large pour l'écran, 84px pour
+>   l'Attaque — contre 42px avant), en gardant `PigCard` en mode "mini"
+>   plutôt que "big" à l'échelle : mini garde des polices fixes (10px nom /
+>   7px type) quelle que soit la taille du conteneur, donc les agrandir en
+>   gardant ce mode donne un nom et un type toujours nets, avec en plus
+>   l'illustration bien plus grande et reconnaissable — passer en mode
+>   "big" réduit ensuite par `transform: scale()` avait été essayé en
+>   premier mais donnait un texte PLUS PETIT qu'avant en dessous d'environ
+>   130px de large (18px réduit à l'échelle < 10px fixe), donc abandonné.
+> - Tailles calibrées pour que les 3 cartes-écran tournées tiennent
+>   toujours sur une largeur de téléphone SANS défilement horizontal (70px
+>   de large à la verticale → ~97px de large une fois tournées à
+>   l'horizontale, × 3 + interlignes ≈ 304px, sous la budget disponible même
+>   sur un écran de 360px de large).
+> - Vérifié en live (Playwright, viewports 390×844 et 360×740) : noms et
+>   types lisibles, illustrations nettes, aucun débordement horizontal aux
+>   deux largeurs, aucune erreur console sur un combat complet de bot.
+>
 > Le reste de ce document (schéma Postgres/Supabase, phasage, questions
 > restées ouvertes) garde sa valeur de référence historique mais ne
 > correspond plus à l'implémentation réelle (Cloudflare D1, pas Supabase —
