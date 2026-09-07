@@ -100,8 +100,15 @@ const DESPERATION_BONUS = 0.3;
 const DESPERATION_THRESHOLD = 0.25;
 const CRIT_CHANCE = 0.15;
 const BLOCK_CHANCE = 0.12;
-const BASE_PV = 500;
-const DEFENDER_DURABILITY_MULT = 4;
+// Rééquilibrage (onzième passage, IDEES_AMIS_COMBAT.md) : 500/4 donnait des
+// combats à ~100 tours en moyenne, bien trop long pour un ciblage choisi en
+// direct à chaque tour. Calibré par simulation pour ~10-20 tours (rareté
+// égale) : le nombre de tours dépend surtout de la durabilité de l'écran
+// (beaucoup plus que des PV eux-mêmes, l'ATTAQUE mitigée par la DÉFENSE
+// adverse à chaque coup grignote lentement), donc les deux ont dû baisser
+// ensemble, pas juste les PV.
+const BASE_PV = 50;
+const DEFENDER_DURABILITY_MULT = 0.5;
 const MAX_ROUNDS = 1000;
 
 export function campOf(cardId: number): Camp | null {
@@ -208,126 +215,187 @@ function pickTargetIndex(defHp: number[], defenders: SlotStats[], assignedCardId
   return idx === -1 ? null : idx;
 }
 
-/** Entièrement déterministe pour l'ATTAQUE elle-même — voir
- *  functions/_lib/battle.ts.
- *
- *  `challengerTargets` (mode "Défier un bot" uniquement — voir
- *  BattlesScreen) : pour CHAQUE carte en Attaque du challenger (clé =
- *  son cardId), la carte-écran adverse qu'elle vise en priorité tant
- *  qu'elle est vivante — choisie une fois avant le combat, pas retouchée
- *  tour par tour. Sans assignation (ou une fois la cible assignée
- *  détruite), retombe sur le comportement automatique (premier défenseur
- *  adverse encore vivant). Toujours absent côté adversaire (bot) : son
- *  ciblage reste entièrement automatique, non concerné par ce passage. */
-export function resolveBattle(challengerTeam: TeamSlot[], opponentTeam: TeamSlot[], challengerTargets?: Record<number, number>): BattleResult {
+/** État d'un combat EN COURS — voir `initBattle`/`stepBattle` ci-dessous.
+ *  Muté en place à chaque tour (pas de copie : un combat peut durer une
+ *  vingtaine de tours, inutile de réallouer les tableaux à chaque fois). */
+export interface BattleState {
+  c: Side;
+  o: Side;
+  hpC: number;
+  hpO: number;
+  defHpC: number[];
+  defHpO: number[];
+  momC: boolean[];
+  momO: boolean[];
+  round: number;
+  finished: boolean;
+  winner: BattleResult['winner'] | null;
+  rounds: RoundEvent[];
+}
+
+/** Prépare un combat sans jouer le moindre tour — voir `stepBattle` pour
+ *  avancer, ou `resolveBattle` pour tout résoudre d'un coup (mode
+ *  automatique/PvP). */
+export function initBattle(challengerTeam: TeamSlot[], opponentTeam: TeamSlot[]): BattleState {
   const c = buildSide(challengerTeam);
   const o = buildSide(opponentTeam);
+  return {
+    c,
+    o,
+    hpC: c.maxHp,
+    hpO: o.maxHp,
+    defHpC: c.defenders.map((d) => d.def * DEFENDER_DURABILITY_MULT),
+    defHpO: o.defenders.map((d) => d.def * DEFENDER_DURABILITY_MULT),
+    momC: c.attackers.map(() => false),
+    momO: o.attackers.map(() => false),
+    round: 0,
+    finished: false,
+    winner: null,
+    rounds: [],
+  };
+}
 
-  let hpC = c.maxHp;
-  let hpO = o.maxHp;
-  const defHpC = c.defenders.map((d) => d.def * DEFENDER_DURABILITY_MULT);
-  const defHpO = o.defenders.map((d) => d.def * DEFENDER_DURABILITY_MULT);
-  const momC = c.attackers.map(() => false);
-  const momO = o.attackers.map(() => false);
-  const rounds: RoundEvent[] = [];
+/** cardId des défenseurs adverses ENCORE VIVANTS à l'instant présent — pour
+ *  construire le sélecteur de cible avant de jouer le tour suivant (mode
+ *  "en direct", voir BattlesScreen). `null` si l'écran est déjà percé (les
+ *  PV sont visés directement, plus rien à choisir). */
+export function aliveDefenderIds(state: BattleState, side: 'challenger' | 'opponent'): number[] {
+  const defenders = side === 'challenger' ? state.o.defenders : state.c.defenders;
+  const defHp = side === 'challenger' ? state.defHpO : state.defHpC;
+  return defenders.filter((_, i) => defHp[i] > 0).map((d) => d.cardId);
+}
 
+/** Résout UN SEUL tour à partir de l'état courant (muté en place) et
+ *  renvoie l'événement produit — `null` si le combat était déjà terminé.
+ *  `challengerTargets` : cible choisie pour CE tour précis pour chaque
+ *  carte en Attaque du challenger (clé = son cardId) — voir `resolveBattle`
+ *  pour le détail du repli automatique. Recalculée à chaque appel, donc
+ *  rien n'empêche de choisir une cible différente d'un tour à l'autre
+ *  (ciblage "en direct") ; `resolveBattle` se contente de passer LE MÊME
+ *  objet à chaque tour pour un ciblage figé à la composition. */
+export function stepBattle(state: BattleState, challengerTargets?: Record<number, number>): RoundEvent | null {
+  if (state.finished) return null;
+  const { c, o } = state;
   const nC = c.attackers.length || 1;
   const nO = o.attackers.length || 1;
-  let round = 0;
-  while (hpC > 0 && hpO > 0 && round < MAX_ROUNDS) {
-    const ai = round % nC;
-    const oi = round % nO;
-    const attC = c.attackers[ai];
-    const attO = o.attackers[oi];
-    const cDesperate = hpC / c.maxHp < DESPERATION_THRESHOLD;
-    const oDesperate = hpO / o.maxHp < DESPERATION_THRESHOLD;
-    const cHadMomentum = momC[ai];
-    const oHadMomentum = momO[oi];
+  const round = state.round;
+  const ai = round % nC;
+  const oi = round % nO;
+  const attC = c.attackers[ai];
+  const attO = o.attackers[oi];
+  const cDesperate = state.hpC / c.maxHp < DESPERATION_THRESHOLD;
+  const oDesperate = state.hpO / o.maxHp < DESPERATION_THRESHOLD;
+  const cHadMomentum = state.momC[ai];
+  const oHadMomentum = state.momO[oi];
 
-    // ── Attaque du challenger, vise le camp adverse ──
-    const targetOIdx = pickTargetIndex(defHpO, o.defenders, challengerTargets?.[attC.cardId]);
-    const targetO = targetOIdx !== null ? o.defenders[targetOIdx] : null;
-    const cAdv = !!targetO && attC.camp !== null && targetO.camp !== null && CAMP_BEATS[attC.camp] === targetO.camp;
-    const cBonus = (cAdv ? CAMP_ADVANTAGE_BONUS : 0) + (cHadMomentum ? MOMENTUM_BONUS : 0) + (cDesperate ? DESPERATION_BONUS : 0);
-    const atkC = Math.round(attC.atk * (1 + cBonus));
-    let cDmg = Math.max(1, atkC - (targetO ? targetO.def : 0));
-    let cCrit = false;
-    const cBlocked = Math.random() < BLOCK_CHANCE;
-    if (cBlocked) cDmg = 0;
-    else if ((cCrit = Math.random() < CRIT_CHANCE)) cDmg *= 2;
-    let cDestroyed = false;
-    if (targetOIdx !== null) {
-      defHpO[targetOIdx] -= cDmg;
-      if (defHpO[targetOIdx] <= 0) cDestroyed = true;
-    } else {
-      hpO = Math.max(0, hpO - cDmg);
-    }
-    momC[ai] = targetOIdx === null;
+  // ── Attaque du challenger, vise le camp adverse ──
+  const targetOIdx = pickTargetIndex(state.defHpO, o.defenders, challengerTargets?.[attC.cardId]);
+  const targetO = targetOIdx !== null ? o.defenders[targetOIdx] : null;
+  const cAdv = !!targetO && attC.camp !== null && targetO.camp !== null && CAMP_BEATS[attC.camp] === targetO.camp;
+  const cBonus = (cAdv ? CAMP_ADVANTAGE_BONUS : 0) + (cHadMomentum ? MOMENTUM_BONUS : 0) + (cDesperate ? DESPERATION_BONUS : 0);
+  const atkC = Math.round(attC.atk * (1 + cBonus));
+  let cDmg = Math.max(1, atkC - (targetO ? targetO.def : 0));
+  let cCrit = false;
+  const cBlocked = Math.random() < BLOCK_CHANCE;
+  if (cBlocked) cDmg = 0;
+  else if ((cCrit = Math.random() < CRIT_CHANCE)) cDmg *= 2;
+  let cDestroyed = false;
+  if (targetOIdx !== null) {
+    state.defHpO[targetOIdx] -= cDmg;
+    if (state.defHpO[targetOIdx] <= 0) cDestroyed = true;
+  } else {
+    state.hpO = Math.max(0, state.hpO - cDmg);
+  }
+  state.momC[ai] = targetOIdx === null;
 
-    // ── Attaque de l'adversaire, vise le camp du challenger — toujours
-    // automatique (premier défenseur encore vivant), pas d'assignation
-    // côté bot. ──
-    const targetCIdx = pickTargetIndex(defHpC, c.defenders, undefined);
-    const targetC = targetCIdx !== null ? c.defenders[targetCIdx] : null;
-    const oAdv = !!targetC && attO.camp !== null && targetC.camp !== null && CAMP_BEATS[attO.camp] === targetC.camp;
-    const oBonus = (oAdv ? CAMP_ADVANTAGE_BONUS : 0) + (oHadMomentum ? MOMENTUM_BONUS : 0) + (oDesperate ? DESPERATION_BONUS : 0);
-    const atkO = Math.round(attO.atk * (1 + oBonus));
-    let oDmg = Math.max(1, atkO - (targetC ? targetC.def : 0));
-    let oCrit = false;
-    const oBlocked = Math.random() < BLOCK_CHANCE;
-    if (oBlocked) oDmg = 0;
-    else if ((oCrit = Math.random() < CRIT_CHANCE)) oDmg *= 2;
-    let oDestroyed = false;
-    if (targetCIdx !== null) {
-      defHpC[targetCIdx] -= oDmg;
-      if (defHpC[targetCIdx] <= 0) oDestroyed = true;
-    } else {
-      hpC = Math.max(0, hpC - oDmg);
-    }
-    momO[oi] = targetCIdx === null;
+  // ── Attaque de l'adversaire, vise le camp du challenger — toujours
+  // automatique (premier défenseur encore vivant), pas d'assignation
+  // côté bot. ──
+  const targetCIdx = pickTargetIndex(state.defHpC, c.defenders, undefined);
+  const targetC = targetCIdx !== null ? c.defenders[targetCIdx] : null;
+  const oAdv = !!targetC && attO.camp !== null && targetC.camp !== null && CAMP_BEATS[attO.camp] === targetC.camp;
+  const oBonus = (oAdv ? CAMP_ADVANTAGE_BONUS : 0) + (oHadMomentum ? MOMENTUM_BONUS : 0) + (oDesperate ? DESPERATION_BONUS : 0);
+  const atkO = Math.round(attO.atk * (1 + oBonus));
+  let oDmg = Math.max(1, atkO - (targetC ? targetC.def : 0));
+  let oCrit = false;
+  const oBlocked = Math.random() < BLOCK_CHANCE;
+  if (oBlocked) oDmg = 0;
+  else if ((oCrit = Math.random() < CRIT_CHANCE)) oDmg *= 2;
+  let oDestroyed = false;
+  if (targetCIdx !== null) {
+    state.defHpC[targetCIdx] -= oDmg;
+    if (state.defHpC[targetCIdx] <= 0) oDestroyed = true;
+  } else {
+    state.hpC = Math.max(0, state.hpC - oDmg);
+  }
+  state.momO[oi] = targetCIdx === null;
 
-    rounds.push({
-      round,
-      challengerAttackerId: attC.cardId,
-      opponentAttackerId: attO.cardId,
-      challengerAtk: atkC,
-      opponentAtk: atkO,
-      challengerTargetCardId: targetO ? targetO.cardId : null,
-      opponentTargetCardId: targetC ? targetC.cardId : null,
-      challengerTargetDestroyed: cDestroyed,
-      opponentTargetDestroyed: oDestroyed,
-      challengerDamage: cDmg,
-      opponentDamage: oDmg,
-      challengerHp: hpC,
-      opponentHp: hpO,
-      challengerCamp: attC.camp,
-      opponentCamp: attO.camp,
-      challengerCampAdvantage: cAdv,
-      opponentCampAdvantage: oAdv,
-      challengerMomentum: cHadMomentum,
-      opponentMomentum: oHadMomentum,
-      challengerDesperation: cDesperate,
-      opponentDesperation: oDesperate,
-      challengerCrit: cCrit,
-      opponentCrit: oCrit,
-      challengerBlocked: cBlocked,
-      opponentBlocked: oBlocked,
-    });
-    round++;
+  const event: RoundEvent = {
+    round,
+    challengerAttackerId: attC.cardId,
+    opponentAttackerId: attO.cardId,
+    challengerAtk: atkC,
+    opponentAtk: atkO,
+    challengerTargetCardId: targetO ? targetO.cardId : null,
+    opponentTargetCardId: targetC ? targetC.cardId : null,
+    challengerTargetDestroyed: cDestroyed,
+    opponentTargetDestroyed: oDestroyed,
+    challengerDamage: cDmg,
+    opponentDamage: oDmg,
+    challengerHp: state.hpC,
+    opponentHp: state.hpO,
+    challengerCamp: attC.camp,
+    opponentCamp: attO.camp,
+    challengerCampAdvantage: cAdv,
+    opponentCampAdvantage: oAdv,
+    challengerMomentum: cHadMomentum,
+    opponentMomentum: oHadMomentum,
+    challengerDesperation: cDesperate,
+    opponentDesperation: oDesperate,
+    challengerCrit: cCrit,
+    opponentCrit: oCrit,
+    challengerBlocked: cBlocked,
+    opponentBlocked: oBlocked,
+  };
+  state.rounds.push(event);
+  state.round++;
+
+  if (state.hpC <= 0 || state.hpO <= 0 || state.round >= MAX_ROUNDS) {
+    state.finished = true;
+    let winner: BattleResult['winner'] = 'tie';
+    if (state.hpC > 0 && state.hpO <= 0) winner = 'challenger';
+    else if (state.hpO > 0 && state.hpC <= 0) winner = 'opponent';
+    else if (state.hpC !== state.hpO) winner = state.hpC > state.hpO ? 'challenger' : 'opponent';
+    state.winner = winner;
   }
 
-  let winner: BattleResult['winner'] = 'tie';
-  if (hpC > 0 && hpO <= 0) winner = 'challenger';
-  else if (hpO > 0 && hpC <= 0) winner = 'opponent';
-  else if (hpC !== hpO) winner = hpC > hpO ? 'challenger' : 'opponent';
+  return event;
+}
 
+/** Entièrement déterministe pour l'ATTAQUE elle-même — voir
+ *  functions/_lib/battle.ts. Résout le combat ENTIER d'un coup (mode
+ *  automatique, et seule façon de résoudre un vrai combat PvP — voir
+ *  `initBattle`/`stepBattle` pour un déroulé tour par tour, mode "Défier un
+ *  bot" uniquement).
+ *
+ *  `challengerTargets` : pour CHAQUE carte en Attaque du challenger (clé =
+ *  son cardId), la carte-écran adverse qu'elle vise en priorité tant
+ *  qu'elle est vivante — le MÊME objet est réutilisé à chaque tour ici
+ *  (ciblage figé pour tout le combat), contrairement à `stepBattle` où
+ *  rien n'empêche de le changer d'un tour à l'autre. Sans assignation (ou
+ *  une fois la cible assignée détruite), retombe sur l'automatique
+ *  (premier défenseur adverse encore vivant). Toujours absent côté
+ *  adversaire (bot) : son ciblage reste entièrement automatique. */
+export function resolveBattle(challengerTeam: TeamSlot[], opponentTeam: TeamSlot[], challengerTargets?: Record<number, number>): BattleResult {
+  const state = initBattle(challengerTeam, opponentTeam);
+  while (!state.finished) stepBattle(state, challengerTargets);
   return {
-    rounds,
-    challengerMaxHp: c.maxHp,
-    opponentMaxHp: o.maxHp,
-    challengerSynergyBonus: c.synergy,
-    opponentSynergyBonus: o.synergy,
-    winner,
+    rounds: state.rounds,
+    challengerMaxHp: state.c.maxHp,
+    opponentMaxHp: state.o.maxHp,
+    challengerSynergyBonus: state.c.synergy,
+    opponentSynergyBonus: state.o.synergy,
+    winner: state.winner!,
   };
 }
 

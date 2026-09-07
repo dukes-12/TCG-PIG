@@ -148,15 +148,19 @@ const DESPERATION_THRESHOLD = 0.25;
 const CRIT_CHANCE = 0.15;
 const BLOCK_CHANCE = 0.12;
 
-/** PV fixes (pas dérivés des cartes) — 500, +15% si bonus de synergie. */
-const BASE_PV = 500;
+/** PV fixes (pas dérivés des cartes) — 50, +15% si bonus de synergie. */
+const BASE_PV = 50;
 
 /** Durabilité d'une carte-écran = sa DÉFENSE (ajustée par la posture) ×
- *  DEFENDER_DURABILITY_MULT. Calibré par simulation pour un combat typique
- *  d'une cinquantaine à une centaine de tours (PV fixes à 500 obligent —
- *  avec seulement 2 attaquants qui cyclent par équipe, chaque tour pèse
- *  moins qu'avant, d'où des combats plus longs que la version précédente). */
-const DEFENDER_DURABILITY_MULT = 4;
+ *  DEFENDER_DURABILITY_MULT. Rééquilibrage (onzième passage,
+ *  IDEES_AMIS_COMBAT.md) : la version précédente (PV=500, MULT=4) donnait
+ *  des combats à ~100 tours en moyenne, bien trop long pour suivre tour par
+ *  tour (et pour le ciblage choisi en direct ajouté à ce passage). Calibré
+ *  par simulation pour ~10-20 tours à rareté égale — le nombre de tours
+ *  dépend surtout de la durabilité de l'écran (l'ATTAQUE mitigée par la
+ *  DÉFENSE adverse grignote lentement), donc PV et durabilité ont baissé
+ *  ensemble, pas juste les PV. */
+const DEFENDER_DURABILITY_MULT = 0.5;
 
 /** Filet de sécurité — un combat doit toujours se terminer. Départagé par
  *  PV restants si jamais atteint. */

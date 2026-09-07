@@ -335,11 +335,15 @@ avec comptes utilisateurs.
 >   360×600, simulant une barre de navigateur visible) : bouton "Fermer"
 >   toujours dans le viewport et cliquable aux deux tailles.
 >
-> **Onzième passage** ("on ne peux choisir qui attaque qui" — clarifié par
-> questions : une assignation choisie UNE FOIS à la composition, pas un
-> vrai tour par tour interactif ; bot uniquement pour l'instant, pas le
-> PvP) — chaque carte-écran adverse devient une cible qu'on peut choisir
-> explicitement, plutôt qu'un ciblage entièrement automatique :
+> **Onzième passage** ⚠️ **SUPERSEDÉ par le douzième passage juste en
+> dessous** — gardé pour l'historique, mais le panneau "🎯 Cibles" décrit
+> ici (assignation figée à la composition) n'existe plus dans le code :
+> remplacé par un ciblage vraiment en direct, tour par tour. ("on ne peux
+> choisir qui attaque qui" — clarifié par questions à l'époque : une
+> assignation choisie UNE FOIS à la composition, pas un vrai tour par tour
+> interactif ; bot uniquement pour l'instant, pas le PvP) — chaque
+> carte-écran adverse devient une cible qu'on peut choisir explicitement,
+> plutôt qu'un ciblage entièrement automatique :
 > - `resolveBattle` (lib/battle.ts, mode bot uniquement — le serveur,
 >   functions/_lib/battle.ts, n'est PAS concerné par ce passage) accepte
 >   maintenant un 3e paramètre optionnel `challengerTargets` : pour chaque
@@ -368,6 +372,71 @@ avec comptes utilisateurs.
 >   le vrai code bundlé en esbuild ; tsc/build/eslint propres ; Playwright
 >   live (panneau affiché, assignation cliquable et reflétée visuellement,
 >   combat résolu sans erreur jusqu'à la victoire).
+>
+> **Douzième passage** — bug remonté (vidéo à l'appui) + deux demandes liées
+> ("il faut que le joueur choisisse en live la cible c'est mieux puis il
+> faudra trouver une solution pour éviter les 100 tours") :
+> - **Bug scroll persistant** : la vidéo montrait le correctif du dixième
+>   passage inopérant (aucun défilement, la page entière rebondissait sans
+>   rien révéler de plus, contenu figé "Tour 17" du début à la fin du clip —
+>   signature d'un déploiement pas encore à jour, pas d'un correctif
+>   inefficace). Durci quand même par prudence, indépendamment de la cause
+>   probable : `overscrollBehavior: 'contain'` sur le journal ET sur le
+>   modal (empêche un geste de rebondir sur la page derrière au lieu de
+>   défiler CE conteneur), `WebkitOverflowScrolling: 'touch'` sur le
+>   journal (force le défilement avec inertie sur les moteurs iOS qui,
+>   sans ça, ne traitent parfois pas la zone comme défilable au toucher).
+> - **Rééquilibrage pour des combats courts** : `BASE_PV` 500→**50** et
+>   `DEFENDER_DURABILITY_MULT` 4→**0,5**, appliqué aux DEUX fichiers
+>   (client ET serveur, donc au PvP aussi — contrairement au ciblage,
+>   purement numérique et sans risque à synchroniser partout). Calibré par
+>   simulation : le nombre de tours dépend surtout de la durabilité de
+>   l'écran, bien plus que des PV eux-mêmes (l'ATTAQUE mitigée par la
+>   DÉFENSE adverse grignote lentement) — les deux ont dû baisser ensemble.
+>   Résultat vérifié contre le vrai code bundlé : **~14-15 tours en
+>   moyenne** (médiane 14-15, p90 ≈ 17-18) contre ~100 avant, rareté
+>   toujours très décisive (4v3 et 5v3 → 100%), crit/bouclier toujours
+>   conformes (~13%/12%), parité serveur/client toujours 100%.
+> - **Ciblage vraiment en direct** — remplace intégralement le panneau
+>   "assignation figée" du onzième passage : `lib/battle.ts` expose
+>   maintenant `initBattle`/`stepBattle`/`aliveDefenderIds` en plus de
+>   `resolveBattle` (qui reste, construit par-dessus : `initBattle` + boucle
+>   `stepBattle` avec le MÊME ciblage à chaque tour — toujours la seule
+>   façon de résoudre un vrai combat PvP, non concerné par ce passage).
+>   `stepBattle` résout UN SEUL tour à partir d'un `BattleState` muté en
+>   place, avec le ciblage choisi pour CE tour précis (rien n'empêche de
+>   changer d'un tour à l'autre, contrairement à `resolveBattle`).
+> - Découverte utile en construisant ceci : un seul des 2 attaquants agit
+>   par tour (ils cyclent, `round % attackers.length`) — jamais les deux à
+>   la fois. Le ciblage en direct n'a donc besoin que d'UNE seule décision
+>   par tour, pas deux : bien plus simple à jouer qu'anticipé.
+> - Nouveau composant `LiveBattleOverlay` (mode bot uniquement) : à chaque
+>   tour, affiche qui attaque et propose ses cibles possibles (puce
+>   "Automatique" + une puce par carte-écran adverse ENCORE VIVANTE à cet
+>   instant, recalculées à chaque tour via `aliveDefenderIds`) ; un bouton
+>   "Jouer ce tour ▶" résout ce tour et affiche le résultat sur le plateau ;
+>   un bouton "Terminer auto" à côté permet de sauter la fin pour qui ne
+>   veut pas cliquer à chaque tour. `BattleBoard.tsx` et `BattleLog.tsx`
+>   (plateau et journal détaillé) sont désormais des composants PARTAGÉS,
+>   extraits de `BattleResultOverlay` (qui garde son ancien fonctionnement
+>   — un résultat déjà calculé, révélé par un minuteur — pour le vrai PvP,
+>   toujours résolu par le serveur en un seul appel) : plutôt que dupliquer
+>   ~250 lignes de JSX dans un second overlay, un seul plateau à maintenir.
+>   Le panneau "🎯 Cibles" du composeur (onzième passage) a disparu, remplacé
+>   par un simple aperçu en lecture seule de l'équipe adverse.
+> - Vérifié : suite de tests dédiée sur `initBattle`/`stepBattle`/
+>   `aliveDefenderIds` (ciblage qui suit bien un choix différent à chaque
+>   tour, liste des cibles vivantes qui se met à jour après une
+>   destruction, `resolveBattle` toujours strictement équivalent à une
+>   boucle manuelle de `stepBattle` à graine RNG égale) contre le vrai code
+>   bundlé en esbuild ; tsc/build/eslint propres (un avertissement Fast
+>   Refresh non bloquant sur `BattleBoard.tsx`, plusieurs exports non-
+>   composants dans un fichier `.tsx`) ; Playwright live à deux largeurs de
+>   téléphone (390×844 et 360×700) : aperçu adverse affiché, panneau de
+>   ciblage par tour affiché et qui se met à jour (options qui disparaissent
+>   à mesure que les défenseurs adverses meurent), combat jouable jusqu'à la
+>   victoire en 5 tours dans le test, bouton "Fermer" toujours atteignable,
+>   aucune erreur console.
 >
 > Le reste de ce document (schéma Postgres/Supabase, phasage, questions
 > restées ouvertes) garde sa valeur de référence historique mais ne
