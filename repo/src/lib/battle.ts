@@ -1,4 +1,5 @@
 import { CARDS, SECRET_RARITY_ID, cardById } from '../data/catalog';
+import { categoryAbilityFor, type CategoryAbility } from './categoryAbilities';
 import type { TeamSlot, BattleResult, RoundEvent, Camp, Stance } from './api';
 
 /** Port client de functions/_lib/battle.ts, pour le mode "Défier un bot"
@@ -181,6 +182,11 @@ interface SlotStats {
   atk: number;
   def: number;
   camp: Camp | null;
+  /** Pouvoir de la CATÉGORIE de la carte (card.type — voir
+   *  categoryAbilities.ts), pas de son camp : passif toujours actif,
+   *  capacité active déclenchée automatiquement à la première action de
+   *  cette carte (voir stepBattle, `usedActiveC`/`usedActiveO`). */
+  ability: CategoryAbility;
 }
 
 function slotStats(s: TeamSlot): SlotStats {
@@ -188,7 +194,21 @@ function slotStats(s: TeamSlot): SlotStats {
   // Filet de sécurité — voir functions/_lib/battle.ts pour l'explication
   // (une équipe stockée avant l'ajout des postures n'a pas de `stance`).
   const mult = STANCE_MULT[s.stance] ?? STANCE_MULT.attaque;
-  return { cardId: s.cardId, atk: Math.round(base.atk * mult.atk), def: Math.round(base.def * mult.def), camp: campOf(s.cardId) };
+  const ability = categoryAbilityFor(cardById(s.cardId)?.type ?? 'Hors catégorie');
+  // Les passifs `atk`/`def` sont pliés une fois pour toutes dans la stat,
+  // comme la posture — mais seulement du côté où ils comptent : `atk` ne
+  // sert que si la carte finit en Attaque, `def` que si elle finit en
+  // Défense (une carte a les deux stats quelle que soit sa posture, seule
+  // la moitié pertinente est jamais lue par la suite).
+  const atkBonus = s.stance === 'attaque' && ability.passive.kind === 'atk' ? ability.passive.pct : 0;
+  const defBonus = s.stance === 'defense' && ability.passive.kind === 'def' ? ability.passive.pct : 0;
+  return {
+    cardId: s.cardId,
+    atk: Math.round(base.atk * mult.atk * (1 + atkBonus)),
+    def: Math.round(base.def * mult.def * (1 + defBonus)),
+    camp: campOf(s.cardId),
+    ability,
+  };
 }
 
 function synergyBonus(team: TeamSlot[]): number {
@@ -207,6 +227,12 @@ interface Side {
   defenders: SlotStats[];
   maxHp: number;
   synergy: number;
+  /** Durabilité MAX de chaque défenseur (même ordre que `defenders`) — DEF
+   *  × DEFENDER_DURABILITY_MULT, +bonus du passif `durability` de sa
+   *  catégorie s'il y en a un. Calculée une fois ici plutôt que recalculée
+   *  à la volée partout (defenderDurability, la capacité "fortify") : deux
+   *  défenseurs de même DEF peuvent avoir des max différents. */
+  defMax: number[];
 }
 
 function buildSide(team: TeamSlot[]): Side {
@@ -214,9 +240,31 @@ function buildSide(team: TeamSlot[]): Side {
   const attackers = team.map((s, i) => (s.stance === 'attaque' ? stats[i] : null)).filter((s): s is SlotStats => s !== null);
   const defenders = team.map((s, i) => (s.stance === 'defense' ? stats[i] : null)).filter((s): s is SlotStats => s !== null);
   // Filet de sécurité — voir functions/_lib/battle.ts pour l'explication.
-  if (attackers.length === 0) attackers.push({ cardId: 0, atk: 0, def: 0, camp: null });
+  if (attackers.length === 0) attackers.push({ cardId: 0, atk: 0, def: 0, camp: null, ability: categoryAbilityFor('Hors catégorie') });
   const synergy = synergyBonus(team);
-  return { attackers, defenders, maxHp: Math.round(BASE_PV * (1 + synergy)), synergy };
+  const defMax = defenders.map((d) => {
+    const bonus = d.ability.passive.kind === 'durability' ? d.ability.passive.pct : 0;
+    return Math.round(d.def * DEFENDER_DURABILITY_MULT * (1 + bonus));
+  });
+  return { attackers, defenders, maxHp: Math.round(BASE_PV * (1 + synergy)), synergy, defMax };
+}
+
+/** Répare l'écran allié le plus abîmé (encore en vie) de `pct` % de SA
+ *  durabilité max — capacité active `fortify`. Ne fait rien si tous les
+ *  écrans de ce côté sont déjà détruits (rien à réparer). */
+function fortifyWeakestDefender(defHp: number[], defMax: number[], pct: number): void {
+  let idx = -1;
+  let bestRatio = Infinity;
+  for (let i = 0; i < defHp.length; i++) {
+    if (defHp[i] <= 0) continue;
+    const ratio = defMax[i] > 0 ? defHp[i] / defMax[i] : 1;
+    if (ratio < bestRatio) {
+      bestRatio = ratio;
+      idx = i;
+    }
+  }
+  if (idx === -1) return;
+  defHp[idx] = Math.min(defMax[idx], defHp[idx] + Math.round(defMax[idx] * pct));
 }
 
 /** Index du défenseur adverse visé par un attaquant précis : son
@@ -247,6 +295,11 @@ export interface BattleState {
   defHpO: number[];
   momC: boolean[];
   momO: boolean[];
+  /** Capacité active déjà déclenchée pour cet attaquant (même index que
+   *  `c.attackers`/`o.attackers`) — au plus une fois par carte, à sa toute
+   *  première action du combat (voir stepBattle). */
+  usedActiveC: boolean[];
+  usedActiveO: boolean[];
   round: number;
   finished: boolean;
   winner: BattleResult['winner'] | null;
@@ -264,10 +317,12 @@ export function initBattle(challengerTeam: TeamSlot[], opponentTeam: TeamSlot[])
     o,
     hpC: c.maxHp,
     hpO: o.maxHp,
-    defHpC: c.defenders.map((d) => d.def * DEFENDER_DURABILITY_MULT),
-    defHpO: o.defenders.map((d) => d.def * DEFENDER_DURABILITY_MULT),
+    defHpC: c.defMax.slice(),
+    defHpO: o.defMax.slice(),
     momC: c.attackers.map(() => false),
     momO: o.attackers.map(() => false),
+    usedActiveC: c.attackers.map(() => false),
+    usedActiveO: o.attackers.map(() => false),
     round: 0,
     finished: false,
     winner: null,
@@ -295,7 +350,19 @@ export function defenderDurability(state: BattleState, owner: 'challenger' | 'op
   const defHp = owner === 'challenger' ? state.defHpC : state.defHpO;
   const i = defenders.findIndex((d) => d.cardId === cardId);
   if (i === -1) return null;
-  return { current: Math.max(0, defHp[i]), max: defenders[i].def * DEFENDER_DURABILITY_MULT };
+  const defMax = owner === 'challenger' ? state.c.defMax : state.o.defMax;
+  return { current: Math.max(0, defHp[i]), max: defMax[i] };
+}
+
+/** Sa capacité active de catégorie s'est-elle déjà déclenchée ? (voir
+ *  BattleCardStats.) `false` pour une carte en Défense : elle n'attaque
+ *  jamais, sa capacité active ne se déclenche donc jamais — seul son
+ *  passif compte pour elle. */
+export function hasActiveFired(state: BattleState, owner: 'challenger' | 'opponent', cardId: number): boolean {
+  const attackers = owner === 'challenger' ? state.c.attackers : state.o.attackers;
+  const used = owner === 'challenger' ? state.usedActiveC : state.usedActiveO;
+  const i = attackers.findIndex((a) => a.cardId === cardId);
+  return i !== -1 && used[i];
 }
 
 /** Résout UN SEUL tour à partir de l'état courant (muté en place) et
@@ -321,17 +388,38 @@ export function stepBattle(state: BattleState, challengerTargets?: Record<number
   const cHadMomentum = state.momC[ai];
   const oHadMomentum = state.momO[oi];
 
+  // Capacité active de catégorie : au plus une fois par carte, à sa toute
+  // première action du combat (voir usedActiveC/O dans BattleState).
+  const cActive = state.usedActiveC[ai] ? null : attC.ability.active;
+  if (cActive) state.usedActiveC[ai] = true;
+  const oActive = state.usedActiveO[oi] ? null : attO.ability.active;
+  if (oActive) state.usedActiveO[oi] = true;
+
   // ── Attaque du challenger, vise le camp adverse ──
   const targetOIdx = pickTargetIndex(state.defHpO, o.defenders, challengerTargets?.[attC.cardId]);
   const targetO = targetOIdx !== null ? o.defenders[targetOIdx] : null;
   const cAdv = !!targetO && attC.camp !== null && targetO.camp !== null && CAMP_BEATS[attC.camp] === targetO.camp;
   const cBonus = (cAdv ? CAMP_ADVANTAGE_BONUS : 0) + (cHadMomentum ? MOMENTUM_BONUS : 0) + (cDesperate ? DESPERATION_BONUS : 0);
   const atkC = Math.round(attC.atk * (1 + cBonus));
-  let cDmg = Math.max(1, atkC - (targetO ? targetO.def : 0));
+  // `guardBreak` (actif) ignore la DÉFENSE de la cible ce tour — sans
+  // effet si les PV sont déjà visés directement (pas de DÉFENSE à ignorer).
+  let cDmg = Math.max(1, atkC - (cActive?.kind === 'guardBreak' || !targetO ? 0 : targetO.def));
+  if (cActive?.kind === 'powerStrike') cDmg = Math.round(cDmg * (1 + cActive.pct));
   let cCrit = false;
-  const cBlocked = Math.random() < BLOCK_CHANCE;
-  if (cBlocked) cDmg = 0;
-  else if ((cCrit = Math.random() < CRIT_CHANCE)) cDmg *= 2;
+  let cBlocked = false;
+  if (cActive?.kind === 'trueStrike') {
+    // Coup critique garanti, imblocable — les deux tirages sont sautés.
+    cCrit = true;
+    cDmg *= 2;
+  } else {
+    const blockBonus = targetO?.ability.passive.kind === 'block' ? targetO.ability.passive.pct : 0;
+    // `blockReduction` (passif de l'ATTAQUANT) réduit MULTIPLICATIVEMENT la
+    // chance de blocage de la cible — pas une immunité totale.
+    const blockReduction = attC.ability.passive.kind === 'blockReduction' ? attC.ability.passive.pct : 0;
+    cBlocked = Math.random() < (BLOCK_CHANCE + blockBonus) * (1 - blockReduction);
+    if (cBlocked) cDmg = 0;
+    else if ((cCrit = Math.random() < CRIT_CHANCE)) cDmg *= 2;
+  }
   let cDestroyed = false;
   if (targetOIdx !== null) {
     state.defHpO[targetOIdx] -= cDmg;
@@ -339,6 +427,21 @@ export function stepBattle(state: BattleState, challengerTargets?: Record<number
   } else {
     state.hpO = Math.max(0, state.hpO - cDmg);
   }
+  // Vol de vie (passif) : soigne SA PROPRE équipe d'une part des dégâts
+  // infligés — rien sur un coup bloqué (0 dégât, rien à voler).
+  if (cDmg > 0 && attC.ability.passive.kind === 'lifesteal') {
+    state.hpC = Math.min(c.maxHp, state.hpC + Math.round(cDmg * attC.ability.passive.pct));
+  }
+  // Épines (passif de la carte-écran visée) : renvoie une part du coup
+  // DIRECTEMENT en PV à l'équipe qui vient de frapper — traverse l'écran
+  // adverse, contrairement aux dégâts normaux.
+  if (cDmg > 0 && targetO?.ability.passive.kind === 'thorns') {
+    state.hpC = Math.max(0, state.hpC - Math.round(cDmg * targetO.ability.passive.pct));
+  }
+  // Soin / réparation d'écran (actif) : effet ponctuel EN PLUS de
+  // l'attaque normale de ce tour, pas à la place.
+  if (cActive?.kind === 'heal') state.hpC = Math.min(c.maxHp, state.hpC + Math.round(c.maxHp * cActive.pct));
+  else if (cActive?.kind === 'fortify') fortifyWeakestDefender(state.defHpC, c.defMax, cActive.pct);
   state.momC[ai] = targetOIdx === null;
 
   // ── Attaque de l'adversaire, vise le camp du challenger — toujours
@@ -349,11 +452,20 @@ export function stepBattle(state: BattleState, challengerTargets?: Record<number
   const oAdv = !!targetC && attO.camp !== null && targetC.camp !== null && CAMP_BEATS[attO.camp] === targetC.camp;
   const oBonus = (oAdv ? CAMP_ADVANTAGE_BONUS : 0) + (oHadMomentum ? MOMENTUM_BONUS : 0) + (oDesperate ? DESPERATION_BONUS : 0);
   const atkO = Math.round(attO.atk * (1 + oBonus));
-  let oDmg = Math.max(1, atkO - (targetC ? targetC.def : 0));
+  let oDmg = Math.max(1, atkO - (oActive?.kind === 'guardBreak' || !targetC ? 0 : targetC.def));
+  if (oActive?.kind === 'powerStrike') oDmg = Math.round(oDmg * (1 + oActive.pct));
   let oCrit = false;
-  const oBlocked = Math.random() < BLOCK_CHANCE;
-  if (oBlocked) oDmg = 0;
-  else if ((oCrit = Math.random() < CRIT_CHANCE)) oDmg *= 2;
+  let oBlocked = false;
+  if (oActive?.kind === 'trueStrike') {
+    oCrit = true;
+    oDmg *= 2;
+  } else {
+    const blockBonus = targetC?.ability.passive.kind === 'block' ? targetC.ability.passive.pct : 0;
+    const blockReduction = attO.ability.passive.kind === 'blockReduction' ? attO.ability.passive.pct : 0;
+    oBlocked = Math.random() < (BLOCK_CHANCE + blockBonus) * (1 - blockReduction);
+    if (oBlocked) oDmg = 0;
+    else if ((oCrit = Math.random() < CRIT_CHANCE)) oDmg *= 2;
+  }
   let oDestroyed = false;
   if (targetCIdx !== null) {
     state.defHpC[targetCIdx] -= oDmg;
@@ -361,6 +473,14 @@ export function stepBattle(state: BattleState, challengerTargets?: Record<number
   } else {
     state.hpC = Math.max(0, state.hpC - oDmg);
   }
+  if (oDmg > 0 && attO.ability.passive.kind === 'lifesteal') {
+    state.hpO = Math.min(o.maxHp, state.hpO + Math.round(oDmg * attO.ability.passive.pct));
+  }
+  if (oDmg > 0 && targetC?.ability.passive.kind === 'thorns') {
+    state.hpO = Math.max(0, state.hpO - Math.round(oDmg * targetC.ability.passive.pct));
+  }
+  if (oActive?.kind === 'heal') state.hpO = Math.min(o.maxHp, state.hpO + Math.round(o.maxHp * oActive.pct));
+  else if (oActive?.kind === 'fortify') fortifyWeakestDefender(state.defHpO, o.defMax, oActive.pct);
   state.momO[oi] = targetCIdx === null;
 
   const event: RoundEvent = {

@@ -3,6 +3,7 @@ import PigCard from './PigCard';
 import { cardById } from '../data/catalog';
 import type { RoundEvent, TeamSlot } from '../lib/api';
 import { STANCE_INFO } from '../lib/battle';
+import { categoryAbilityFor } from '../lib/categoryAbilities';
 
 /** Le plateau de combat — partagé entre `BattleResultOverlay` (PvP,
  *  résultat déjà calculé côté serveur, révélé progressivement tour par
@@ -40,6 +41,61 @@ export function computeBoardInfo(rounds: RoundEvent[]) {
       opponentTargetInfo[last.challengerTargetCardId] = { damage: last.challengerDamage, destroyed: last.challengerTargetDestroyed, blocked: last.challengerBlocked, crit: last.challengerCrit };
     }
   }
+  // Mise en scène (voir IDEES_AMIS_COMBAT.md, dix-septième passage) : rien
+  // ici n'affecte l'issue du combat, tout est dérivé après coup des tours
+  // déjà joués — un flourish pour le tour affiché, plus deux stats de fin
+  // de partie (série en cours, MVP), calculées à chaque appel mais bon
+  // marché (au plus une quarantaine de tours).
+  //
+  // Capacité active : elle se déclenche à la TOUTE PREMIÈRE action de son
+  // attaquant — donc si le tour affiché est le premier où CET attaquant
+  // apparaît dans `rounds`, c'est exactement ce tour-là qui l'a fait agir.
+  let flourish: string | null = null;
+  if (last) {
+    const firstForChallenger = !rounds.slice(0, -1).some((r) => r.challengerAttackerId === last.challengerAttackerId);
+    const firstForOpponent = !rounds.slice(0, -1).some((r) => r.opponentAttackerId === last.opponentAttackerId);
+    const activeAttackerId = firstForChallenger ? last.challengerAttackerId : firstForOpponent ? last.opponentAttackerId : null;
+    const activeCard = activeAttackerId !== null ? cardById(activeAttackerId) : null;
+    if (activeCard) {
+      const ability = categoryAbilityFor(activeCard.type);
+      flourish = `${ability.icon} ${activeCard.name} déclenche ${ability.activeLabel} !`;
+    } else if (last.challengerCampAdvantage || last.opponentCampAdvantage) {
+      // Un flourish de repli plus discret quand il n'y a pas de capacité à
+      // annoncer ce tour-ci, pour que l'avantage de camp — jusqu'ici
+      // silencieux — se voie aussi à l'écran, pas seulement dans le
+      // journal détaillé plus bas.
+      const advCard = cardById(last.challengerCampAdvantage ? last.challengerAttackerId : last.opponentAttackerId);
+      if (advCard) flourish = `💫 ${advCard.name} a l'avantage de camp !`;
+    }
+  }
+
+  // Série en cours : coups d'affilée non bloqués, jusqu'au tour affiché
+  // (remise à 0 dès qu'un coup est bloqué) — juste pour le frisson, aucun
+  // effet sur les dégâts.
+  let challengerCombo = 0;
+  let opponentCombo = 0;
+  for (const r of rounds) {
+    challengerCombo = r.challengerBlocked ? 0 : challengerCombo + 1;
+    opponentCombo = r.opponentBlocked ? 0 : opponentCombo + 1;
+  }
+
+  // MVP : la carte (des deux équipes confondues) qui a infligé le plus de
+  // dégâts cumulés sur tout le combat — affiché seulement une fois terminé
+  // par l'appelant, calculé ici dans la foulée des autres statistiques.
+  const dmgByCard = new Map<number, number>();
+  for (const r of rounds) {
+    dmgByCard.set(r.challengerAttackerId, (dmgByCard.get(r.challengerAttackerId) ?? 0) + r.challengerDamage);
+    dmgByCard.set(r.opponentAttackerId, (dmgByCard.get(r.opponentAttackerId) ?? 0) + r.opponentDamage);
+  }
+  let mvpCardId: number | null = null;
+  let mvpDamage = 0;
+  for (const [cardId, dmg] of dmgByCard) {
+    if (dmg > mvpDamage) {
+      mvpDamage = dmg;
+      mvpCardId = cardId;
+    }
+  }
+
   return {
     last,
     challengerDestroyed,
@@ -48,6 +104,11 @@ export function computeBoardInfo(rounds: RoundEvent[]) {
     opponentTargetInfo,
     challengerPvHitNow: !!last && last.opponentTargetCardId === null,
     opponentPvHitNow: !!last && last.challengerTargetCardId === null,
+    flourish,
+    challengerCombo,
+    opponentCombo,
+    mvpCardId,
+    mvpDamage,
   };
 }
 
@@ -60,6 +121,7 @@ export function HpBar({
   floatText,
   targetable,
   onClick,
+  combo = 0,
 }: {
   label: string;
   hp: number;
@@ -73,6 +135,10 @@ export function HpBar({
    *  jauge qu'on touche pour attaquer (il n'y a plus de carte à viser). */
   targetable?: boolean;
   onClick?: () => void;
+  /** Coups d'affilée sans blocage (voir `computeBoardInfo`) — juste pour
+   *  le frisson, affiché seulement à partir de 3 pour ne pas encombrer les
+   *  premiers tours d'un badge qui ne dit encore rien. */
+  combo?: number;
 }) {
   const pct = maxHp > 0 ? Math.max(0, Math.min(100, (hp / maxHp) * 100)) : 0;
   const color = pct > 50 ? 'var(--color-accent-2)' : pct > 20 ? 'var(--color-accent)' : '#c0503f';
@@ -99,7 +165,14 @@ export function HpBar({
       className={targetable ? 'battle-targetable' : undefined}
     >
       <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 10.5, opacity: 0.65, marginBottom: 3, textAlign: align }}>
-        <span style={{ fontWeight: 700 }}>{label}</span>
+        <span style={{ fontWeight: 700 }}>
+          {label}
+          {combo >= 3 && (
+            <span key={combo} style={{ marginLeft: 5, color: 'var(--color-accent-800)', animation: 'pigPop .25s ease both' }}>
+              🔥×{combo}
+            </span>
+          )}
+        </span>
         <span>
           {hp} / {maxHp} PV
         </span>
@@ -146,6 +219,7 @@ export function BattleBoard({
   activeOpponentAttackerId,
   activeChallengerAttackerId,
   roundLabel,
+  flourish,
   animKey,
   onCardClick,
   playableAttackerId = null,
@@ -160,6 +234,10 @@ export function BattleBoard({
   activeOpponentAttackerId: number | null;
   activeChallengerAttackerId: number | null;
   roundLabel: string;
+  /** Une ligne de mise en scène pour le tour affiché — capacité active
+   *  déclenchée ou, à défaut, avantage de camp (voir `computeBoardInfo`).
+   *  `null`/absent = rien à annoncer ce tour-ci, juste `roundLabel`. */
+  flourish?: string | null;
   /** Change à chaque tour joué/révélé — sert à rejouer les animations une
    *  seule fois par tour (remonte l'élément concerné). */
   animKey: number;
@@ -205,6 +283,17 @@ export function BattleBoard({
       {/* Écran de défense de l'adversaire — à l'horizontale, plus proche du centre. */}
       <TeamRow team={opponentTeam.filter((s) => s.stance === 'defense')} rotated cardW={DEFENSE_CARD_W} {...rowProps(opponentDestroyed, opponentTargetInfo, activeOpponentAttackerId, 'battle-lunge-down', 'opponent')} />
       <div style={{ textAlign: 'center', fontSize: 9, fontWeight: 700, opacity: 0.35, letterSpacing: '.06em', textTransform: 'uppercase', margin: '2px 0' }}>{roundLabel}</div>
+      {/* Flourish du tour (capacité active / avantage de camp) — un `key` sur
+          animKey rejoue le pop une seule fois par tour (même animation que
+          l'ouverture d'une carte, voir animations.css, pigPop). */}
+      {flourish && (
+        <div
+          key={`flourish-${animKey}`}
+          style={{ textAlign: 'center', fontSize: 11, fontWeight: 700, color: 'var(--color-accent-800)', margin: '-2px 0 2px', animation: 'pigPop .3s ease both' }}
+        >
+          {flourish}
+        </div>
+      )}
       {/* Écran de défense du challenger — à l'horizontale, plus proche du centre. */}
       <TeamRow team={challengerTeam.filter((s) => s.stance === 'defense')} rotated cardW={DEFENSE_CARD_W} {...rowProps(challengerDestroyed, challengerTargetInfo, activeChallengerAttackerId, 'battle-lunge-up', 'challenger')} />
       {/* Attaque du challenger — la plus loin du centre (derrière son écran). */}

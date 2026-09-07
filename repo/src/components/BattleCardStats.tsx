@@ -2,6 +2,7 @@ import PigCard from './PigCard';
 import { cardById, rarityById } from '../data/catalog';
 import type { TeamSlot } from '../lib/api';
 import { CAMP_BEATS, CAMP_INFO, DEFENDER_DURABILITY_MULT, STANCE_INFO, campOf, cardStats, cardStatsWithStance } from '../lib/battle';
+import { categoryAbilityFor } from '../lib/categoryAbilities';
 
 /** Fiche d'une carte pendant un combat, ouverte en touchant la carte sur le
  *  plateau. Volontairement différente de `CardDetailOverlay` (la fiche de
@@ -13,6 +14,7 @@ export default function BattleCardStats({
   ownerName,
   durability,
   isDestroyed,
+  activeUsed,
   onClose,
 }: {
   slot: TeamSlot;
@@ -21,6 +23,11 @@ export default function BattleCardStats({
    *  `defenderDurability` (lib/battle.ts). */
   durability: { current: number; max: number } | null;
   isDestroyed: boolean;
+  /** Sa capacité active de catégorie s'est-elle déjà déclenchée cette
+   *  partie ? `undefined` quand on ne peut pas le savoir (aucun cas
+   *  aujourd'hui, mais le badge se contente alors de ne rien afficher
+   *  plutôt que d'inventer un état). Voir `hasActiveFired` (lib/battle.ts). */
+  activeUsed?: boolean;
   onClose: () => void;
 }) {
   const card = cardById(slot.cardId);
@@ -31,6 +38,11 @@ export default function BattleCardStats({
   const base = cardStats(slot.cardId, slot.holo);
   const withStance = cardStatsWithStance(slot.cardId, slot.holo, slot.stance);
   const durabilityPct = durability && durability.max > 0 ? Math.max(0, Math.min(100, (durability.current / durability.max) * 100)) : 0;
+  const ability = categoryAbilityFor(card.type);
+  // L'actif ne se déclenche jamais pour une carte en Défense (elle
+  // n'attaque pas) — inutile d'afficher un badge "pas encore utilisée" qui
+  // ne se réalisera jamais.
+  const activeApplies = slot.stance === 'attaque';
 
   return (
     <div
@@ -104,6 +116,27 @@ export default function BattleCardStats({
             tint="var(--color-accent-2-200)"
             ink="var(--color-accent-2-800)"
           />
+        </div>
+
+        {/* Pouvoir de CATÉGORIE (card.type — Star Wars, Meme, Dictateurs...),
+            pas de camp : un passif toujours actif, une capacité active qui
+            se déclenche seule à la première action de la carte. Voir
+            categoryAbilities.ts. */}
+        <div style={{ background: 'var(--color-surface)', borderRadius: 14, padding: '9px 11px', display: 'flex', flexDirection: 'column', gap: 7 }}>
+          <div style={{ fontSize: 9.5, fontWeight: 700, opacity: 0.5, textTransform: 'uppercase', letterSpacing: '.06em' }}>
+            {ability.icon} Pouvoir {card.type.trim()}
+          </div>
+          <div style={{ fontSize: 11, lineHeight: 1.3 }}>
+            <strong>{ability.passiveLabel}</strong> (passif) — {ability.passiveDesc}
+          </div>
+          <div style={{ fontSize: 11, lineHeight: 1.3 }}>
+            <strong>{ability.activeLabel}</strong> (actif) — {ability.activeDesc}
+            {activeApplies && (
+              <span style={{ display: 'block', fontSize: 9.5, opacity: 0.55, marginTop: 2 }}>
+                {activeUsed ? '✅ Déjà déclenchée ce combat' : '⏳ Pas encore déclenchée'}
+              </span>
+            )}
+          </div>
         </div>
 
         {durability && (

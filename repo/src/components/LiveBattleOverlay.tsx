@@ -4,7 +4,7 @@ import BattleCardStats from './BattleCardStats';
 import { RoundCard } from './BattleLog';
 import { cardById } from '../data/catalog';
 import type { TeamSlot } from '../lib/api';
-import { aliveDefenderIds, defenderDurability, initBattle, stepBattle, type BattleState } from '../lib/battle';
+import { aliveDefenderIds, defenderDurability, hasActiveFired, initBattle, stepBattle, type BattleState } from '../lib/battle';
 import { useAnimations } from '../lib/useAnimations';
 import { useBattleFullscreen } from '../lib/useBattleFullscreen';
 
@@ -188,6 +188,7 @@ export default function LiveBattleOverlay({
             // jauge elle-même qu'on touche pour porter le coup.
             targetable={pvTargetable}
             onClick={pvTargetable ? () => playRound() : undefined}
+            combo={info.opponentCombo}
           />
           <div style={{ height: 8 }} />
           <HpBar
@@ -197,6 +198,7 @@ export default function LiveBattleOverlay({
             align="left"
             hitKey={info.challengerPvHitNow ? animKey : null}
             floatText={info.challengerPvHitNow && info.last ? String(info.last.opponentDamage) : null}
+            combo={info.challengerCombo}
           />
         </div>
 
@@ -232,6 +234,7 @@ export default function LiveBattleOverlay({
             activeOpponentAttackerId={info.last?.opponentAttackerId ?? null}
             activeChallengerAttackerId={info.last?.challengerAttackerId ?? null}
             roundLabel={!finished ? `Tour ${battleState.round + 1}` : `${battleState.rounds.length} tours joués`}
+            flourish={info.flourish}
             animKey={animKey}
             onCardClick={stableHandleCardClick}
             // Le halo reste allumé PENDANT le ciblage : c'est la même carte
@@ -255,16 +258,23 @@ export default function LiveBattleOverlay({
             ))}
 
             {finished && (
-              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, opacity: 0.6, padding: '6px 4px 0' }}>
-                <span>
-                  PV max : {battleState.c.maxHp}
-                  {battleState.c.synergy > 0 && ` (+${Math.round(battleState.c.synergy * 100)}% synergie)`}
-                </span>
-                <span>
-                  {battleState.o.synergy > 0 && `(+${Math.round(battleState.o.synergy * 100)}% synergie) `}
-                  {battleState.o.maxHp}
-                </span>
-              </div>
+              <>
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, opacity: 0.6, padding: '6px 4px 0' }}>
+                  <span>
+                    PV max : {battleState.c.maxHp}
+                    {battleState.c.synergy > 0 && ` (+${Math.round(battleState.c.synergy * 100)}% synergie)`}
+                  </span>
+                  <span>
+                    {battleState.o.synergy > 0 && `(+${Math.round(battleState.o.synergy * 100)}% synergie) `}
+                    {battleState.o.maxHp}
+                  </span>
+                </div>
+                {info.mvpCardId !== null && (
+                  <div style={{ textAlign: 'center', fontSize: 11.5, fontWeight: 700, padding: '4px 4px 0', color: 'var(--color-accent-800)' }}>
+                    🏆 MVP : {cardById(info.mvpCardId)?.name} — {info.mvpDamage} dégâts infligés
+                  </div>
+                )}
+              </>
             )}
           </div>
         </div>
@@ -365,6 +375,7 @@ export default function LiveBattleOverlay({
             ownerName={statsFor.side === 'challenger' ? challengerUsername : opponentUsername}
             durability={defenderDurability(battleState, statsFor.side, statsFor.slot.cardId)}
             isDestroyed={statsDestroyed}
+            activeUsed={hasActiveFired(battleState, statsFor.side, statsFor.slot.cardId)}
             onClose={() => setStatsFor(null)}
           />
         )}

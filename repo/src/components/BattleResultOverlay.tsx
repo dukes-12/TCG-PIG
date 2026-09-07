@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { BattleBoard, computeBoardInfo, HpBar } from './BattleBoard';
 import BattleCardStats from './BattleCardStats';
 import { RoundCard } from './BattleLog';
+import { cardById } from '../data/catalog';
 import type { Battle, TeamSlot } from '../lib/api';
 import { useAnimations } from '../lib/useAnimations';
 import { useBattleFullscreen } from '../lib/useBattleFullscreen';
@@ -107,6 +108,7 @@ export default function BattleResultOverlay({ battle, myUsername, onClose }: { b
             align="left"
             hitKey={info.opponentPvHitNow ? revealed : null}
             floatText={info.opponentPvHitNow && info.last ? String(info.last.challengerDamage) : null}
+            combo={info.opponentCombo}
           />
           <div style={{ height: 8 }} />
           <HpBar
@@ -116,6 +118,7 @@ export default function BattleResultOverlay({ battle, myUsername, onClose }: { b
             align="left"
             hitKey={info.challengerPvHitNow ? revealed : null}
             floatText={info.challengerPvHitNow && info.last ? String(info.last.opponentDamage) : null}
+            combo={info.challengerCombo}
           />
         </div>
 
@@ -159,6 +162,7 @@ export default function BattleResultOverlay({ battle, myUsername, onClose }: { b
             activeOpponentAttackerId={info.last?.opponentAttackerId ?? null}
             activeChallengerAttackerId={info.last?.challengerAttackerId ?? null}
             roundLabel={info.last ? `Tour ${info.last.round + 1}` : 'En attente…'}
+            flourish={info.flourish}
             animKey={revealed}
             onCardClick={handleCardClick}
           />
@@ -177,16 +181,23 @@ export default function BattleResultOverlay({ battle, myUsername, onClose }: { b
             ))}
 
             {finished && (
-              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, opacity: 0.6, padding: '6px 4px 0' }}>
-                <span>
-                  PV max : {result.challengerMaxHp}
-                  {result.challengerSynergyBonus > 0 && ` (+${Math.round(result.challengerSynergyBonus * 100)}% synergie)`}
-                </span>
-                <span>
-                  {result.opponentSynergyBonus > 0 && `(+${Math.round(result.opponentSynergyBonus * 100)}% synergie) `}
-                  {result.opponentMaxHp}
-                </span>
-              </div>
+              <>
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, opacity: 0.6, padding: '6px 4px 0' }}>
+                  <span>
+                    PV max : {result.challengerMaxHp}
+                    {result.challengerSynergyBonus > 0 && ` (+${Math.round(result.challengerSynergyBonus * 100)}% synergie)`}
+                  </span>
+                  <span>
+                    {result.opponentSynergyBonus > 0 && `(+${Math.round(result.opponentSynergyBonus * 100)}% synergie) `}
+                    {result.opponentMaxHp}
+                  </span>
+                </div>
+                {info.mvpCardId !== null && (
+                  <div style={{ textAlign: 'center', fontSize: 11.5, fontWeight: 700, padding: '4px 4px 0', color: 'var(--color-accent-800)' }}>
+                    🏆 MVP : {cardById(info.mvpCardId)?.name} — {info.mvpDamage} dégâts infligés
+                  </div>
+                )}
+              </>
             )}
           </div>
         </div>
@@ -245,6 +256,13 @@ export default function BattleResultOverlay({ battle, myUsername, onClose }: { b
             // écrans brisés (grisés + 💥).
             durability={null}
             isDestroyed={(statsFor.side === 'challenger' ? info.challengerDestroyed : info.opponentDestroyed).has(statsFor.slot.cardId)}
+            // Sa capacité active se déclenche à sa TOUTE PREMIÈRE action —
+            // si elle apparaît comme attaquante dans un tour déjà révélé,
+            // c'est donc déjà arrivé (rien à recalculer, juste à chercher
+            // dans ce qui a déjà été montré).
+            activeUsed={rounds
+              .slice(0, revealed)
+              .some((r) => (statsFor.side === 'challenger' ? r.challengerAttackerId : r.opponentAttackerId) === statsFor.slot.cardId)}
             onClose={() => setStatsFor(null)}
           />
         )}

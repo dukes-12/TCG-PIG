@@ -596,6 +596,78 @@ avec comptes utilisateurs.
 >   changements ; nouveau test dédié confirmant `battle-active` posée/
 >   retirée et la barre de menu absente puis réapparue.
 >
+> **Dix-septième passage** ("il faudrait encore étoffer le déroulement des
+> combats et le pouvoir des cartes") — le plus gros chantier du combat
+> depuis sa refonte initiale, tranché par questions préalables (le pouvoir
+> passe par la CATÉGORIE de la carte — `card.type`, 31 valeurs distinctes,
+> PAS par son camp à 3 valeurs ; une capacité par catégorie, pas par carte,
+> vu les 276 cartes à répartir ; "Hors catégorie" a son propre pouvoir
+> comme les autres) :
+> - Nouveau fichier **`categoryAbilities.ts`** (dupliqué client/serveur,
+>   même raison que battle.ts), une table de 31 entrées (icône, passif,
+>   capacité active). Construit sur une petite boîte à outils réutilisable
+>   plutôt que 31 mécaniques uniques — 8 formes de passif (`atk`, `def`,
+>   `crit`, `block`, `durability`, `lifesteal`, `thorns`,
+>   `blockReduction`) et 5 formes d'actif (`powerStrike`, `guardBreak`,
+>   `trueStrike`, `heal`, `fortify`), chaque catégorie piochant une
+>   combinaison + une magnitude + un thème (nom/icône/texte).
+> - **Le passif est toujours actif**, sans rien à faire ; **la capacité
+>   active se déclenche automatiquement à la toute première action de la
+>   carte** (`usedActiveC`/`usedActiveO` dans `BattleState`, `round === ai`
+>   au moment où elle s'active) — délibérément AUCUNE nouvelle décision
+>   pour le joueur : le ciblage en direct (douzième/quatorzième passages)
+>   reste la seule chose à choisir, la capacité vient se greffer dessus.
+> - `SlotStats` gagne un champ `ability` (résolu une fois à la
+>   construction de l'équipe) ; `Side` gagne `defMax` (durabilité MAX par
+>   défenseur, plus uniforme depuis que `durability` peut la faire varier
+>   d'une carte à l'autre — `defenderDurability`/`initBattle` s'appuient
+>   dessus au lieu de recalculer `DEF × MULT` un peu partout).
+> - **Calibré par simulation, pas à l'œil** (voir le commentaire d'en-tête
+>   de `categoryAbilities.ts` pour le détail) — deux allers-retours qui
+>   valent la peine d'être notés pour la prochaine fois :
+>   1. Une première mesure semblait montrer que les capacités TRIPLAIENT
+>      la durée d'un combat (43 tours au lieu de ~14-15) — s'est révélé
+>      être un artefact du script de test (rareté tirée au hasard de 1 à 6
+>      au lieu de la rareté 3 fixe du calibrage d'origine), pas un effet
+>      réel : à rareté égale, avant/après capacités donnent le même
+>      ~13-14 tours en moyenne.
+>   2. Le vrai problème : une équipe monocatégorie (5 cartes du même type)
+>      contre une équipe mélangée donnait des écarts de victoire de 1% à
+>      99% selon la catégorie — mais ce test-là aussi était biaisé (le
+>      pool de cartes disponibles par catégorie n'a pas la même rareté
+>      moyenne d'une catégorie à l'autre, un confondant qui n'a rien à
+>      voir avec les capacités). Le test propre : MÊME équipe, MÊME graine
+>      aléatoire, jouée sur le moteur AVANT et APRÈS l'ajout des
+>      capacités — l'écart isolé (l'apport réel d'une capacité,
+>      indépendamment de la carte qui la porte) tombe à -9/+4 points
+>      selon la catégorie, moyenne -0,3 : un pouvoir de carte ne décide
+>      jamais un combat à lui seul. `durability` et l'ex-`ignoreBlock`
+>      (immunité totale au blocage, remplacée par `blockReduction` à 35%,
+>      une réduction forte mais pas absolue) ont quand même été réduits
+>      par prudence après la première mesure biaisée — sans effet mesuré
+>      sur le test propre, mais sans risque non plus.
+> - **UI** : `BattleCardStats` affiche désormais le pouvoir de catégorie
+>   de la carte (passif + capacité active, avec un badge "déjà
+>   déclenchée"/"pas encore déclenchée" — absent pour une carte en
+>   Défense, qui n'attaque jamais). Nouvelle fonction `hasActiveFired`
+>   (lib/battle.ts) côté combat en direct ; côté PvP déjà résolu, dérivé
+>   directement des tours déjà révélés (la capacité se déclenche à la
+>   PREMIÈRE apparition de la carte comme attaquante, donc si elle est
+>   déjà apparue, c'est déjà arrivé — pas besoin de la recalculer).
+> - **Mise en scène**, sans aucun effet sur l'équilibrage : un flourish
+>   (« ✨ Nom déclenche Capacité ! », ou à défaut « 💫 Nom a l'avantage de
+>   camp ! ») rejoué une fois par tour sous le plateau ; un badge 🔥×N sur
+>   la jauge de PV pour une série de coups non bloqués (à partir de 3) ;
+>   un MVP (carte ayant infligé le plus de dégâts cumulés) annoncé à la
+>   fin, à côté du récapitulatif de PV max déjà existant. Tout dérivé de
+>   `computeBoardInfo` (BattleBoard.tsx), donc gratuit pour les deux
+>   overlays (bot et PvP) sans dupliquer la logique.
+> - Vérifié : tsc/build/eslint propres ; parité serveur/client toujours
+>   100% (300 combats à graine égale) ; suite Playwright existante
+>   toujours verte (390×844/360×700/375×620, PvP compris) ; nouveau test
+>   dédié pour la fiche de pouvoir, le flourish du tour 1 et le MVP en fin
+>   de combat.
+>
 > Le reste de ce document (schéma Postgres/Supabase, phasage, questions
 > restées ouvertes) garde sa valeur de référence historique mais ne
 > correspond plus à l'implémentation réelle (Cloudflare D1, pas Supabase —
