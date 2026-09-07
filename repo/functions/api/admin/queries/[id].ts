@@ -1,3 +1,4 @@
+import { ensureAdminQueries } from '../../../_lib/adminSchema';
 import { json, requireAdmin, type Env } from '../../../_lib/auth';
 
 /** Modifie ou supprime une requête SQL d'administration pré-enregistrée
@@ -6,6 +7,7 @@ export const onRequestPatch: PagesFunction<Env> = async ({ request, env, params 
   const me = await requireAdmin(request, env);
   if (!me) return json({ error: 'Accès refusé.' }, 403);
 
+  await ensureAdminQueries(env);
   const id = Number(params.id);
   const body = await request.json<{ name?: string; sqlText?: string }>().catch(() => null);
   if (!body || (!body.name?.trim() && !body.sqlText?.trim())) return json({ error: 'Rien à modifier.' }, 400);
@@ -37,6 +39,7 @@ export const onRequestDelete: PagesFunction<Env> = async ({ request, env, params
   const me = await requireAdmin(request, env);
   if (!me) return json({ error: 'Accès refusé.' }, 403);
 
+  await ensureAdminQueries(env);
   const id = Number(params.id);
   await env.DB.prepare('DELETE FROM admin_queries WHERE id = ?').bind(id).run();
   return json({ ok: true });
@@ -59,6 +62,7 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env, params }
   const me = await requireAdmin(request, env);
   if (!me) return json({ error: 'Accès refusé.' }, 403);
 
+  await ensureAdminQueries(env);
   const id = Number(params.id);
   const body = await request.json<{ sqlText?: string }>().catch(() => ({}) as { sqlText?: string });
 
