@@ -12,9 +12,10 @@ execute grouin --file=...` en local si tu préfères la CLI.)
 
 **Depuis l'appli directement** (Profil → Outils de test → Requêtes SQL,
 compte "Dukes" uniquement) : tous les modèles ci-dessous sont déjà
-enregistrés (voir `admin_queries` dans `schema.sql`), éditables et
-exécutables en un clic — plus besoin de revenir ici copier-coller à chaque
-fois. Cette page reste la référence pour comprendre ce que fait chaque
+enregistrés, éditables et exécutables en un clic — plus besoin de revenir
+ici copier-coller à chaque fois. Rien à préparer côté base : la table
+`admin_queries` et ses 9 modèles sont créés automatiquement à la première
+ouverture du panneau (voir `functions/_lib/adminSchema.ts`). Cette page reste la référence pour comprendre ce que fait chaque
 requête et en écrire de nouvelles. Le `WHERE username = '...'` est à
 adapter au joueur visé avant de lancer, dans l'un ou l'autre outil.
 

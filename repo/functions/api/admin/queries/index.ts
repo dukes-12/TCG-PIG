@@ -1,3 +1,4 @@
+import { ensureAdminQueries } from '../../../_lib/adminSchema';
 import { json, requireAdmin, type Env } from '../../../_lib/auth';
 
 interface QueryRow {
@@ -18,6 +19,9 @@ export const onRequestGet: PagesFunction<Env> = async ({ request, env }) => {
   const me = await requireAdmin(request, env);
   if (!me) return json({ error: 'Accès refusé.' }, 403);
 
+  // Crée/amorce la table au vol si besoin — évite le « no such table »
+  // après déploiement tant que schema.sql n'a pas été rejoué à la main.
+  await ensureAdminQueries(env);
   const { results } = await env.DB.prepare('SELECT * FROM admin_queries ORDER BY id').all<QueryRow>();
   return json({ queries: results ?? [] });
 };
@@ -29,6 +33,7 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
   const body = await request.json<{ name?: string; sqlText?: string }>().catch(() => null);
   if (!body?.name?.trim() || !body.sqlText?.trim()) return json({ error: 'Nom et requête SQL requis.' }, 400);
 
+  await ensureAdminQueries(env);
   const now = Date.now();
   const res = await env.DB.prepare('INSERT INTO admin_queries (name, sql_text, created_at, updated_at) VALUES (?, ?, ?, ?)')
     .bind(body.name.trim(), body.sqlText, now, now)
