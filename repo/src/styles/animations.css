@@ -201,6 +201,23 @@
   0%, 100% { filter: brightness(1) saturate(1); }
   35% { filter: brightness(1.5) saturate(1.4); }
 }
+/* Combat en direct : la carte en Attaque dont c'est le tour respire pour
+   signaler qu'elle est touchable, et les cibles possibles pulsent en rouge
+   une fois l'attaque lancée. Voir LiveBattleOverlay (on touche sa carte,
+   puis la cible — plus de liste de boutons en bas). Ces deux-là bouclent
+   tant que l'état dure, contrairement aux autres animations de combat qui
+   ne jouent qu'un coup — d'où `infinite`. */
+@keyframes battlePlayablePulse {
+  0%, 100% { box-shadow: 0 0 0 2px var(--color-accent-500), 0 0 0 5px rgba(196, 106, 62, 0); }
+  50% { box-shadow: 0 0 0 2px var(--color-accent-500), 0 0 0 7px rgba(196, 106, 62, .35); }
+}
+@keyframes battleTargetablePulse {
+  0%, 100% { box-shadow: 0 0 0 2px #c0503f, 0 0 0 5px rgba(192, 80, 63, 0); }
+  50% { box-shadow: 0 0 0 2px #c0503f, 0 0 0 8px rgba(192, 80, 63, .45); }
+}
+.battle-playable { animation: battlePlayablePulse 1.4s ease-in-out infinite; border-radius: 15px; }
+.battle-targetable { animation: battleTargetablePulse 1s ease-in-out infinite; border-radius: 15px; }
+
 .battle-lunge-down { animation: battleLungeDown .45s ease; }
 .battle-lunge-up { animation: battleLungeUp .45s ease; }
 .battle-shake { animation: battleShake .4s ease; }

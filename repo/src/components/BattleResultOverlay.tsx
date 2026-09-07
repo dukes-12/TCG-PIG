@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
 import { BattleBoard, computeBoardInfo, HpBar } from './BattleBoard';
+import BattleCardStats from './BattleCardStats';
 import { RoundCard } from './BattleLog';
-import type { Battle } from '../lib/api';
+import type { Battle, TeamSlot } from '../lib/api';
 import { useAnimations } from '../lib/useAnimations';
 
 /** Résultat d'un combat PvP déjà résolu côté serveur — révélé
@@ -33,6 +34,10 @@ export default function BattleResultOverlay({ battle, myUsername, onClose }: { b
   const result = battle.result;
   const rounds = result?.rounds ?? [];
   const [revealed, setRevealed] = useState(0);
+  // Fiche d'une carte, ouverte en la touchant sur le plateau — comme en
+  // combat contre un bot (LiveBattleOverlay). Ici c'est le seul rôle de la
+  // touche : un combat PvP est déjà joué, il n'y a plus rien à décider.
+  const [statsFor, setStatsFor] = useState<{ slot: TeamSlot; side: 'challenger' | 'opponent' } | null>(null);
   const logRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -68,6 +73,9 @@ export default function BattleResultOverlay({ battle, myUsername, onClose }: { b
       <div
         onClick={(e) => e.stopPropagation()}
         style={{
+          // `relative` : la fiche d'une carte se pose en `absolute; inset: 0`
+          // par-dessus CE modal, le combat restant visible derrière.
+          position: 'relative',
           margin: 'auto 0',
           // `dvh` (hauteur de viewport DYNAMIQUE) tient compte de la barre
           // d'adresse/outils du navigateur mobile, contrairement à `vh`
@@ -159,6 +167,7 @@ export default function BattleResultOverlay({ battle, myUsername, onClose }: { b
             roundLabel={info.last ? `Tour ${info.last.round + 1}` : 'En attente…'}
             animKey={revealed}
             holoAnim={holoAnim}
+            onCardClick={(slot, side) => setStatsFor({ slot, side })}
           />
 
           <div style={{ padding: '0 20px', display: 'flex', flexDirection: 'column', gap: 6 }}>
@@ -231,6 +240,21 @@ export default function BattleResultOverlay({ battle, myUsername, onClose }: { b
             </button>
           )}
         </div>
+
+        {statsFor && (
+          <BattleCardStats
+            slot={statsFor.slot}
+            ownerName={statsFor.side === 'challenger' ? battle.challengerUsername : battle.opponentUsername}
+            // Pas de durabilité en PvP : le détail des points d'écran restants
+            // n'est pas dans le résultat renvoyé par le serveur, et le
+            // recalculer ici risquerait d'annoncer un chiffre en désaccord
+            // avec le combat réellement joué. Le plateau montre déjà les
+            // écrans brisés (grisés + 💥).
+            durability={null}
+            isDestroyed={(statsFor.side === 'challenger' ? info.challengerDestroyed : info.opponentDestroyed).has(statsFor.slot.cardId)}
+            onClose={() => setStatsFor(null)}
+          />
+        )}
       </div>
     </div>
   );

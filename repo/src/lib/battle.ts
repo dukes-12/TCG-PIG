@@ -265,6 +265,19 @@ export function aliveDefenderIds(state: BattleState, side: 'challenger' | 'oppon
   return defenders.filter((_, i) => defHp[i] > 0).map((d) => d.cardId);
 }
 
+/** Durabilité restante / maximale d'une carte-écran, pour l'afficher quand
+ *  on touche une carte pendant le combat (voir BattleCardStats). `owner`
+ *  est le camp qui POSSÈDE la carte, pas celui qui l'attaque. `null` si la
+ *  carte n'est pas une carte-écran de ce camp (une carte en Attaque n'a pas
+ *  de durabilité : elle n'est jamais ciblée). */
+export function defenderDurability(state: BattleState, owner: 'challenger' | 'opponent', cardId: number): { current: number; max: number } | null {
+  const defenders = owner === 'challenger' ? state.c.defenders : state.o.defenders;
+  const defHp = owner === 'challenger' ? state.defHpC : state.defHpO;
+  const i = defenders.findIndex((d) => d.cardId === cardId);
+  if (i === -1) return null;
+  return { current: Math.max(0, defHp[i]), max: defenders[i].def * DEFENDER_DURABILITY_MULT };
+}
+
 /** Résout UN SEUL tour à partir de l'état courant (muté en place) et
  *  renvoie l'événement produit — `null` si le combat était déjà terminé.
  *  `challengerTargets` : cible choisie pour CE tour précis pour chaque

@@ -438,6 +438,78 @@ avec comptes utilisateurs.
 >   victoire en 5 tours dans le test, bouton "Fermer" toujours atteignable,
 >   aucune erreur console.
 >
+> **Treizième passage** — même bug remonté une troisième fois ("toujours le
+> même problème je ne peux pas accéder à ce qu'il y a sous les cartes en
+> phase de combat. C'est bloqué par la barre de menu"), cette fois
+> **mesuré** au lieu d'être supposé :
+> - Diagnostic réel, à 360×700 : le modal allait de 53 à 648 px, mais le
+>   bouton "Jouer ce tour" se trouvait à 754→794 px, soit **106 px SOUS le
+>   bas du modal**, découpé par son `overflow: hidden`. Rien à voir avec la
+>   barre de menu (z-index 40, derrière l'overlay en z-index 80, elle
+>   n'interceptait rien) ni avec un défilement récalcitrant : le bouton
+>   n'était pas dans la page, point.
+> - Cause : en-tête, jauges de PV, plateau ET pied de page étaient tous en
+>   `flex: none`, donc incompressibles — ~710 px de contenu pour 595 px
+>   disponibles, le surplus passait à la trappe. Les correctifs précédents
+>   (`overscrollBehavior`, `dvh`, sortir le bouton du journal) traitaient
+>   des symptômes plausibles mais pas la cause.
+> - Correctif : le **plateau entre dans la zone défilante** (avec le
+>   journal). Seuls en-tête, jauges et pied de page restent incompressibles
+>   (~175 px) — le pied de page ne peut plus être éjecté, quelle que soit la
+>   hauteur d'écran. Le défilement automatique vers le bas du journal est
+>   supprimé au passage : il pousserait le plateau hors de vue à chaque tour,
+>   or c'est justement ce qu'on regarde.
+> - Vérifié par **vrais clics** Playwright (qui refusent de cliquer un
+>   élément intercepté ou hors écran) à 390×844, 360×700, 393×660 et
+>   375×620, et par re-mesure des positions : bouton dans le modal partout,
+>   sur le combat en direct comme sur le PvP.
+>
+> **Quatorzième passage** ("on doit pouvoir cliquer sur la carte de notre
+> côté à notre tour pour lancer l'attaque et choisir la cible. On doit aussi
+> pouvoir voir les stats des cartes en cliquant dessus") — le combat se joue
+> désormais **sur le plateau**, plus dans un formulaire en bas :
+> - Les cases du plateau deviennent de vrais `<button>` (donc aussi
+>   utilisables au clavier) dès qu'un `onCardClick` est fourni ; sans lui,
+>   le plateau reste une simple image, comme avant.
+> - Deux temps par tour : toucher **sa** carte en Attaque du moment (halo
+>   orange qui respire + pastille 👆) passe en ciblage ; les cartes-écran
+>   adverses encore vivantes se mettent alors à pulser en rouge avec une
+>   pastille 🎯, et en toucher une joue le tour contre elle. Retoucher sa
+>   propre carte annule. Quand l'écran adverse est entièrement brisé, il n'y
+>   a plus de carte à viser : c'est la **jauge de PV** adverse qui devient
+>   ciblable (même halo rouge, même pastille). Les puces "Automatique /
+>   défenseur" et le bouton "Jouer ce tour ▶" du douzième passage
+>   disparaissent ; "Terminer auto" reste pour qui ne veut pas jouer chaque
+>   tour à la main.
+> - Toucher **n'importe quelle autre carte** ouvre sa fiche de combat
+>   (`BattleCardStats`) : ATTAQUE et DÉFENSE telles qu'ajustées par la
+>   posture (avec la valeur de base et le delta, sinon le chiffre affiché
+>   sort de nulle part), rareté, type, camp, et pour une carte-écran sa
+>   **durabilité restante** (`defenderDurability`, nouvelle fonction de
+>   `lib/battle.ts`). Volontairement distincte de `CardDetailOverlay` (la
+>   fiche de collection, qui parle d'exemplaires possédés) : ici seul compte
+>   ce qui sert au combat. Affichée avec une décimale sous 10 — la
+>   durabilité vaut DEF × 0,5, donc « 2,5 / 2,5 » et non « 3 / 3 ».
+> - Disponible aussi en **PvP** (`BattleResultOverlay`), pour consulter les
+>   cartes pendant la révélation — sans durabilité là-bas : le serveur ne la
+>   renvoie pas et la recalculer côté client risquerait d'annoncer un
+>   chiffre en désaccord avec le combat réellement joué.
+> - Bug trouvé et corrigé pendant les tests : les deux équipes piochant dans
+>   le même catalogue, **la même carte peut être alignée des deux côtés** —
+>   les halos, comparés au seul identifiant de carte, s'allumaient alors sur
+>   le sosie d'en face. Le camp fait maintenant partie du test.
+> - Vérifié : tsc/build/eslint propres (toujours le seul avertissement Fast
+>   Refresh sur `BattleBoard.tsx`) ; suite Playwright dédiée à 390×844,
+>   360×700 et 375×620 — une seule carte jouable au repos, 3 cibles après
+>   la touche, annulation par re-touche, **les dégâts tombent bien sur la
+>   carte désignée** (position du libellé de dégâts comparée à celle de la
+>   carte touchée, le journal ne nommant pas la cible), fiche de stats qui
+>   s'ouvre et se referme, durabilité affichée pour une carte-écran, combat
+>   mené jusqu'à la victoire à la touche seule *y compris* la phase
+>   d'attaque directe sur les PV, bouton "Fermer" atteignable, aucune erreur
+>   console ; PvP re-testé (révélation, fiche de stats, "Passer" et
+>   "Fermer" cliquables) à 390×844 et 375×620.
+>
 > Le reste de ce document (schéma Postgres/Supabase, phasage, questions
 > restées ouvertes) garde sa valeur de référence historique mais ne
 > correspond plus à l'implémentation réelle (Cloudflare D1, pas Supabase —

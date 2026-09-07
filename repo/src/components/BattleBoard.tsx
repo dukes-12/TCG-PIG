@@ -57,6 +57,8 @@ export function HpBar({
   align,
   hitKey,
   floatText,
+  targetable,
+  onClick,
 }: {
   label: string;
   hp: number;
@@ -66,11 +68,35 @@ export function HpBar({
    *  percé) — remonte l'élément pour rejouer le flash une seule fois. */
   hitKey?: number | null;
   floatText?: string | null;
+  /** Ciblable à cet instant : l'écran adverse est percé, donc c'est LA
+   *  jauge qu'on touche pour attaquer (il n'y a plus de carte à viser). */
+  targetable?: boolean;
+  onClick?: () => void;
 }) {
   const pct = maxHp > 0 ? Math.max(0, Math.min(100, (hp / maxHp) * 100)) : 0;
   const color = pct > 50 ? 'var(--color-accent-2)' : pct > 20 ? 'var(--color-accent)' : '#c0503f';
+  const Wrapper = onClick ? 'button' : 'div';
   return (
-    <div style={{ position: 'relative' }}>
+    <Wrapper
+      onClick={onClick}
+      type={onClick ? 'button' : undefined}
+      title={onClick ? 'Attaquer directement les points de vie' : undefined}
+      style={{
+        position: 'relative',
+        display: 'block',
+        width: '100%',
+        padding: targetable ? 6 : 0,
+        margin: targetable ? -6 : 0,
+        border: 0,
+        background: 'none',
+        font: 'inherit',
+        color: 'inherit',
+        textAlign: 'inherit',
+        borderRadius: 12,
+        cursor: onClick ? 'pointer' : 'default',
+      }}
+      className={targetable ? 'battle-targetable' : undefined}
+    >
       <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 10.5, opacity: 0.65, marginBottom: 3, textAlign: align }}>
         <span style={{ fontWeight: 700 }}>{label}</span>
         <span>
@@ -89,7 +115,10 @@ export function HpBar({
           ❤️ -{floatText}
         </div>
       )}
-    </div>
+      {targetable && (
+        <span style={{ position: 'absolute', right: -2, top: -10, fontSize: 13, pointerEvents: 'none' }}>🎯</span>
+      )}
+    </Wrapper>
   );
 }
 
@@ -118,6 +147,9 @@ export function BattleBoard({
   roundLabel,
   animKey,
   holoAnim,
+  onCardClick,
+  playableAttackerId = null,
+  targetableIds,
 }: {
   opponentTeam: TeamSlot[];
   challengerTeam: TeamSlot[];
@@ -132,14 +164,34 @@ export function BattleBoard({
    *  seule fois par tour (remonte l'élément concerné). */
   animKey: number;
   holoAnim: boolean;
+  /** Touche une carte du plateau — sert à la fois à consulter ses stats et,
+   *  en combat en direct, à lancer l'attaque puis choisir la cible (voir
+   *  LiveBattleOverlay). Absent = plateau purement décoratif. */
+  onCardClick?: (slot: TeamSlot, side: 'challenger' | 'opponent') => void;
+  /** Ma carte en Attaque dont c'est le tour : halo qui respire pour dire
+   *  « touche-moi ». Cherchée uniquement dans l'équipe du challenger. */
+  playableAttackerId?: number | null;
+  /** Cartes adverses ciblables à cet instant : halo rouge qui pulse.
+   *  Cherchées uniquement dans l'équipe adverse. */
+  targetableIds?: Set<number>;
 }) {
-  const rowProps = (destroyed: Set<number>, targetInfo: Record<number, HitInfo>, activeAttackerId: number | null, lunge: 'battle-lunge-down' | 'battle-lunge-up') => ({
+  const rowProps = (
+    destroyed: Set<number>,
+    targetInfo: Record<number, HitInfo>,
+    activeAttackerId: number | null,
+    lunge: 'battle-lunge-down' | 'battle-lunge-up',
+    side: 'challenger' | 'opponent',
+  ) => ({
     destroyed,
     targetInfo,
     activeAttackerId,
     lunge,
     animKey,
     holoAnim,
+    side,
+    onCardClick,
+    playableAttackerId,
+    targetableIds,
   });
   // Cartes en Attaque un peu plus grandes que celles en Défense : la rangée
   // Défense doit loger 3 cartes tournées à l'horizontale côte à côte (donc
@@ -151,14 +203,14 @@ export function BattleBoard({
   return (
     <div style={{ padding: '10px 10px 4px', flex: 'none', display: 'flex', flexDirection: 'column', gap: 6 }}>
       {/* Attaque de l'adversaire — la plus loin du centre (derrière son écran). */}
-      <TeamRow team={opponentTeam.filter((s) => s.stance === 'attaque')} rotated={false} cardW={ATTACK_CARD_W} {...rowProps(opponentDestroyed, opponentTargetInfo, activeOpponentAttackerId, 'battle-lunge-down')} />
+      <TeamRow team={opponentTeam.filter((s) => s.stance === 'attaque')} rotated={false} cardW={ATTACK_CARD_W} {...rowProps(opponentDestroyed, opponentTargetInfo, activeOpponentAttackerId, 'battle-lunge-down', 'opponent')} />
       {/* Écran de défense de l'adversaire — à l'horizontale, plus proche du centre. */}
-      <TeamRow team={opponentTeam.filter((s) => s.stance === 'defense')} rotated cardW={DEFENSE_CARD_W} {...rowProps(opponentDestroyed, opponentTargetInfo, activeOpponentAttackerId, 'battle-lunge-down')} />
+      <TeamRow team={opponentTeam.filter((s) => s.stance === 'defense')} rotated cardW={DEFENSE_CARD_W} {...rowProps(opponentDestroyed, opponentTargetInfo, activeOpponentAttackerId, 'battle-lunge-down', 'opponent')} />
       <div style={{ textAlign: 'center', fontSize: 9, fontWeight: 700, opacity: 0.35, letterSpacing: '.06em', textTransform: 'uppercase', margin: '2px 0' }}>{roundLabel}</div>
       {/* Écran de défense du challenger — à l'horizontale, plus proche du centre. */}
-      <TeamRow team={challengerTeam.filter((s) => s.stance === 'defense')} rotated cardW={DEFENSE_CARD_W} {...rowProps(challengerDestroyed, challengerTargetInfo, activeChallengerAttackerId, 'battle-lunge-up')} />
+      <TeamRow team={challengerTeam.filter((s) => s.stance === 'defense')} rotated cardW={DEFENSE_CARD_W} {...rowProps(challengerDestroyed, challengerTargetInfo, activeChallengerAttackerId, 'battle-lunge-up', 'challenger')} />
       {/* Attaque du challenger — la plus loin du centre (derrière son écran). */}
-      <TeamRow team={challengerTeam.filter((s) => s.stance === 'attaque')} rotated={false} cardW={ATTACK_CARD_W} {...rowProps(challengerDestroyed, challengerTargetInfo, activeChallengerAttackerId, 'battle-lunge-up')} />
+      <TeamRow team={challengerTeam.filter((s) => s.stance === 'attaque')} rotated={false} cardW={ATTACK_CARD_W} {...rowProps(challengerDestroyed, challengerTargetInfo, activeChallengerAttackerId, 'battle-lunge-up', 'challenger')} />
     </div>
   );
 }
@@ -173,6 +225,10 @@ function TeamRow({
   lunge,
   animKey,
   holoAnim,
+  side,
+  onCardClick,
+  playableAttackerId,
+  targetableIds,
 }: {
   team: TeamSlot[];
   rotated: boolean;
@@ -183,6 +239,10 @@ function TeamRow({
   lunge: 'battle-lunge-down' | 'battle-lunge-up';
   animKey: number;
   holoAnim: boolean;
+  side: 'challenger' | 'opponent';
+  onCardClick?: (slot: TeamSlot, side: 'challenger' | 'opponent') => void;
+  playableAttackerId?: number | null;
+  targetableIds?: Set<number>;
 }) {
   return (
     <div style={{ display: 'flex', gap: 7, justifyContent: 'center' }}>
@@ -211,6 +271,13 @@ function TeamRow({
             animKey={slotAnimKey}
             hit={hit}
             holoAnim={holoAnim}
+            onClick={onCardClick ? () => onCardClick(slot, side) : undefined}
+            // Le camp compte autant que l'identifiant : les deux équipes
+            // piochent dans le même catalogue, la même carte peut donc être
+            // alignée des deux côtés — sans ce test, toucher SA carte
+            // allumait aussi son sosie en face.
+            isPlayable={side === 'challenger' && playableAttackerId != null && slot.cardId === playableAttackerId}
+            isTargetable={side === 'opponent' && !!targetableIds?.has(slot.cardId)}
           />
         );
       })}
@@ -227,6 +294,9 @@ function BoardSlot({
   animKey,
   hit,
   holoAnim,
+  onClick,
+  isPlayable,
+  isTargetable,
 }: {
   slot: TeamSlot;
   rotated: boolean;
@@ -236,6 +306,11 @@ function BoardSlot({
   animKey: string;
   hit: HitInfo | undefined;
   holoAnim: boolean;
+  onClick?: () => void;
+  /** Ma carte en Attaque dont c'est le tour — halo qui respire. */
+  isPlayable?: boolean;
+  /** Cible possible pour l'attaque en cours — halo rouge qui pulse. */
+  isTargetable?: boolean;
 }) {
   const card = cardById(slot.cardId);
   if (!card) return null;
@@ -244,8 +319,37 @@ function BoardSlot({
   const cardH = cardW / CARD_ASPECT;
   const footprintW = rotated ? cardH : cardW;
   const footprintH = rotated ? cardW : cardH;
+  // Bouton quand c'est interactif (au clavier aussi, et pas juste une div
+  // qui réagit à la souris) ; simple div sinon, pour le PvP décoratif.
+  const Wrapper = onClick ? 'button' : 'div';
   return (
-    <div style={{ position: 'relative', width: footprintW, flex: 'none' }}>
+    <Wrapper
+      onClick={onClick}
+      type={onClick ? 'button' : undefined}
+      // Le même bouton fait trois choses selon le moment du tour — l'infobulle
+      // le dit, plutôt que de laisser deviner ce qu'une touche va déclencher.
+      title={
+        !onClick
+          ? undefined
+          : isTargetable
+            ? 'Attaquer cette carte'
+            : isPlayable
+              ? "Ta carte qui attaque : touche pour lancer l'attaque, retouche pour annuler"
+              : 'Voir les stats de la carte'
+      }
+      style={{
+        position: 'relative',
+        width: footprintW,
+        flex: 'none',
+        padding: 0,
+        border: 0,
+        background: 'none',
+        font: 'inherit',
+        color: 'inherit',
+        textAlign: 'inherit',
+        cursor: onClick ? 'pointer' : 'default',
+      }}
+    >
       <div
         key={animKey}
         className={animClass}
@@ -259,6 +363,7 @@ function BoardSlot({
         }}
       >
         <div
+          className={isTargetable ? 'battle-targetable' : isPlayable ? 'battle-playable' : undefined}
           style={{
             position: 'absolute',
             width: cardW,
@@ -266,7 +371,10 @@ function BoardSlot({
             top: '50%',
             left: '50%',
             transform: `translate(-50%, -50%) ${rotated ? 'rotate(90deg)' : ''}`,
-            boxShadow: `0 0 0 2px ${ring}`,
+            // Le halo pulsant (classe ci-dessus) remplace le liseré fixe de
+            // posture tant qu'il dure — sinon les deux box-shadow se
+            // marchent dessus.
+            boxShadow: isTargetable || isPlayable ? undefined : `0 0 0 2px ${ring}`,
             borderRadius: 15,
           }}
         >
@@ -301,6 +409,15 @@ function BoardSlot({
           {hit.blocked ? '🚫' : `${hit.crit ? '🎯 ' : ''}-${hit.damage}`}
         </div>
       )}
-    </div>
+      {/* Pastille au-dessus de la carte : le halo qui pulse se remarque en
+          mouvement, mais d'un coup d'œil immobile les cartes en Attaque ont
+          déjà toutes le même liseré — sans repère explicite on ne sait pas
+          laquelle toucher. 👆 = « c'est toi qui joues », 🎯 = « visable ». */}
+      {(isTargetable || isPlayable) && (
+        <span style={{ position: 'absolute', top: -6, left: '50%', transform: 'translateX(-50%)', fontSize: 14, zIndex: 3, pointerEvents: 'none' }}>
+          {isTargetable ? '🎯' : '👆'}
+        </span>
+      )}
+    </Wrapper>
   );
 }
