@@ -257,6 +257,40 @@ avec comptes utilisateurs.
 >   un attaquant affronte précisément cette carte-écran, jamais sur
 >   l'ensemble d'un combat de plusieurs dizaines de tours.
 >
+> **Huitième passage** ("il faudrait qu'on visualise sur l'écran la
+> position choisie par chaque joueur comme un plateau sur Yu-Gi-Oh, avec un
+> mouvement des cartes pour montrer qu'elles attaquent ou qu'elles
+> résistent") — purement visuel, aucun changement de calcul :
+> - Un **plateau permanent** (`BattleBoard` dans `BattleResultOverlay`)
+>   s'affiche entre les jauges de PV et le journal de combat existant
+>   (conservé tel quel en dessous, pour le détail tour par tour) : les 5
+>   cartes de chaque équipe, dans l'ordre où elles ont été alignées, avec un
+>   badge de posture (⚔️/🛡️) et un liseré de couleur (accent = Attaque,
+>   accent-2 = Défense). Une carte-écran détruite reste à sa place mais
+>   s'assombrit et se grise (façon "cimetière visible"), plutôt que de
+>   disparaître — pour toujours voir d'un coup d'œil combien de défenseurs
+>   il reste de chaque côté.
+> - Contrairement au journal (qui défile), le plateau ne montre QUE l'état
+>   du tour actuellement dévoilé — dérivé uniquement des tours déjà révélés
+>   (`revealed`), jamais du résultat complet à l'avance.
+> - **Mouvement des cartes**, rejoué une fois par tour dévoilé (via un
+>   `key` React qui change pour forcer le remontage de l'élément animé,
+>   jamais une boucle) : la carte en Attaque qui agit s'élance vers le
+>   centre du plateau (vers le bas pour l'adversaire, vers le haut pour
+>   soi) ; sa cible tressaute si elle encaisse, se brise (rotation + grisage
+>   + fondu) si c'est le coup de grâce, ou s'entoure d'un halo bleu si
+>   bloquée — plus un nombre de dégâts flottant qui s'élève et s'efface
+>   au-dessus de la carte touchée (ou de la jauge de PV si l'écran est déjà
+>   percé). Nouvelles keyframes dans `animations.css`
+>   (`battleLungeUp/Down`, `battleShake`, `battleBreak`, `battleBlockFlash`,
+>   `battleFloat`, `battlePvFlash`) — respectent automatiquement
+>   `prefers-reduced-motion` comme tout le reste du fichier (aucune logique
+>   supplémentaire à écrire côté composant).
+> - Vérifié en live (Playwright contre `npm run dev`, viewport desktop et
+>   mobile 390×844) : plateau lisible aux deux tailles, écrans détruits
+>   bien grisés, halo de blocage et nombres flottants visibles, aucune
+>   erreur console sur un combat complet de bot.
+>
 > Le reste de ce document (schéma Postgres/Supabase, phasage, questions
 > restées ouvertes) garde sa valeur de référence historique mais ne
 > correspond plus à l'implémentation réelle (Cloudflare D1, pas Supabase —

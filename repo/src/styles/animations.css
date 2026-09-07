@@ -160,6 +160,55 @@
   100% { transform: translateY(0) scale(1); opacity: 1; }
 }
 
+/* ── Plateau de combat (façon Yu-Gi-Oh) ─────────────────────────
+   Utilisées par src/components/BattleResultOverlay.tsx (BattleBoard) — le
+   plateau affiche les 5 cartes de chaque équipe en permanence (pas un
+   journal qui défile) et ces animations, une par tour dévoilé, montrent
+   QUI agit et QUI encaisse : la carte en Attaque qui frappe s'élance vers
+   le centre, la carte-écran visée tressaute (ou se brise si c'est le coup
+   de grâce, ou s'entoure d'un halo si bloquée). Rejouées à chaque tour via
+   un `key` React qui change (remonte l'élément), jamais en boucle. */
+@keyframes battleLungeDown {
+  0%, 100% { transform: translateY(0) scale(1); }
+  40% { transform: translateY(9px) scale(1.06); }
+}
+@keyframes battleLungeUp {
+  0%, 100% { transform: translateY(0) scale(1); }
+  40% { transform: translateY(-9px) scale(1.06); }
+}
+@keyframes battleShake {
+  0%, 100% { transform: translateX(0); }
+  20% { transform: translateX(-4px); }
+  40% { transform: translateX(4px); }
+  60% { transform: translateX(-3px); }
+  80% { transform: translateX(3px); }
+}
+@keyframes battleBreak {
+  0% { transform: scale(1) rotate(0deg); opacity: 1; filter: grayscale(0) brightness(1); }
+  30% { transform: scale(1.1) rotate(-5deg); filter: grayscale(.3) brightness(1.3); }
+  100% { transform: scale(.88) rotate(7deg); opacity: .4; filter: grayscale(1) brightness(1); }
+}
+@keyframes battleBlockFlash {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(94,168,199,0); }
+  40% { box-shadow: 0 0 0 5px rgba(94,168,199,.6); }
+}
+@keyframes battleFloat {
+  0% { transform: translate(-50%, 0); opacity: 0; }
+  15% { opacity: 1; }
+  100% { transform: translate(-50%, -18px); opacity: 0; }
+}
+@keyframes battlePvFlash {
+  0%, 100% { filter: brightness(1) saturate(1); }
+  35% { filter: brightness(1.5) saturate(1.4); }
+}
+.battle-lunge-down { animation: battleLungeDown .45s ease; }
+.battle-lunge-up { animation: battleLungeUp .45s ease; }
+.battle-shake { animation: battleShake .4s ease; }
+.battle-break { animation: battleBreak .55s ease forwards; }
+.battle-block-flash { animation: battleBlockFlash .5s ease; }
+.battle-float { animation: battleFloat .9s ease forwards; }
+.battle-pv-flash { animation: battlePvFlash .5s ease; }
+
 /* Respect reduced-motion: freeze decorative loops, keep functional transitions.
    Le sélecteur exclut `html.anim-forced` : quand le joueur choisit
    « Animations : activées » dans Profil, cette règle ne doit pas gagner —

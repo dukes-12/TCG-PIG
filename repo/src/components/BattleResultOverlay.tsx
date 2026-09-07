@@ -61,6 +61,30 @@ export default function BattleResultOverlay({ battle, myUsername, onClose }: { b
   const iWon = winner !== null && (winner === 'challenger') === iAmChallenger;
   const tie = winner === 'tie';
 
+  // ── État du plateau (voir BattleBoard plus bas) — dérivé uniquement des
+  // tours déjà révélés, jamais du résultat complet à l'avance : une
+  // carte-écran détruite au tour 7 reste debout sur le plateau tant qu'on
+  // n'a pas révélé ce tour-là.
+  const revealedRounds = rounds.slice(0, revealed);
+  const challengerDestroyed = new Set<number>();
+  const opponentDestroyed = new Set<number>();
+  for (const r of revealedRounds) {
+    if (r.opponentTargetDestroyed && r.opponentTargetCardId !== null) challengerDestroyed.add(r.opponentTargetCardId);
+    if (r.challengerTargetDestroyed && r.challengerTargetCardId !== null) opponentDestroyed.add(r.challengerTargetCardId);
+  }
+  const challengerTargetInfo: Record<number, HitInfo> = {};
+  const opponentTargetInfo: Record<number, HitInfo> = {};
+  if (last) {
+    if (last.opponentTargetCardId !== null) {
+      challengerTargetInfo[last.opponentTargetCardId] = { damage: last.opponentDamage, destroyed: last.opponentTargetDestroyed, blocked: last.opponentBlocked, crit: last.opponentCrit };
+    }
+    if (last.challengerTargetCardId !== null) {
+      opponentTargetInfo[last.challengerTargetCardId] = { damage: last.challengerDamage, destroyed: last.challengerTargetDestroyed, blocked: last.challengerBlocked, crit: last.challengerCrit };
+    }
+  }
+  const challengerPvHitNow = !!last && last.opponentTargetCardId === null;
+  const opponentPvHitNow = !!last && last.challengerTargetCardId === null;
+
   return (
     <div className="overlay" onClick={finished ? onClose : undefined} style={{ alignItems: 'stretch' }}>
       <div
@@ -86,12 +110,40 @@ export default function BattleResultOverlay({ battle, myUsername, onClose }: { b
         </div>
 
         <div style={{ padding: '10px 20px 0', flex: 'none' }}>
-          <HpBar label={battle.challengerUsername} hp={hpC} maxHp={result.challengerMaxHp} align="left" />
+          <HpBar
+            label={battle.opponentUsername}
+            hp={hpO}
+            maxHp={result.opponentMaxHp}
+            align="left"
+            hitKey={opponentPvHitNow ? revealed : null}
+            floatText={opponentPvHitNow && last ? String(last.challengerDamage) : null}
+          />
           <div style={{ height: 8 }} />
-          <HpBar label={battle.opponentUsername} hp={hpO} maxHp={result.opponentMaxHp} align="left" />
+          <HpBar
+            label={battle.challengerUsername}
+            hp={hpC}
+            maxHp={result.challengerMaxHp}
+            align="left"
+            hitKey={challengerPvHitNow ? revealed : null}
+            floatText={challengerPvHitNow && last ? String(last.opponentDamage) : null}
+          />
         </div>
 
-        <div ref={logRef} style={{ overflowY: 'auto', padding: '14px 20px 20px', display: 'flex', flexDirection: 'column', gap: 6, marginTop: 4 }}>
+        <BattleBoard
+          opponentTeam={battle.opponentTeam}
+          challengerTeam={battle.challengerTeam}
+          opponentDestroyed={opponentDestroyed}
+          challengerDestroyed={challengerDestroyed}
+          opponentTargetInfo={opponentTargetInfo}
+          challengerTargetInfo={challengerTargetInfo}
+          activeOpponentAttackerId={last?.opponentAttackerId ?? null}
+          activeChallengerAttackerId={last?.challengerAttackerId ?? null}
+          roundLabel={last ? `Tour ${last.round + 1}` : 'En attente…'}
+          revealed={revealed}
+          holoAnim={holoAnim}
+        />
+
+        <div ref={logRef} style={{ overflowY: 'auto', padding: '4px 20px 20px', display: 'flex', flexDirection: 'column', gap: 6 }}>
           {rounds.slice(0, revealed).map((r) => (
             <RoundCard
               key={r.round}
@@ -163,20 +215,211 @@ export default function BattleResultOverlay({ battle, myUsername, onClose }: { b
   );
 }
 
-function HpBar({ label, hp, maxHp, align }: { label: string; hp: number; maxHp: number; align: 'left' | 'right' }) {
+function HpBar({
+  label,
+  hp,
+  maxHp,
+  align,
+  hitKey,
+  floatText,
+}: {
+  label: string;
+  hp: number;
+  maxHp: number;
+  align: 'left' | 'right';
+  /** Change à chaque tour où ces PV encaissent un coup direct (écran déjà
+   *  percé) — remonte l'élément pour rejouer le flash une seule fois. */
+  hitKey?: number | null;
+  floatText?: string | null;
+}) {
   const pct = maxHp > 0 ? Math.max(0, Math.min(100, (hp / maxHp) * 100)) : 0;
   const color = pct > 50 ? 'var(--color-accent-2)' : pct > 20 ? 'var(--color-accent)' : '#c0503f';
   return (
-    <div>
+    <div style={{ position: 'relative' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 10.5, opacity: 0.65, marginBottom: 3, textAlign: align }}>
         <span style={{ fontWeight: 700 }}>{label}</span>
         <span>
           {hp} / {maxHp} PV
         </span>
       </div>
-      <div style={{ height: 9, borderRadius: 999, background: 'var(--color-neutral-200)', overflow: 'hidden' }}>
+      <div key={hitKey ?? 'still'} className={hitKey != null ? 'battle-pv-flash' : undefined} style={{ height: 9, borderRadius: 999, background: 'var(--color-neutral-200)', overflow: 'hidden' }}>
         <div style={{ height: '100%', width: `${pct}%`, background: color, borderRadius: 999, transition: 'width .3s ease, background .3s ease' }} />
       </div>
+      {hitKey != null && floatText && (
+        <div
+          key={`${hitKey}-float`}
+          className="battle-float"
+          style={{ position: 'absolute', right: 0, top: -2, fontSize: 12, fontWeight: 800, color: '#c0503f', pointerEvents: 'none' }}
+        >
+          ❤️ -{floatText}
+        </div>
+      )}
+    </div>
+  );
+}
+
+interface HitInfo {
+  damage: number;
+  destroyed: boolean;
+  blocked: boolean;
+  crit: boolean;
+}
+
+/** Le plateau — les 5 cartes de chaque équipe, toujours visibles dans
+ *  l'ordre où elles ont été alignées (façon plateau Yu-Gi-Oh), avec un
+ *  badge de posture (⚔️/🛡️) plutôt qu'une rotation de carte. Contrairement
+ *  au journal en dessous (qui défile), ce plateau ne montre que l'état
+ *  ACTUEL : une carte-écran détruite s'assombrit et reste à sa place (façon
+ *  "cimetière visible"), la carte en Attaque qui vient d'agir s'élance vers
+ *  le centre, sa cible tressaute, se brise ou s'entoure d'un halo bleu si
+ *  bloquée — une seule fois par tour révélé (voir animations.css). */
+function BattleBoard({
+  opponentTeam,
+  challengerTeam,
+  opponentDestroyed,
+  challengerDestroyed,
+  opponentTargetInfo,
+  challengerTargetInfo,
+  activeOpponentAttackerId,
+  activeChallengerAttackerId,
+  roundLabel,
+  revealed,
+  holoAnim,
+}: {
+  opponentTeam: TeamSlot[];
+  challengerTeam: TeamSlot[];
+  opponentDestroyed: Set<number>;
+  challengerDestroyed: Set<number>;
+  opponentTargetInfo: Record<number, HitInfo>;
+  challengerTargetInfo: Record<number, HitInfo>;
+  activeOpponentAttackerId: number | null;
+  activeChallengerAttackerId: number | null;
+  roundLabel: string;
+  revealed: number;
+  holoAnim: boolean;
+}) {
+  return (
+    <div style={{ padding: '10px 20px 4px', flex: 'none' }}>
+      <TeamRow team={opponentTeam} destroyed={opponentDestroyed} targetInfo={opponentTargetInfo} activeAttackerId={activeOpponentAttackerId} lunge="battle-lunge-down" revealed={revealed} holoAnim={holoAnim} />
+      <div style={{ textAlign: 'center', fontSize: 9, fontWeight: 700, opacity: 0.35, letterSpacing: '.06em', textTransform: 'uppercase', margin: '5px 0' }}>{roundLabel}</div>
+      <TeamRow team={challengerTeam} destroyed={challengerDestroyed} targetInfo={challengerTargetInfo} activeAttackerId={activeChallengerAttackerId} lunge="battle-lunge-up" revealed={revealed} holoAnim={holoAnim} />
+    </div>
+  );
+}
+
+function TeamRow({
+  team,
+  destroyed,
+  targetInfo,
+  activeAttackerId,
+  lunge,
+  revealed,
+  holoAnim,
+}: {
+  team: TeamSlot[];
+  destroyed: Set<number>;
+  targetInfo: Record<number, HitInfo>;
+  activeAttackerId: number | null;
+  lunge: 'battle-lunge-down' | 'battle-lunge-up';
+  revealed: number;
+  holoAnim: boolean;
+}) {
+  return (
+    <div style={{ display: 'flex', gap: 5, justifyContent: 'center' }}>
+      {team.map((slot) => {
+        const hit = targetInfo[slot.cardId];
+        const isActiveAttacker = slot.stance === 'attaque' && slot.cardId === activeAttackerId;
+        let animClass: string | undefined;
+        let animKey: string;
+        if (isActiveAttacker) {
+          animClass = lunge;
+          animKey = `atk-${revealed}-${slot.cardId}`;
+        } else if (hit) {
+          animClass = hit.blocked ? 'battle-block-flash' : hit.destroyed ? 'battle-break' : 'battle-shake';
+          animKey = `hit-${revealed}-${slot.cardId}`;
+        } else {
+          animKey = `static-${slot.cardId}`;
+        }
+        return (
+          <BoardSlot
+            key={slot.cardId}
+            slot={slot}
+            isDestroyed={destroyed.has(slot.cardId)}
+            animClass={animClass}
+            animKey={animKey}
+            hit={hit}
+            holoAnim={holoAnim}
+          />
+        );
+      })}
+    </div>
+  );
+}
+
+function BoardSlot({
+  slot,
+  isDestroyed,
+  animClass,
+  animKey,
+  hit,
+  holoAnim,
+}: {
+  slot: TeamSlot;
+  isDestroyed: boolean;
+  animClass: string | undefined;
+  animKey: string;
+  hit: HitInfo | undefined;
+  holoAnim: boolean;
+}) {
+  const card = cardById(slot.cardId);
+  if (!card) return null;
+  const stanceInfo = STANCE_INFO[slot.stance];
+  const ring = slot.stance === 'attaque' ? 'var(--color-accent-500)' : 'var(--color-accent-2-500)';
+  return (
+    <div style={{ position: 'relative', width: 42, flex: 'none' }}>
+      <div
+        key={animKey}
+        className={animClass}
+        style={{
+          width: 42,
+          aspectRatio: '0.72',
+          borderRadius: 9,
+          position: 'relative',
+          boxShadow: `0 0 0 1.5px ${ring}`,
+          opacity: isDestroyed ? 0.4 : 1,
+          filter: isDestroyed ? 'grayscale(1)' : 'none',
+          transition: 'opacity .4s ease, filter .4s ease',
+        }}
+      >
+        <PigCard card={card} holoAnim={holoAnim} ownedCount={1} isHolo={slot.holo} />
+        <span
+          title={`Posture : ${stanceInfo.label}`}
+          style={{ position: 'absolute', bottom: -3, right: -3, fontSize: 11, background: 'var(--color-bg)', borderRadius: '50%', lineHeight: 1, padding: 1.5, boxShadow: 'var(--shadow-sm)' }}
+        >
+          {stanceInfo.icon}
+        </span>
+        {isDestroyed && (
+          <span style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 16 }}>💥</span>
+        )}
+      </div>
+      {hit && (
+        <div
+          key={`${animKey}-float`}
+          className="battle-float"
+          style={{
+            position: 'absolute',
+            top: -6,
+            left: '50%',
+            fontSize: 10.5,
+            fontWeight: 800,
+            whiteSpace: 'nowrap',
+            color: hit.crit ? '#c0503f' : hit.blocked ? 'var(--color-text)' : 'var(--color-accent-800)',
+            pointerEvents: 'none',
+          }}
+        >
+          {hit.blocked ? '🚫' : `${hit.crit ? '🎯 ' : ''}-${hit.damage}`}
+        </div>
+      )}
     </div>
   );
 }
