@@ -55,6 +55,16 @@ export default function BattlesScreen() {
   const [team, setTeam] = useState<TeamSlot[]>([]);
   const [busy, setBusy] = useState(false);
   const [viewing, setViewing] = useState<Battle | null>(null);
+  // Équipe du bot, tirée UNE FOIS au lancement du défi (pas relancée à
+  // l'envoi) — mode "Défier un bot" uniquement (voir IDEES_AMIS_COMBAT.md,
+  // dixième passage) : il faut voir l'écran adverse pour pouvoir assigner
+  // ses attaquants à une carte-écran précise plutôt que le ciblage
+  // automatique habituel (le 1er défenseur adverse encore vivant).
+  const [botPreviewTeam, setBotPreviewTeam] = useState<TeamSlot[] | null>(null);
+  // cardId d'un attaquant à moi → cardId du défenseur adverse qu'il vise en
+  // priorité. Absent = ciblage automatique (comportement d'avant ce
+  // passage). Voir resolveBattle (lib/battle.ts, challengerTargets).
+  const [attackerTargets, setAttackerTargets] = useState<Record<number, number>>({});
 
   // Recale aussi la pastille ⚔️ de Profil tout de suite (sinon elle
   // n'aurait bougé qu'au prochain sondage de 30s, voir App.tsx) — un
@@ -133,16 +143,24 @@ export default function BattlesScreen() {
   const startChallenge = (username: string) => {
     setCompose({ target: username });
     setTeam(favoriteIfValid());
+    setBotPreviewTeam(null);
+    setAttackerTargets({});
   };
 
   const startBotChallenge = () => {
     setCompose({ target: `Bot (${BOT_LABEL[botDifficulty]})`, bot: botDifficulty });
     setTeam(favoriteIfValid());
+    // Tirée maintenant, pas à l'envoi — pour que le joueur voie l'écran
+    // adverse et puisse y assigner ses attaquants (voir attackerTargets).
+    setBotPreviewTeam(randomBotTeam(botDifficulty));
+    setAttackerTargets({});
   };
 
   const startRespond = (b: Battle) => {
     setCompose({ target: b.challengerUsername, respondTo: b.id });
     setTeam(favoriteIfValid());
+    setBotPreviewTeam(null);
+    setAttackerTargets({});
   };
 
   const isCurrentTeamFavorite =
@@ -164,6 +182,8 @@ export default function BattlesScreen() {
   const cancelCompose = () => {
     setCompose(null);
     setTeam([]);
+    setBotPreviewTeam(null);
+    setAttackerTargets({});
   };
 
   const submit = async () => {
@@ -173,10 +193,13 @@ export default function BattlesScreen() {
       if (compose.bot) {
         // Zone de test — tout se passe en local, jamais d'appel serveur ni
         // de ligne ajoutée à l'historique (pas un vrai adversaire, pas de
-        // compte). randomBotTeam() tire une équipe différente à chaque
-        // défi (resolveBattle lui-même est déterministe, sans aléa).
-        const opponentTeam = randomBotTeam(compose.bot);
-        const result = resolveBattleLocally(team, opponentTeam);
+        // compte). L'équipe adverse est celle déjà tirée à l'ouverture du
+        // défi (botPreviewTeam) — pas relancée ici — pour que le combat
+        // affronte vraiment l'écran que le joueur a vu en assignant ses
+        // cibles (resolveBattleLocally lui-même est déterministe, sans
+        // aléa, hors coup critique/bouclier — voir functions/_lib/battle.ts).
+        const opponentTeam = botPreviewTeam ?? randomBotTeam(compose.bot);
+        const result = resolveBattleLocally(team, opponentTeam, attackerTargets);
         setViewing({
           id: -1,
           challengerUsername: account ?? 'Toi',
@@ -249,7 +272,9 @@ export default function BattlesScreen() {
           ne compte que face à la carte-écran visée, plus une fois les PV atteints directement. Toucher les PV
           adverses donne de la lancée 🔥 au prochain tour de cet attaquant, et une équipe sous 25% de PV se bat avec
           les tripes (💢 bonus d'attaque). Chaque tour, 🎯 15% de chances de coup critique (double les dégâts) et 🚫
-          12% de bloquer complètement une attaque. Asynchrone : ton adversaire répond quand il veut.
+          12% de bloquer complètement une attaque. Asynchrone : ton adversaire répond quand il veut — sauf contre un
+          bot (Zone de test), où tu peux en plus assigner chacun de tes attaquants à une carte-écran adverse précise
+          avant de lancer le combat.
         </p>
       </div>
 
@@ -417,9 +442,88 @@ export default function BattlesScreen() {
           </div>
           <div style={{ fontSize: 10.5, opacity: 0.5, marginBottom: 10 }}>
             Il faut exactement {TEAM_SHAPE.attackers} cartes en Attaque et {TEAM_SHAPE.defenders} en Défense — touche
-            la pastille sous une carte pour changer sa posture. L'ordre des cartes en Défense fixe l'ordre de l'écran
-            (la 1ère encaisse en premier).
+            la pastille sous une carte pour changer sa posture. Par défaut, l'ordre des cartes en Défense fixe l'ordre
+            de l'écran (la 1ère encaisse en premier){compose.bot ? ' — ou assigne toi-même chaque attaquant ci-dessous' : ''}.
           </div>
+
+          {compose.bot && botPreviewTeam && (
+            <div style={{ marginBottom: 14, padding: 12, borderRadius: 18, background: 'var(--color-surface)' }}>
+              <div style={{ fontSize: 11.5, fontWeight: 700, marginBottom: 8 }}>
+                🎯 Cibles — équipe adverse (Bot {BOT_LABEL[compose.bot]})
+              </div>
+              <div style={{ display: 'flex', gap: 6, marginBottom: 10, overflowX: 'auto', paddingBottom: 2 }}>
+                {botPreviewTeam.map((slot) => {
+                  const card = cardById(slot.cardId);
+                  if (!card) return null;
+                  const camp = campOf(slot.cardId);
+                  return (
+                    <div key={slot.cardId} style={{ width: 40, flex: 'none' }}>
+                      <div style={{ width: 40, aspectRatio: '0.72', borderRadius: 8, position: 'relative', opacity: slot.stance === 'defense' ? 1 : 0.45 }}>
+                        <PigCard card={card} holoAnim={holoAnim} ownedCount={1} isHolo={slot.holo} />
+                        {camp && (
+                          <span style={{ position: 'absolute', top: 1, left: 1, fontSize: 9, filter: 'drop-shadow(0 1px 1px rgba(0,0,0,.4))' }}>{CAMP_INFO[camp].icon}</span>
+                        )}
+                      </div>
+                      <div style={{ fontSize: 8, textAlign: 'center', marginTop: 2, opacity: 0.55 }}>{STANCE_INFO[slot.stance].icon}</div>
+                    </div>
+                  );
+                })}
+              </div>
+
+              {teamAttackers === 0 ? (
+                <p style={{ fontSize: 10.5, opacity: 0.5, margin: 0 }}>Choisis d'abord tes {TEAM_SHAPE.attackers} cartes en Attaque pour pouvoir leur assigner une cible.</p>
+              ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                  {team
+                    .filter((s) => s.stance === 'attaque')
+                    .map((attSlot) => {
+                      const attCard = cardById(attSlot.cardId);
+                      if (!attCard) return null;
+                      const assigned = attackerTargets[attSlot.cardId];
+                      return (
+                        <div key={attSlot.cardId}>
+                          <div style={{ fontSize: 10.5, fontWeight: 700, marginBottom: 4 }}>⚔️ {attCard.name} vise :</div>
+                          <div className="chip-row">
+                            <Chip
+                              label="Automatique"
+                              active={assigned === undefined}
+                              onClick={() =>
+                                setAttackerTargets((t) => {
+                                  const next = { ...t };
+                                  delete next[attSlot.cardId];
+                                  return next;
+                                })
+                              }
+                            />
+                            {botPreviewTeam
+                              .filter((s) => s.stance === 'defense')
+                              .map((defSlot) => {
+                                const defCard = cardById(defSlot.cardId);
+                                if (!defCard) return null;
+                                return (
+                                  <Chip
+                                    key={defSlot.cardId}
+                                    label={defCard.name}
+                                    active={assigned === defSlot.cardId}
+                                    onClick={() => setAttackerTargets((t) => ({ ...t, [attSlot.cardId]: defSlot.cardId }))}
+                                  />
+                                );
+                              })}
+                          </div>
+                        </div>
+                      );
+                    })}
+                </div>
+              )}
+
+              <p style={{ fontSize: 10, opacity: 0.45, margin: '10px 0 0' }}>
+                "Automatique" vise le 1er défenseur adverse encore vivant, dans l'ordre de son écran. Une cible
+                assignée reste visée tant qu'elle est vivante ; une fois détruite, retombe sur l'automatique. Les PV
+                adverses ne sont atteignables qu'une fois les {TEAM_SHAPE.defenders} défenseurs détruits, quelle que
+                soit l'assignation.
+              </p>
+            </div>
+          )}
 
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,minmax(0,1fr))', gap: 8, maxHeight: '38vh', overflowY: 'auto' }}>
             {eligible.map(({ card, holo }) => {

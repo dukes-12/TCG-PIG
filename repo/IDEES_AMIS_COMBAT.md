@@ -319,6 +319,56 @@ avec comptes utilisateurs.
 >   types lisibles, illustrations nettes, aucun débordement horizontal aux
 >   deux largeurs, aucune erreur console sur un combat complet de bot.
 >
+> **Dixième passage** (bug remonté avec capture d'écran : "on ne peux pas
+> scroller vers le bas" — le bouton "Fermer" hors d'atteinte sur certains
+> téléphones) — deux causes cumulées, plus probable depuis l'agrandissement
+> du plateau (passage précédent, qui laisse moins de place au reste) :
+> - Le modal utilisait `85vh`, basé sur le plus grand viewport possible
+>   (barre d'adresse/outils masquée) — remplacé par `85dvh` (hauteur de
+>   viewport DYNAMIQUE), qui tient compte de la barre réellement affichée.
+> - Le bouton "Fermer"/"Passer" vivait à l'intérieur du journal défilant
+>   (`position: sticky`), qui n'avait ni `flex` ni `minHeight: 0` — un
+>   flex-item avec overflow ne se laisse pas comprimer sous sa taille de
+>   contenu sans ça. Sorti du journal, désormais un pied de page fixe,
+>   toujours visible quel que soit l'état du scroll.
+> - Vérifié en live (Playwright, viewports délibérément courts 390×660 et
+>   360×600, simulant une barre de navigateur visible) : bouton "Fermer"
+>   toujours dans le viewport et cliquable aux deux tailles.
+>
+> **Onzième passage** ("on ne peux choisir qui attaque qui" — clarifié par
+> questions : une assignation choisie UNE FOIS à la composition, pas un
+> vrai tour par tour interactif ; bot uniquement pour l'instant, pas le
+> PvP) — chaque carte-écran adverse devient une cible qu'on peut choisir
+> explicitement, plutôt qu'un ciblage entièrement automatique :
+> - `resolveBattle` (lib/battle.ts, mode bot uniquement — le serveur,
+>   functions/_lib/battle.ts, n'est PAS concerné par ce passage) accepte
+>   maintenant un 3e paramètre optionnel `challengerTargets` : pour chaque
+>   carte en Attaque du joueur (clé = son cardId), la carte-écran adverse
+>   qu'elle vise en priorité tant qu'elle est vivante. Sans assignation (ou
+>   une fois la cible assignée détruite), retombe sur le comportement
+>   automatique déjà existant (le 1er défenseur adverse encore vivant).
+> - Changement de modèle sous-jacent : les 3 défenseurs adverses n'étaient
+>   protégés que par un unique pointeur "front" partagé par les deux
+>   attaquants (destruction strictement dans l'ordre). Chaque défenseur a
+>   maintenant sa durabilité suivie indépendamment, et une cible assignée
+>   peut être atteinte MÊME SI un défenseur placé avant elle dans l'écran
+>   est encore vivant — l'écran protège toujours les PV (inatteignables
+>   tant qu'il en reste UN SEUL vivant, assigné ou pas), mais ne verrouille
+>   plus un ordre strict entre défenseurs individuels.
+> - Côté bot (`BattlesScreen`) : l'équipe adverse est désormais tirée à
+>   l'OUVERTURE du défi (pas à l'envoi), pour que le joueur voie l'écran
+>   adverse et puisse y assigner ses attaquants avant de lancer le combat —
+>   un nouveau panneau "🎯 Cibles" liste les 3 défenseurs adverses (aperçu
+>   des 5 cartes) et, pour chacun des attaquants du joueur, une puce
+>   "Automatique" plus une puce par défenseur adverse nommé.
+> - Vérifié : suite de tests ciblés sur le moteur (cible assignée bien
+>   visée devant un défenseur "plus proche" encore vivant ; repli correct
+>   sur l'automatique une fois la cible assignée détruite ; PV toujours
+>   protégées tant qu'un défenseur, même non assigné, reste vivant) contre
+>   le vrai code bundlé en esbuild ; tsc/build/eslint propres ; Playwright
+>   live (panneau affiché, assignation cliquable et reflétée visuellement,
+>   combat résolu sans erreur jusqu'à la victoire).
+>
 > Le reste de ce document (schéma Postgres/Supabase, phasage, questions
 > restées ouvertes) garde sa valeur de référence historique mais ne
 > correspond plus à l'implémentation réelle (Cloudflare D1, pas Supabase —

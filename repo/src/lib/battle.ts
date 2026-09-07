@@ -192,9 +192,34 @@ function buildSide(team: TeamSlot[]): Side {
   return { attackers, defenders, maxHp: Math.round(BASE_PV * (1 + synergy)), synergy };
 }
 
+/** Index du défenseur adverse visé par un attaquant précis : son
+ *  assignation explicite (voir `challengerTargets` sur `resolveBattle`) si
+ *  elle existe ENCORE (la carte visée peut avoir été détruite entre
+ *  temps), sinon le premier défenseur adverse encore vivant — comportement
+ *  automatique, identique à avant l'ajout du ciblage. `null` seulement une
+ *  fois TOUS les défenseurs adverses détruits (les PV sont alors visés
+ *  directement, quelle que soit l'assignation). */
+function pickTargetIndex(defHp: number[], defenders: SlotStats[], assignedCardId: number | undefined): number | null {
+  if (assignedCardId !== undefined) {
+    const idx = defenders.findIndex((d) => d.cardId === assignedCardId);
+    if (idx !== -1 && defHp[idx] > 0) return idx;
+  }
+  const idx = defHp.findIndex((hp) => hp > 0);
+  return idx === -1 ? null : idx;
+}
+
 /** Entièrement déterministe pour l'ATTAQUE elle-même — voir
- *  functions/_lib/battle.ts. */
-export function resolveBattle(challengerTeam: TeamSlot[], opponentTeam: TeamSlot[]): BattleResult {
+ *  functions/_lib/battle.ts.
+ *
+ *  `challengerTargets` (mode "Défier un bot" uniquement — voir
+ *  BattlesScreen) : pour CHAQUE carte en Attaque du challenger (clé =
+ *  son cardId), la carte-écran adverse qu'elle vise en priorité tant
+ *  qu'elle est vivante — choisie une fois avant le combat, pas retouchée
+ *  tour par tour. Sans assignation (ou une fois la cible assignée
+ *  détruite), retombe sur le comportement automatique (premier défenseur
+ *  adverse encore vivant). Toujours absent côté adversaire (bot) : son
+ *  ciblage reste entièrement automatique, non concerné par ce passage. */
+export function resolveBattle(challengerTeam: TeamSlot[], opponentTeam: TeamSlot[], challengerTargets?: Record<number, number>): BattleResult {
   const c = buildSide(challengerTeam);
   const o = buildSide(opponentTeam);
 
@@ -202,8 +227,6 @@ export function resolveBattle(challengerTeam: TeamSlot[], opponentTeam: TeamSlot
   let hpO = o.maxHp;
   const defHpC = c.defenders.map((d) => d.def * DEFENDER_DURABILITY_MULT);
   const defHpO = o.defenders.map((d) => d.def * DEFENDER_DURABILITY_MULT);
-  let frontC = 0;
-  let frontO = 0;
   const momC = c.attackers.map(() => false);
   const momO = o.attackers.map(() => false);
   const rounds: RoundEvent[] = [];
@@ -222,7 +245,8 @@ export function resolveBattle(challengerTeam: TeamSlot[], opponentTeam: TeamSlot
     const oHadMomentum = momO[oi];
 
     // ── Attaque du challenger, vise le camp adverse ──
-    const targetO = frontO < o.defenders.length ? o.defenders[frontO] : null;
+    const targetOIdx = pickTargetIndex(defHpO, o.defenders, challengerTargets?.[attC.cardId]);
+    const targetO = targetOIdx !== null ? o.defenders[targetOIdx] : null;
     const cAdv = !!targetO && attC.camp !== null && targetO.camp !== null && CAMP_BEATS[attC.camp] === targetO.camp;
     const cBonus = (cAdv ? CAMP_ADVANTAGE_BONUS : 0) + (cHadMomentum ? MOMENTUM_BONUS : 0) + (cDesperate ? DESPERATION_BONUS : 0);
     const atkC = Math.round(attC.atk * (1 + cBonus));
@@ -232,19 +256,19 @@ export function resolveBattle(challengerTeam: TeamSlot[], opponentTeam: TeamSlot
     if (cBlocked) cDmg = 0;
     else if ((cCrit = Math.random() < CRIT_CHANCE)) cDmg *= 2;
     let cDestroyed = false;
-    if (targetO) {
-      defHpO[frontO] -= cDmg;
-      if (defHpO[frontO] <= 0) {
-        cDestroyed = true;
-        frontO++;
-      }
+    if (targetOIdx !== null) {
+      defHpO[targetOIdx] -= cDmg;
+      if (defHpO[targetOIdx] <= 0) cDestroyed = true;
     } else {
       hpO = Math.max(0, hpO - cDmg);
     }
-    momC[ai] = targetO === null;
+    momC[ai] = targetOIdx === null;
 
-    // ── Attaque de l'adversaire, vise le camp du challenger ──
-    const targetC = frontC < c.defenders.length ? c.defenders[frontC] : null;
+    // ── Attaque de l'adversaire, vise le camp du challenger — toujours
+    // automatique (premier défenseur encore vivant), pas d'assignation
+    // côté bot. ──
+    const targetCIdx = pickTargetIndex(defHpC, c.defenders, undefined);
+    const targetC = targetCIdx !== null ? c.defenders[targetCIdx] : null;
     const oAdv = !!targetC && attO.camp !== null && targetC.camp !== null && CAMP_BEATS[attO.camp] === targetC.camp;
     const oBonus = (oAdv ? CAMP_ADVANTAGE_BONUS : 0) + (oHadMomentum ? MOMENTUM_BONUS : 0) + (oDesperate ? DESPERATION_BONUS : 0);
     const atkO = Math.round(attO.atk * (1 + oBonus));
@@ -254,16 +278,13 @@ export function resolveBattle(challengerTeam: TeamSlot[], opponentTeam: TeamSlot
     if (oBlocked) oDmg = 0;
     else if ((oCrit = Math.random() < CRIT_CHANCE)) oDmg *= 2;
     let oDestroyed = false;
-    if (targetC) {
-      defHpC[frontC] -= oDmg;
-      if (defHpC[frontC] <= 0) {
-        oDestroyed = true;
-        frontC++;
-      }
+    if (targetCIdx !== null) {
+      defHpC[targetCIdx] -= oDmg;
+      if (defHpC[targetCIdx] <= 0) oDestroyed = true;
     } else {
       hpC = Math.max(0, hpC - oDmg);
     }
-    momO[oi] = targetC === null;
+    momO[oi] = targetCIdx === null;
 
     rounds.push({
       round,
