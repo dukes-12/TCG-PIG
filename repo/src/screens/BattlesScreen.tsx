@@ -7,7 +7,7 @@ import LiveBattleOverlay from '../components/LiveBattleOverlay';
 import PigCard from '../components/PigCard';
 import { CARDS, SECRET_RARITY_ID, cardById } from '../data/catalog';
 import { apiCreateBattle, apiFetchBattles, apiFetchFriends, apiRespondBattle, type Battle, type TeamSlot } from '../lib/api';
-import { CAMP_INFO, STANCE_INFO, TEAM_SHAPE, campOf, cardStats, cardStatsWithStance, randomBotTeam, teamShapeOk, type BotDifficulty } from '../lib/battle';
+import { CAMP_INFO, STANCE_INFO, TEAM_SHAPE, campOf, campTooltip, cardStats, cardStatsWithStance, randomBotTeam, teamShapeOk, type BotDifficulty } from '../lib/battle';
 import type { Stance } from '../lib/api';
 import { useAnimations } from '../lib/useAnimations';
 import { useStore } from '../state/store';
@@ -250,10 +250,12 @@ export default function BattlesScreen() {
         <p style={{ fontSize: 13, opacity: 0.6, margin: '10px 0 0', textWrap: 'pretty' as const }}>
           5 cartes, chacune avec une ⚔️ Attaque et une 🛡️ Défense (rareté = puissance, holo = +50%, profil propre à
           chaque carte) — EXACTEMENT {TEAM_SHAPE.attackers} en posture ⚔️ Attaque et {TEAM_SHAPE.defenders} en 🛡️
-          Défense. Les deux équipes ont 500 PV. Les cartes en Défense forment un écran : les Attaque adverses doivent
-          d'abord les briser une par une, dans l'ordre, avant de pouvoir toucher les PV directement — une fois l'écran
-          percé, plus rien ne protège les PV. Trois camps se contrent façon pierre-papier-ciseaux ({CAMP_INFO.pouvoir.icon}{' '}
-          bat {CAMP_INFO.fiction.icon} bat {CAMP_INFO.culture.icon} bat {CAMP_INFO.pouvoir.icon}) : un avantage de camp
+          Défense. Les deux équipes ont 50 PV. Les cartes en Défense forment un écran : chacune tient DÉFENSE × 0,5
+          points de dégâts avant de se briser, et les Attaque adverses doivent les briser avant de pouvoir toucher les
+          PV directement — une fois l'écran percé, plus rien ne protège les PV. Trois camps se contrent façon
+          pierre-feuille-ciseaux ({CAMP_INFO.fiction.icon} {CAMP_INFO.fiction.label} bat {CAMP_INFO.culture.icon}{' '}
+          {CAMP_INFO.culture.label} bat {CAMP_INFO.pouvoir.icon} {CAMP_INFO.pouvoir.label} bat{' '}
+          {CAMP_INFO.fiction.icon}) : un avantage de camp
           ne compte que face à la carte-écran visée, plus une fois les PV atteints directement. Toucher les PV
           adverses donne de la lancée 🔥 au prochain tour de cet attaquant, et une équipe sous 25% de PV se bat avec
           les tripes (💢 bonus d'attaque). Chaque tour, 🎯 15% de chances de coup critique (double les dégâts) et 🚫
@@ -362,7 +364,7 @@ export default function BattlesScreen() {
                     {card ? <PigCard card={card} holoAnim={holoAnim} ownedCount={1} isHolo={slot!.holo} /> : null}
                     {camp && (
                       <span
-                        title={CAMP_INFO[camp].label}
+                        title={campTooltip(camp)}
                         style={{ position: 'absolute', top: 2, left: 2, fontSize: 11, filter: 'drop-shadow(0 1px 1px rgba(0,0,0,.4))' }}
                       >
                         {CAMP_INFO[camp].icon}
@@ -427,8 +429,11 @@ export default function BattlesScreen() {
           </div>
           <div style={{ fontSize: 10.5, opacity: 0.5, marginBottom: 10 }}>
             Il faut exactement {TEAM_SHAPE.attackers} cartes en Attaque et {TEAM_SHAPE.defenders} en Défense — touche
-            la pastille sous une carte pour changer sa posture. Par défaut, l'ordre des cartes en Défense fixe l'ordre
-            de l'écran (la 1ère encaisse en premier){compose.bot ? ' — ou assigne toi-même chaque attaquant ci-dessous' : ''}.
+            la pastille sous une carte pour changer sa posture. Chaque carte en Défense tient DÉFENSE × 0,5 points de
+            dégâts avant de se briser.
+            {compose.bot
+              ? " Contre un bot, tu choisis toi-même en direct quelle carte-écran adverse viser à chaque tour."
+              : " L'ordre des cartes en Défense fixe l'ordre de l'écran (la 1ère encaisse en premier)."}
           </div>
 
           {compose.bot && botPreviewTeam && (
@@ -446,7 +451,7 @@ export default function BattlesScreen() {
                       <div style={{ width: 40, aspectRatio: '0.72', borderRadius: 8, position: 'relative', opacity: slot.stance === 'defense' ? 1 : 0.45 }}>
                         <PigCard card={card} holoAnim={holoAnim} ownedCount={1} isHolo={slot.holo} />
                         {camp && (
-                          <span style={{ position: 'absolute', top: 1, left: 1, fontSize: 9, filter: 'drop-shadow(0 1px 1px rgba(0,0,0,.4))' }}>{CAMP_INFO[camp].icon}</span>
+                          <span title={campTooltip(camp)} style={{ position: 'absolute', top: 1, left: 1, fontSize: 9, filter: 'drop-shadow(0 1px 1px rgba(0,0,0,.4))' }}>{CAMP_INFO[camp].icon}</span>
                         )}
                       </div>
                       <div style={{ fontSize: 8, textAlign: 'center', marginTop: 2, opacity: 0.55 }}>{STANCE_INFO[slot.stance].icon}</div>
@@ -475,7 +480,7 @@ export default function BattlesScreen() {
                   <PigCard card={card} holoAnim={holoAnim} ownedCount={1} isHolo={holo} />
                   {camp && (
                     <span
-                      title={CAMP_INFO[camp].label}
+                      title={campTooltip(camp)}
                       style={{ position: 'absolute', top: 3, left: 3, fontSize: 12, filter: 'drop-shadow(0 1px 1px rgba(0,0,0,.4))' }}
                     >
                       {CAMP_INFO[camp].icon}

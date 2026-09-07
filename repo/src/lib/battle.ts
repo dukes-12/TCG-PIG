@@ -91,7 +91,7 @@ const TYPE_CAMP: Record<string, Camp> = {
 // le plus fort, Pouvoir (70 cartes, 3,61) le plus faible — le premier sens
 // (Fiction bat Pouvoir) cumulait l'écart de puissance et l'avantage de camp
 // sur le même camp déjà en difficulté. Sens inversé : Pouvoir bat Fiction.
-const CAMP_BEATS: Record<Camp, Camp> = { fiction: 'culture', culture: 'pouvoir', pouvoir: 'fiction' };
+export const CAMP_BEATS: Record<Camp, Camp> = { fiction: 'culture', culture: 'pouvoir', pouvoir: 'fiction' };
 // Bonus additionnés (pas multipliés) — voir functions/_lib/battle.ts pour
 // le détail et le calibrage.
 const CAMP_ADVANTAGE_BONUS = 0.5;
@@ -108,7 +108,11 @@ const BLOCK_CHANCE = 0.12;
 // adverse à chaque coup grignote lentement), donc les deux ont dû baisser
 // ensemble, pas juste les PV.
 const BASE_PV = 50;
-const DEFENDER_DURABILITY_MULT = 0.5;
+/** Points d'écran d'une carte en Défense = sa DÉFENSE (posture comprise)
+ *  × ce coefficient. Exporté pour pouvoir afficher le calcul au joueur
+ *  (BattleCardStats) plutôt que de lui laisser deviner d'où sort le
+ *  chiffre. */
+export const DEFENDER_DURABILITY_MULT = 0.5;
 const MAX_ROUNDS = 1000;
 
 export function campOf(cardId: number): Camp | null {
@@ -132,12 +136,28 @@ export function teamShapeOk(team: TeamSlot[]): boolean {
 }
 
 /** Icône + libellé par camp, pour l'affichage (composeur d'équipe,
- *  résultat de combat) — un seul endroit à mettre à jour côté UI. */
-export const CAMP_INFO: Record<Camp, { icon: string; label: string }> = {
-  fiction: { icon: '🎭', label: 'Fiction' },
-  pouvoir: { icon: '👑', label: 'Pouvoir' },
-  culture: { icon: '🌿', label: 'Culture' },
+ *  résultat de combat) — un seul endroit à mettre à jour côté UI.
+ *
+ *  Les icônes sont celles de PIERRE-FEUILLE-CISEAUX, et pas des symboles
+ *  de thème (🎭/👑/🌿 avant) : le triangle qui se contre est la seule chose
+ *  qu'on a besoin de lire d'un coup d'œil en plein combat, et personne n'a
+ *  à mémoriser si un masque bat une couronne. Le mariage suit exactement
+ *  CAMP_BEATS ci-dessus — Fiction ✊ bat Culture ✌️ bat Pouvoir ✋ bat
+ *  Fiction ✊ — donc changer l'un oblige à changer l'autre. */
+export const CAMP_INFO: Record<Camp, { icon: string; label: string; rps: string }> = {
+  fiction: { icon: '✊', label: 'Fiction', rps: 'pierre' },
+  culture: { icon: '✌️', label: 'Culture', rps: 'ciseaux' },
+  pouvoir: { icon: '✋', label: 'Pouvoir', rps: 'feuille' },
 };
+
+/** Infobulle d'un camp, partout pareil : le nom, sa main de
+ *  pierre-feuille-ciseaux, et surtout ce qu'il bat — la seule chose qui
+ *  compte en combat (+50% d'ATTAQUE contre le camp dominé). */
+export function campTooltip(camp: Camp): string {
+  const me = CAMP_INFO[camp];
+  const prey = CAMP_INFO[CAMP_BEATS[camp]];
+  return `${me.label} (${me.rps}) — bat ${prey.label} (${prey.rps})`;
+}
 
 /** Icône + libellé par posture, pour l'affichage. */
 export const STANCE_INFO: Record<Stance, { icon: string; label: string }> = {

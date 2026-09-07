@@ -1,7 +1,7 @@
 import PigCard from './PigCard';
 import { cardById, rarityById } from '../data/catalog';
 import type { TeamSlot } from '../lib/api';
-import { CAMP_INFO, STANCE_INFO, campOf, cardStats, cardStatsWithStance } from '../lib/battle';
+import { CAMP_BEATS, CAMP_INFO, DEFENDER_DURABILITY_MULT, STANCE_INFO, campOf, cardStats, cardStatsWithStance } from '../lib/battle';
 
 /** Fiche d'une carte pendant un combat, ouverte en touchant la carte sur le
  *  plateau. Volontairement différente de `CardDetailOverlay` (la fiche de
@@ -76,8 +76,11 @@ export default function BattleCardStats({
                 {stanceInfo.icon} {stanceInfo.label}
               </span>
               {camp && (
-                <span title={`Camp : ${CAMP_INFO[camp].label}`}>
-                  {CAMP_INFO[camp].icon} {CAMP_INFO[camp].label}
+                // « ✊ Fiction bat ✌️ » : le camp ne sert qu'à une chose en
+                // combat (+50% d'ATTAQUE contre le camp qu'il domine), autant
+                // afficher directement lequel plutôt que le seul nom.
+                <span title={`Camp : ${CAMP_INFO[camp].label} (${CAMP_INFO[camp].rps}) — bat ${CAMP_INFO[CAMP_BEATS[camp]].label} (${CAMP_INFO[CAMP_BEATS[camp]].rps})`}>
+                  {CAMP_INFO[camp].icon} {CAMP_INFO[camp].label} <span style={{ opacity: 0.55 }}>bat {CAMP_INFO[CAMP_BEATS[camp]].icon}</span>
                 </span>
               )}
             </div>
@@ -121,6 +124,12 @@ export default function BattleCardStats({
                   transition: 'width .3s ease',
                 }}
               />
+            </div>
+            {/* Le calcul, écrit noir sur blanc : sinon « 9,5 » sort de nulle
+                part et on ne voit pas qu'améliorer la DÉFENSE (ou passer la
+                carte en posture Défense) épaissit directement l'écran. */}
+            <div style={{ fontSize: 9.5, opacity: 0.5, marginTop: 4 }}>
+              = DÉFENSE {withStance?.def ?? 0} × {String(DEFENDER_DURABILITY_MULT).replace('.', ',')} · chaque coup encaissé la fait baisser, à 0 l'écran se brise
             </div>
           </div>
         )}

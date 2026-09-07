@@ -510,6 +510,30 @@ avec comptes utilisateurs.
 >   console ; PvP re-testé (révélation, fiche de stats, "Passer" et
 >   "Fermer" cliquables) à 390×844 et 375×620.
 >
+> **Quinzième passage** ("comment est calculée la durabilité, et remplace les
+> sigles des camps par pierre-feuille-ciseaux pour facilement comprendre") :
+> - Les icônes de camp deviennent celles de **pierre-feuille-ciseaux** —
+>   ✊ Fiction (pierre), ✌️ Culture (ciseaux), ✋ Pouvoir (feuille) — au lieu
+>   de 🎭/👑/🌿. Le mariage suit exactement `CAMP_BEATS` (✊ bat ✌️ bat ✋ bat
+>   ✊), donc le triangle se lit sans rien mémoriser. Partout d'un coup :
+>   plateau, journal, composeur, aperçu adverse, fiche de carte — toutes ces
+>   vues lisent le même `CAMP_INFO`.
+> - Nouveau `campTooltip()` partagé : « Fiction (pierre) — bat Culture
+>   (ciseaux) », et sur la fiche de combat le camp s'affiche « ✊ Fiction
+>   bat ✌️ » : le camp ne sert qu'à ça (+50% d'ATTAQUE contre le camp
+>   dominé), autant nommer directement sa proie.
+> - **Durabilité expliquée dans l'app** plutôt que seulement en réponse : la
+>   fiche affiche maintenant « = DÉFENSE 19 × 0,5 · chaque coup encaissé la
+>   fait baisser, à 0 l'écran se brise » sous la jauge. C'est la DÉFENSE
+>   *posture comprise* (une carte en 🛡️ Défense a +18% de DÉFENSE, donc un
+>   écran d'autant plus épais) ; les dégâts qui la grignotent sont ceux
+>   effectivement infligés, soit ATTAQUE de l'assaillant (bonus de camp,
+>   lancée, désespoir, critique compris) atténuée par la DÉFENSE de la
+>   carte-écran, jamais moins de 1.
+> - Textes du composeur remis à jour au passage : « 500 PV » traînait encore
+>   (c'est 50 depuis le douzième passage), et l'aide parlait toujours
+>   d'« assigner chaque attaquant » — un panneau supprimé depuis.
+>
 > Le reste de ce document (schéma Postgres/Supabase, phasage, questions
 > restées ouvertes) garde sa valeur de référence historique mais ne
 > correspond plus à l'implémentation réelle (Cloudflare D1, pas Supabase —
