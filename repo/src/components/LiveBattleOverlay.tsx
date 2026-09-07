@@ -54,7 +54,9 @@ export default function LiveBattleOverlay({
     stepBattle(battleState, selectedTarget !== undefined ? { [activeAttacker.cardId]: selectedTarget } : undefined);
     setBattleState({ ...battleState });
     setSelectedTarget(undefined);
-    requestAnimationFrame(() => logRef.current?.scrollTo({ top: logRef.current.scrollHeight, behavior: 'smooth' }));
+    // Volontairement PAS de défilement auto vers le bas : le plateau est
+    // maintenant DANS la zone défilante (voir plus bas), le pousser hors de
+    // vue à chaque tour serait absurde — c'est justement ce qu'on regarde.
   };
 
   // Termine le combat d'un coup (ciblage automatique pour tous les tours
@@ -114,20 +116,13 @@ export default function LiveBattleOverlay({
           />
         </div>
 
-        <BattleBoard
-          opponentTeam={opponentTeam}
-          challengerTeam={challengerTeam}
-          opponentDestroyed={info.opponentDestroyed}
-          challengerDestroyed={info.challengerDestroyed}
-          opponentTargetInfo={info.opponentTargetInfo}
-          challengerTargetInfo={info.challengerTargetInfo}
-          activeOpponentAttackerId={info.last?.opponentAttackerId ?? null}
-          activeChallengerAttackerId={info.last?.challengerAttackerId ?? null}
-          roundLabel={!finished ? `Tour ${battleState.round + 1}` : `${battleState.rounds.length} tours joués`}
-          animKey={animKey}
-          holoAnim={holoAnim}
-        />
-
+        {/* Plateau ET journal dans la MÊME zone défilante : tout ce qui est
+            au-dessus (en-tête, PV) et en dessous (pied de page) reste en
+            `flex: none`, donc incompressible. Le plateau agrandi fait à lui
+            seul ~420px : le laisser incompressible lui aussi éjectait le
+            pied de page hors du modal (`overflow: hidden`), donc hors
+            d'atteinte, sur tout écran un peu court — le bouton se retrouvait
+            pile sur la barre de menu, d'où le bug remonté. */}
         <div
           ref={logRef}
           style={{
@@ -136,36 +131,52 @@ export default function LiveBattleOverlay({
             overflowY: 'auto',
             overscrollBehavior: 'contain',
             WebkitOverflowScrolling: 'touch',
-            padding: '4px 20px 10px',
+            padding: '0 0 10px',
             display: 'flex',
             flexDirection: 'column',
             gap: 6,
           }}
         >
-          {battleState.rounds.map((r) => (
-            <RoundCard
-              key={r.round}
-              round={r}
-              challengerTeam={challengerTeam}
-              opponentTeam={opponentTeam}
-              challengerUsername={challengerUsername}
-              opponentUsername={opponentUsername}
-              holoAnim={holoAnim}
-            />
-          ))}
+          <BattleBoard
+            opponentTeam={opponentTeam}
+            challengerTeam={challengerTeam}
+            opponentDestroyed={info.opponentDestroyed}
+            challengerDestroyed={info.challengerDestroyed}
+            opponentTargetInfo={info.opponentTargetInfo}
+            challengerTargetInfo={info.challengerTargetInfo}
+            activeOpponentAttackerId={info.last?.opponentAttackerId ?? null}
+            activeChallengerAttackerId={info.last?.challengerAttackerId ?? null}
+            roundLabel={!finished ? `Tour ${battleState.round + 1}` : `${battleState.rounds.length} tours joués`}
+            animKey={animKey}
+            holoAnim={holoAnim}
+          />
 
-          {finished && (
-            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, opacity: 0.6, padding: '6px 4px 0' }}>
-              <span>
-                PV max : {battleState.c.maxHp}
-                {battleState.c.synergy > 0 && ` (+${Math.round(battleState.c.synergy * 100)}% synergie)`}
-              </span>
-              <span>
-                {battleState.o.synergy > 0 && `(+${Math.round(battleState.o.synergy * 100)}% synergie) `}
-                {battleState.o.maxHp}
-              </span>
-            </div>
-          )}
+          <div style={{ padding: '0 20px', display: 'flex', flexDirection: 'column', gap: 6 }}>
+            {battleState.rounds.map((r) => (
+              <RoundCard
+                key={r.round}
+                round={r}
+                challengerTeam={challengerTeam}
+                opponentTeam={opponentTeam}
+                challengerUsername={challengerUsername}
+                opponentUsername={opponentUsername}
+                holoAnim={holoAnim}
+              />
+            ))}
+
+            {finished && (
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, opacity: 0.6, padding: '6px 4px 0' }}>
+                <span>
+                  PV max : {battleState.c.maxHp}
+                  {battleState.c.synergy > 0 && ` (+${Math.round(battleState.c.synergy * 100)}% synergie)`}
+                </span>
+                <span>
+                  {battleState.o.synergy > 0 && `(+${Math.round(battleState.o.synergy * 100)}% synergie) `}
+                  {battleState.o.maxHp}
+                </span>
+              </div>
+            )}
+          </div>
         </div>
 
         {/* Pied de page fixe, jamais tributaire du scroll (voir

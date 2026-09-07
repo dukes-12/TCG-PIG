@@ -42,9 +42,11 @@ export default function BattleResultOverlay({ battle, myUsername, onClose }: { b
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [revealed, rounds.length]);
 
-  useEffect(() => {
-    logRef.current?.scrollTo({ top: logRef.current.scrollHeight, behavior: 'smooth' });
-  }, [revealed]);
+  // Volontairement PAS de défilement auto vers le bas du journal : le
+  // plateau vit maintenant DANS cette même zone défilante, le pousser hors
+  // de vue à chaque tour révélé serait absurde — c'est justement ce qu'on
+  // regarde pendant la révélation. Le journal détaillé reste consultable
+  // en défilant soi-même.
 
   if (!result || !battle.opponentTeam) return null;
 
@@ -115,27 +117,14 @@ export default function BattleResultOverlay({ battle, myUsername, onClose }: { b
           />
         </div>
 
-        <BattleBoard
-          opponentTeam={battle.opponentTeam}
-          challengerTeam={battle.challengerTeam}
-          opponentDestroyed={info.opponentDestroyed}
-          challengerDestroyed={info.challengerDestroyed}
-          opponentTargetInfo={info.opponentTargetInfo}
-          challengerTargetInfo={info.challengerTargetInfo}
-          activeOpponentAttackerId={info.last?.opponentAttackerId ?? null}
-          activeChallengerAttackerId={info.last?.challengerAttackerId ?? null}
-          roundLabel={info.last ? `Tour ${info.last.round + 1}` : 'En attente…'}
-          animKey={revealed}
-          holoAnim={holoAnim}
-        />
-
-        {/* `flex: 1 1 auto` + `minHeight: 0` — sans ça, un flex-item avec
-            overflow ne se laisse pas comprimer sous la taille de son
-            contenu par le reste de la colonne (le plateau au-dessus a
-            grandi, voir passage précédent) : c'est ce qui laissait le
-            bouton "Fermer" ci-dessous inatteignable sur certains
-            téléphones, plateau + journal dépassant la hauteur réellement
-            visible sans aucun moyen d'y faire défiler. */}
+        {/* Plateau ET journal dans la MÊME zone défilante (`flex: 1 1 auto`
+            + `minHeight: 0`, seule partie compressible) : tout le reste —
+            en-tête, jauges de PV, pied de page — est en `flex: none`, donc
+            incompressible. Le plateau agrandi fait à lui seul ~420px : le
+            laisser incompressible lui aussi éjectait le pied de page hors
+            du modal (`overflow: hidden`), donc hors d'atteinte, sur tout
+            écran un peu court — le bouton tombait pile sur la barre de
+            menu, d'où le bug remonté (vidéo). */}
         <div
           ref={logRef}
           style={{
@@ -152,36 +141,52 @@ export default function BattleResultOverlay({ battle, myUsername, onClose }: { b
             // traitent parfois pas cette zone comme défilable au toucher.
             overscrollBehavior: 'contain',
             WebkitOverflowScrolling: 'touch',
-            padding: '4px 20px 10px',
+            padding: '0 0 10px',
             display: 'flex',
             flexDirection: 'column',
             gap: 6,
           }}
         >
-          {rounds.slice(0, revealed).map((r) => (
-            <RoundCard
-              key={r.round}
-              round={r}
-              challengerTeam={battle.challengerTeam}
-              opponentTeam={battle.opponentTeam!}
-              challengerUsername={battle.challengerUsername}
-              opponentUsername={battle.opponentUsername}
-              holoAnim={holoAnim}
-            />
-          ))}
+          <BattleBoard
+            opponentTeam={battle.opponentTeam}
+            challengerTeam={battle.challengerTeam}
+            opponentDestroyed={info.opponentDestroyed}
+            challengerDestroyed={info.challengerDestroyed}
+            opponentTargetInfo={info.opponentTargetInfo}
+            challengerTargetInfo={info.challengerTargetInfo}
+            activeOpponentAttackerId={info.last?.opponentAttackerId ?? null}
+            activeChallengerAttackerId={info.last?.challengerAttackerId ?? null}
+            roundLabel={info.last ? `Tour ${info.last.round + 1}` : 'En attente…'}
+            animKey={revealed}
+            holoAnim={holoAnim}
+          />
 
-          {finished && (
-            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, opacity: 0.6, padding: '6px 4px 0' }}>
-              <span>
-                PV max : {result.challengerMaxHp}
-                {result.challengerSynergyBonus > 0 && ` (+${Math.round(result.challengerSynergyBonus * 100)}% synergie)`}
-              </span>
-              <span>
-                {result.opponentSynergyBonus > 0 && `(+${Math.round(result.opponentSynergyBonus * 100)}% synergie) `}
-                {result.opponentMaxHp}
-              </span>
-            </div>
-          )}
+          <div style={{ padding: '0 20px', display: 'flex', flexDirection: 'column', gap: 6 }}>
+            {rounds.slice(0, revealed).map((r) => (
+              <RoundCard
+                key={r.round}
+                round={r}
+                challengerTeam={battle.challengerTeam}
+                opponentTeam={battle.opponentTeam!}
+                challengerUsername={battle.challengerUsername}
+                opponentUsername={battle.opponentUsername}
+                holoAnim={holoAnim}
+              />
+            ))}
+
+            {finished && (
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, opacity: 0.6, padding: '6px 4px 0' }}>
+                <span>
+                  PV max : {result.challengerMaxHp}
+                  {result.challengerSynergyBonus > 0 && ` (+${Math.round(result.challengerSynergyBonus * 100)}% synergie)`}
+                </span>
+                <span>
+                  {result.opponentSynergyBonus > 0 && `(+${Math.round(result.opponentSynergyBonus * 100)}% synergie) `}
+                  {result.opponentMaxHp}
+                </span>
+              </div>
+            )}
+          </div>
         </div>
 
         {/* Hors du journal défilant, désormais toujours visible (voir
