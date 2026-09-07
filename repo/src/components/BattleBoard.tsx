@@ -1,3 +1,4 @@
+import { memo } from 'react';
 import PigCard from './PigCard';
 import { cardById } from '../data/catalog';
 import type { RoundEvent, TeamSlot } from '../lib/api';
@@ -146,7 +147,6 @@ export function BattleBoard({
   activeChallengerAttackerId,
   roundLabel,
   animKey,
-  holoAnim,
   onCardClick,
   playableAttackerId = null,
   targetableIds,
@@ -163,7 +163,6 @@ export function BattleBoard({
   /** Change à chaque tour joué/révélé — sert à rejouer les animations une
    *  seule fois par tour (remonte l'élément concerné). */
   animKey: number;
-  holoAnim: boolean;
   /** Touche une carte du plateau — sert à la fois à consulter ses stats et,
    *  en combat en direct, à lancer l'attaque puis choisir la cible (voir
    *  LiveBattleOverlay). Absent = plateau purement décoratif. */
@@ -187,7 +186,6 @@ export function BattleBoard({
     activeAttackerId,
     lunge,
     animKey,
-    holoAnim,
     side,
     onCardClick,
     playableAttackerId,
@@ -224,7 +222,6 @@ function TeamRow({
   activeAttackerId,
   lunge,
   animKey,
-  holoAnim,
   side,
   onCardClick,
   playableAttackerId,
@@ -238,7 +235,6 @@ function TeamRow({
   activeAttackerId: number | null;
   lunge: 'battle-lunge-down' | 'battle-lunge-up';
   animKey: number;
-  holoAnim: boolean;
   side: 'challenger' | 'opponent';
   onCardClick?: (slot: TeamSlot, side: 'challenger' | 'opponent') => void;
   playableAttackerId?: number | null;
@@ -264,14 +260,14 @@ function TeamRow({
           <BoardSlot
             key={slot.cardId}
             slot={slot}
+            side={side}
             rotated={rotated}
             cardW={cardW}
             isDestroyed={destroyed.has(slot.cardId)}
             animClass={animClass}
             animKey={slotAnimKey}
             hit={hit}
-            holoAnim={holoAnim}
-            onClick={onCardClick ? () => onCardClick(slot, side) : undefined}
+            onCardClick={onCardClick}
             // Le camp compte autant que l'identifiant : les deux équipes
             // piochent dans le même catalogue, la même carte peut donc être
             // alignée des deux côtés — sans ce test, toucher SA carte
@@ -285,28 +281,39 @@ function TeamRow({
   );
 }
 
-function BoardSlot({
+/** Mémoïsé : sur un plateau de 10 cartes, un clic ne change JAMAIS l'état de
+ *  toutes à la fois (au pire 1 jouable + 3 ciblables) — sans ce memo,
+ *  chaque tour recalcule et repeint les 10 `PigCard` (dégradés, ombres)
+ *  même pour celles dont rien n'a changé, ce qui se sentait comme un clic
+ *  mou sur un téléphone modeste. Toutes les props reçues sont déjà réduites
+ *  à des primitives ou des références stables par `TeamRow` (`hit` reste un
+ *  objet mais n'existe que pour LA carte visée du dernier tour, `undefined`
+ *  partout ailleurs — donc stable pour les 9 autres), donc la comparaison
+ *  superficielle par défaut suffit ; `onCardClick` doit rester une
+ *  référence stable d'un rendu à l'autre côté appelant (voir le `useRef` +
+ *  `useCallback` dans LiveBattleOverlay) sinon ce memo ne sert à rien. */
+const BoardSlot = memo(function BoardSlot({
   slot,
+  side,
   rotated,
   cardW,
   isDestroyed,
   animClass,
   animKey,
   hit,
-  holoAnim,
-  onClick,
+  onCardClick,
   isPlayable,
   isTargetable,
 }: {
   slot: TeamSlot;
+  side: 'challenger' | 'opponent';
   rotated: boolean;
   cardW: number;
   isDestroyed: boolean;
   animClass: string | undefined;
   animKey: string;
   hit: HitInfo | undefined;
-  holoAnim: boolean;
-  onClick?: () => void;
+  onCardClick?: (slot: TeamSlot, side: 'challenger' | 'opponent') => void;
   /** Ma carte en Attaque dont c'est le tour — halo qui respire. */
   isPlayable?: boolean;
   /** Cible possible pour l'attaque en cours — halo rouge qui pulse. */
@@ -321,6 +328,7 @@ function BoardSlot({
   const footprintH = rotated ? cardW : cardH;
   // Bouton quand c'est interactif (au clavier aussi, et pas juste une div
   // qui réagit à la souris) ; simple div sinon, pour le PvP décoratif.
+  const onClick = onCardClick ? () => onCardClick(slot, side) : undefined;
   const Wrapper = onClick ? 'button' : 'div';
   return (
     <Wrapper
@@ -378,7 +386,17 @@ function BoardSlot({
             borderRadius: 15,
           }}
         >
-          <PigCard card={card} holoAnim={holoAnim} ownedCount={1} isHolo={slot.holo} />
+          {/* `holoAnim` figé à `false` ici, sans tenir compte du réglage du
+              joueur : le dégradé qui balaie une carte (voile Épique+, foil
+              holo) tourne en continu par `background-position` — une
+              animation qui REPEINT à chaque frame, pas juste compositée par
+              le GPU. Multipliée par les 10 cartes du plateau pendant un
+              combat où l'on tape sans arrêt, elle rentre en concurrence avec
+              le rendu du clic lui-même et le fait sentir mou. La carte reste
+              identifiable (même dégradé, juste figé) ; seul le journal en
+              dessous (BattleLog, bien plus petit et jamais touché pendant
+              qu'on joue) garde encore le mouvement. */}
+          <PigCard card={card} holoAnim={false} ownedCount={1} isHolo={slot.holo} />
         </div>
         <span
           title={`Posture : ${stanceInfo.label}`}
@@ -420,4 +438,4 @@ function BoardSlot({
       )}
     </Wrapper>
   );
-}
+});

@@ -1,9 +1,10 @@
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { BattleBoard, computeBoardInfo, HpBar } from './BattleBoard';
 import BattleCardStats from './BattleCardStats';
 import { RoundCard } from './BattleLog';
 import type { Battle, TeamSlot } from '../lib/api';
 import { useAnimations } from '../lib/useAnimations';
+import { useBattleFullscreen } from '../lib/useBattleFullscreen';
 
 /** Résultat d'un combat PvP déjà résolu côté serveur — révélé
  *  PROGRESSIVEMENT tour par tour (pas tout d'un coup) : le plateau et le
@@ -31,6 +32,7 @@ function roundDelayMs(totalRounds: number): number {
 
 export default function BattleResultOverlay({ battle, myUsername, onClose }: { battle: Battle; myUsername: string; onClose: () => void }) {
   const holoAnim = useAnimations();
+  useBattleFullscreen();
   const result = battle.result;
   const rounds = result?.rounds ?? [];
   const [revealed, setRevealed] = useState(0);
@@ -39,6 +41,10 @@ export default function BattleResultOverlay({ battle, myUsername, onClose }: { b
   // touche : un combat PvP est déjà joué, il n'y a plus rien à décider.
   const [statsFor, setStatsFor] = useState<{ slot: TeamSlot; side: 'challenger' | 'opponent' } | null>(null);
   const logRef = useRef<HTMLDivElement>(null);
+  // Référence stable — `setStatsFor` l'est déjà (identité garantie par
+  // React), donc `[]` suffit : voir LiveBattleOverlay pour pourquoi ça
+  // compte (le memo de BoardSlot sur BattleBoard.tsx).
+  const handleCardClick = useCallback((slot: TeamSlot, side: 'challenger' | 'opponent') => setStatsFor({ slot, side }), []);
 
   useEffect(() => {
     if (!result || revealed >= rounds.length) return;
@@ -69,31 +75,19 @@ export default function BattleResultOverlay({ battle, myUsername, onClose }: { b
   const info = computeBoardInfo(rounds.slice(0, revealed));
 
   return (
-    <div className="overlay" onClick={finished ? onClose : undefined} style={{ alignItems: 'stretch' }}>
+    <div className="overlay overlay-battle" style={{ alignItems: 'stretch' }}>
       <div
-        onClick={(e) => e.stopPropagation()}
+        className="battle-fullscreen-panel"
         style={{
           // `relative` : la fiche d'une carte se pose en `absolute; inset: 0`
           // par-dessus CE modal, le combat restant visible derrière.
           position: 'relative',
-          margin: 'auto 0',
-          // `dvh` (hauteur de viewport DYNAMIQUE) tient compte de la barre
-          // d'adresse/outils du navigateur mobile, contrairement à `vh`
-          // (basé sur le viewport le plus grand possible, barre cachée) —
-          // sans ça, sur un téléphone où la barre est visible, le modal
-          // pouvait dépasser la zone réellement visible, avec le bouton
-          // "Fermer" hors d'atteinte (voir aussi : bouton sorti du journal
-          // défilant plus bas, pour ne plus jamais dépendre du scroll).
-          maxHeight: '85dvh',
-          background: 'var(--color-bg)',
-          borderRadius: 28,
           display: 'flex',
           flexDirection: 'column',
           overflow: 'hidden',
           // Empêche un geste démarré ici (hors du journal défilant, par ex.
           // sur le plateau) de faire rebondir toute la page derrière.
           overscrollBehavior: 'contain',
-          boxShadow: 'var(--shadow-lg)',
         }}
       >
         <div style={{ padding: '20px 20px 8px', flex: 'none', textAlign: 'center' }}>
@@ -166,8 +160,7 @@ export default function BattleResultOverlay({ battle, myUsername, onClose }: { b
             activeChallengerAttackerId={info.last?.challengerAttackerId ?? null}
             roundLabel={info.last ? `Tour ${info.last.round + 1}` : 'En attente…'}
             animKey={revealed}
-            holoAnim={holoAnim}
-            onCardClick={(slot, side) => setStatsFor({ slot, side })}
+            onCardClick={handleCardClick}
           />
 
           <div style={{ padding: '0 20px', display: 'flex', flexDirection: 'column', gap: 6 }}>

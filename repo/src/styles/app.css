@@ -119,6 +119,36 @@ body {
   padding: 30px 24px;
 }
 
+/* Combat plein écran (LiveBattleOverlay, BattleResultOverlay) : le combat
+   utilise tout l'espace disponible au lieu d'un petit encart flottant avec
+   une marge floutée autour — plus de place pour le plateau, et surtout
+   plus de hauteur à calculer/recaler à chaque nouveau bug de rognage (voir
+   IDEES_AMIS_COMBAT.md, dixième à treizième passages : des variantes du
+   même problème, pas assez de place dans un encart). Se pose EN PLUS de
+   `.overlay` (même z-index, même position), pas à la place. */
+.overlay-battle {
+  padding: 0;
+  background: var(--color-bg);
+  backdrop-filter: none;
+}
+.overlay-battle .battle-fullscreen-panel {
+  width: 100%;
+  height: 100%;
+  max-height: none;
+  border-radius: 0;
+  box-shadow: none;
+  padding-top: env(safe-area-inset-top, 0px);
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+/* La barre de menu n'a plus sa place une fois le combat plein écran —
+   `battle-active` est posée sur `<html>` pendant qu'un des deux overlays de
+   combat est monté (même mécanique que `anim-forced`, voir
+   useAnimations.ts) : elle disparaît vraiment, pas juste cachée derrière
+   le voile flouté comme avant. */
+html.battle-active .tab-bar {
+  display: none;
+}
+
 .toast-layer {
   position: absolute;
   left: 0;

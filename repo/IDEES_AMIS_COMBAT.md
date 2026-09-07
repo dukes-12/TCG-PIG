@@ -534,6 +534,68 @@ avec comptes utilisateurs.
 >   (c'est 50 depuis le douzième passage), et l'aide parlait toujours
 >   d'« assigner chaque attaquant » — un panneau supprimé depuis.
 >
+> **Seizième passage** ("cliquer est lent, sûrement à cause des animations" +
+> "pendant le combat cela peut prendre tout l'écran pas juste un encart, donc
+> la barre menu disparaît pendant") — deux sujets distincts, perf et mise en
+> page :
+> - **Diagnostic perf** avant de corriger : throttling CPU (CDP
+>   `Emulation.setCPUThrottlingRate`) pour simuler un téléphone modeste
+>   plutôt que la machine de dev où tout est toujours fluide, puis mesure du
+>   délai réel clic→réaction. À 6× (bas de gamme), toucher sa carte puis une
+>   cible prenait ~330-500ms en moyenne — perceptible, mais pas un bug de
+>   logique : le plateau réaffichait bêtement ses 10 cartes à chaque clic,
+>   alors qu'un tour n'en change jamais plus de 4.
+> - **`BoardSlot` mémoïsé** (`BattleBoard.tsx`, `React.memo`) : les cartes
+>   dont l'état (jouable/ciblable/touchée/détruite) n'a pas changé ne se
+>   redessinent plus. Deux pièges à éviter pour que le memo serve à
+>   quelque chose : (1) le clic remonté depuis `TeamRow` construisait un
+>   nouveau `() => onCardClick(...)` à CHAQUE rendu — cassé en passant
+>   `slot`/`side`/`onCardClick` en props brutes à `BoardSlot`, qui construit
+>   lui-même son handler (recréé seulement quand `BoardSlot` se redessine
+>   réellement) ; (2) `onCardClick` lui-même se redéfinissait à chaque rendu
+>   de l'overlay (ferme sur `phase`/`activeAttacker`) — stabilisé par
+>   indirection `useRef` + `useCallback([])` (même trick dans
+>   `BattleResultOverlay`, plus simple là car `setStatsFor` est déjà stable).
+> - **`computeBoardInfo` mémoïsé** sur `battleState.rounds.length` (pas sur
+>   la référence du tableau, mutée en place par `stepBattle` donc toujours
+>   la même) : ouvrir la fiche de stats ou juste passer en ciblage ne
+>   fabrique plus de nouveaux `Set`/objets à chaque fois.
+> - **Voile holo figé sur le plateau** (`holoAnim` forcé à `false`
+>   uniquement dans `BoardSlot`, prop retirée de `BattleBoard`/`TeamRow`
+>   qui ne s'en servaient plus qu'à le transmettre) : le dégradé qui balaie
+>   les cartes Épique+/holo tourne en `background-position`, une animation
+>   qui REPEINT à chaque frame plutôt que d'être compositée par le GPU —
+>   multipliée par 10 cartes visibles en permanence pendant un combat où
+>   l'on tape sans arrêt, elle entrait en concurrence avec le rendu du clic
+>   lui-même. Le journal en dessous (BattleLog, cartes miniatures, jamais
+>   touché pendant qu'on joue) garde le mouvement.
+>   Mesuré après coup (même méthode) : ~185-260ms au lieu de ~330-500ms à
+>   6× throttle sur le même parcours, ~15-25% de mieux ; aucune régression
+>   à vitesse normale (~70ms, inchangé).
+> - **Combat plein écran** : `LiveBattleOverlay` et `BattleResultOverlay`
+>   n'ouvrent plus un petit encart flottant avec une marge floutée autour
+>   (`.overlay` classique, `maxHeight: 85dvh`, coins arrondis, ombre) — ils
+>   occupent maintenant tout l'espace disponible (`.overlay-battle` dans
+>   app.css : fond opaque, sans flou, panneau à 100%×100% sans arrondi).
+>   Plus de marge perdue autour du plateau, et surtout plus de calcul de
+>   hauteur à refaire à chaque nouveau bug de rognage — les dixième à
+>   treizième passages étaient tous des variantes du même problème
+>   ("pas assez de place dans un encart"), celui-ci l'élimine par
+>   construction plutôt que de le recorriger une quatrième fois.
+> - **Barre de menu réellement cachée**, pas juste dissimulée derrière un
+>   voile flouté comme avant : nouveau hook partagé `useBattleFullscreen()`
+>   (pose la classe `battle-active` sur `<html>` tant que l'un des deux
+>   overlays de combat est monté, retirée au démontage — même mécanique que
+>   `anim-forced` pour les animations, voir `useAnimations.ts`) ; `app.css`
+>   fait `html.battle-active .tab-bar { display: none; }`. Vérifié : absente
+>   du rendu (pas juste invisible) pendant le combat, réapparaît dès la
+>   fermeture de l'overlay.
+> - Vérifié : tsc/build/eslint propres ; suite Playwright existante
+>   (ciblage, dégâts sur la bonne carte, fiche de stats, combat complet,
+>   PvP) toujours verte à 390×844/360×700/375×620 après les deux
+>   changements ; nouveau test dédié confirmant `battle-active` posée/
+>   retirée et la barre de menu absente puis réapparue.
+>
 > Le reste de ce document (schéma Postgres/Supabase, phasage, questions
 > restées ouvertes) garde sa valeur de référence historique mais ne
 > correspond plus à l'implémentation réelle (Cloudflare D1, pas Supabase —

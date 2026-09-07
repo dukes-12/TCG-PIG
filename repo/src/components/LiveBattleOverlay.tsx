@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { BattleBoard, computeBoardInfo, HpBar } from './BattleBoard';
 import BattleCardStats from './BattleCardStats';
 import { RoundCard } from './BattleLog';
@@ -6,6 +6,7 @@ import { cardById } from '../data/catalog';
 import type { TeamSlot } from '../lib/api';
 import { aliveDefenderIds, defenderDurability, initBattle, stepBattle, type BattleState } from '../lib/battle';
 import { useAnimations } from '../lib/useAnimations';
+import { useBattleFullscreen } from '../lib/useBattleFullscreen';
 
 /** Combat "Défier un bot" — ciblage choisi EN DIRECT, un tour à la fois
  *  (voir IDEES_AMIS_COMBAT.md, douzième passage), contrairement au PvP
@@ -31,6 +32,7 @@ export default function LiveBattleOverlay({
   onClose: () => void;
 }) {
   const holoAnim = useAnimations();
+  useBattleFullscreen();
   const [battleState, setBattleState] = useState<BattleState>(() => initBattle(challengerTeam, opponentTeam));
   // Deux temps par tour : on touche SA carte en Attaque ("idle" → "targeting"),
   // puis la cible ("targeting" → le tour se joue). Toucher n'importe quelle
@@ -87,6 +89,17 @@ export default function LiveBattleOverlay({
     }
     setStatsFor({ slot, side });
   };
+  // `BoardSlot` (BattleBoard.tsx) est mémoïsé pour ne repeindre que les
+  // cartes dont l'état a vraiment changé à chaque tour — sur un plateau de
+  // 10 cartes, sans ça chaque clic redessinait tout, ce qui se sentait
+  // mou. Mais `handleCardClick` ci-dessus se redéfinit à CHAQUE rendu (il
+  // ferme sur `activeAttacker`/`phase`/`aliveTargets`), donc le passer tel
+  // quel casserait ce memo pour les 10 cartes à la fois — l'indirection par
+  // ref donne à `BattleBoard` une référence de fonction stable qui délègue
+  // toujours à la dernière version, sans jamais changer d'identité.
+  const handleCardClickRef = useRef(handleCardClick);
+  handleCardClickRef.current = handleCardClick;
+  const stableHandleCardClick = useCallback((slot: TeamSlot, side: 'challenger' | 'opponent') => handleCardClickRef.current(slot, side), []);
 
   // Termine le combat d'un coup (ciblage automatique pour tous les tours
   // restants) — pour le joueur qui ne veut pas choisir à chaque tour.
@@ -114,31 +127,44 @@ export default function LiveBattleOverlay({
     if (!visible) log.scrollTo({ top: Math.max(0, log.scrollTop + (br.top - lr.top) - 8), behavior: 'smooth' });
   }, [battleState.round, battleState.finished]);
 
-  const info = computeBoardInfo(battleState.rounds);
+  // Sans ce memo, ouvrir/fermer la fiche de stats ou juste passer en
+  // ciblage (qui ne touchent aucun tour) recalculaient quand même
+  // `computeBoardInfo` et fabriquaient de nouveaux Set/objets à chaque fois
+  // — inutile, et ça défait un peu le memo de BoardSlot plus bas (chaque
+  // objet `hit` redevient une référence neuve même quand rien n'a changé).
+  // `.rounds` est la MÊME référence de tableau d'un rendu à l'autre (mutée
+  // en place par stepBattle) : la lister comme dépendance ferait recalculer
+  // à chaque rendu, exactement ce que ce memo évite. `.length` est le
+  // signal qui compte réellement.
+  const info = useMemo(
+    () => computeBoardInfo(battleState.rounds),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [battleState.rounds.length],
+  );
   const animKey = battleState.rounds.length;
+  const targetableIds = useMemo(
+    () => (phase === 'targeting' ? new Set(aliveTargets) : undefined),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [phase, aliveTargets.join(',')],
+  );
   const statsDestroyed = statsFor
     ? (statsFor.side === 'challenger' ? info.challengerDestroyed : info.opponentDestroyed).has(statsFor.slot.cardId)
     : false;
 
   return (
-    <div className="overlay" onClick={finished ? onClose : undefined} style={{ alignItems: 'stretch' }}>
+    <div className="overlay overlay-battle" style={{ alignItems: 'stretch' }}>
       <div
-        onClick={(e) => e.stopPropagation()}
+        className="battle-fullscreen-panel"
         style={{
           // `relative` : la fiche de stats d'une carte (BattleCardStats) se
           // pose en `absolute; inset: 0` par-dessus CE modal, pas par-dessus
           // toute la page — le combat reste visible en fond, on referme et on
           // continue son tour.
           position: 'relative',
-          margin: 'auto 0',
-          maxHeight: '85dvh',
-          background: 'var(--color-bg)',
-          borderRadius: 28,
           display: 'flex',
           flexDirection: 'column',
           overflow: 'hidden',
           overscrollBehavior: 'contain',
-          boxShadow: 'var(--shadow-lg)',
         }}
       >
         <div style={{ padding: '20px 20px 8px', flex: 'none', textAlign: 'center' }}>
@@ -207,12 +233,11 @@ export default function LiveBattleOverlay({
             activeChallengerAttackerId={info.last?.challengerAttackerId ?? null}
             roundLabel={!finished ? `Tour ${battleState.round + 1}` : `${battleState.rounds.length} tours joués`}
             animKey={animKey}
-            holoAnim={holoAnim}
-            onCardClick={handleCardClick}
+            onCardClick={stableHandleCardClick}
             // Le halo reste allumé PENDANT le ciblage : c'est la même carte
             // qu'on retouche pour annuler (voir handleCardClick).
             playableAttackerId={!finished && activeAttacker ? activeAttacker.cardId : null}
-            targetableIds={phase === 'targeting' ? new Set(aliveTargets) : undefined}
+            targetableIds={targetableIds}
           />
           </div>
 
