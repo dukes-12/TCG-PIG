@@ -91,7 +91,14 @@ export default function BattleResultOverlay({ battle, myUsername, onClose }: { b
         onClick={(e) => e.stopPropagation()}
         style={{
           margin: 'auto 0',
-          maxHeight: '85vh',
+          // `dvh` (hauteur de viewport DYNAMIQUE) tient compte de la barre
+          // d'adresse/outils du navigateur mobile, contrairement à `vh`
+          // (basé sur le viewport le plus grand possible, barre cachée) —
+          // sans ça, sur un téléphone où la barre est visible, le modal
+          // pouvait dépasser la zone réellement visible, avec le bouton
+          // "Fermer" hors d'atteinte (voir aussi : bouton sorti du journal
+          // défilant plus bas, pour ne plus jamais dépendre du scroll).
+          maxHeight: '85dvh',
           background: 'var(--color-bg)',
           borderRadius: 28,
           display: 'flex',
@@ -143,7 +150,14 @@ export default function BattleResultOverlay({ battle, myUsername, onClose }: { b
           holoAnim={holoAnim}
         />
 
-        <div ref={logRef} style={{ overflowY: 'auto', padding: '4px 20px 20px', display: 'flex', flexDirection: 'column', gap: 6 }}>
+        {/* `flex: 1 1 auto` + `minHeight: 0` — sans ça, un flex-item avec
+            overflow ne se laisse pas comprimer sous la taille de son
+            contenu par le reste de la colonne (le plateau au-dessus a
+            grandi, voir passage précédent) : c'est ce qui laissait le
+            bouton "Fermer" ci-dessous inatteignable sur certains
+            téléphones, plateau + journal dépassant la hauteur réellement
+            visible sans aucun moyen d'y faire défiler. */}
+        <div ref={logRef} style={{ flex: '1 1 auto', minHeight: 0, overflowY: 'auto', padding: '4px 20px 10px', display: 'flex', flexDirection: 'column', gap: 6 }}>
           {rounds.slice(0, revealed).map((r) => (
             <RoundCard
               key={r.round}
@@ -168,47 +182,49 @@ export default function BattleResultOverlay({ battle, myUsername, onClose }: { b
               </span>
             </div>
           )}
+        </div>
 
-          <div style={{ display: 'flex', gap: 8, marginTop: 8, position: 'sticky', bottom: 0, background: 'var(--color-bg)', paddingTop: 4 }}>
-            {!finished && (
-              <button
-                className="pressable"
-                onClick={() => setRevealed(rounds.length)}
-                style={{
-                  flex: 1,
-                  cursor: 'pointer',
-                  border: 0,
-                  fontFamily: 'var(--font-heading)',
-                  fontSize: 13,
-                  padding: '11px',
-                  borderRadius: 999,
-                  background: 'var(--color-neutral-200)',
-                  color: 'var(--color-text)',
-                }}
-              >
-                Passer
-              </button>
-            )}
-            {finished && (
-              <button
-                className="pressable"
-                onClick={onClose}
-                style={{
-                  flex: 1,
-                  cursor: 'pointer',
-                  border: 0,
-                  fontFamily: 'var(--font-heading)',
-                  fontSize: 14,
-                  padding: '12px',
-                  borderRadius: 999,
-                  background: 'var(--color-accent)',
-                  color: 'var(--color-bg)',
-                }}
-              >
-                Fermer
-              </button>
-            )}
-          </div>
+        {/* Hors du journal défilant, désormais toujours visible (voir
+            commentaire ci-dessus) — plus jamais tributaire du scroll. */}
+        <div style={{ flex: 'none', display: 'flex', gap: 8, padding: '8px 20px 18px' }}>
+          {!finished && (
+            <button
+              className="pressable"
+              onClick={() => setRevealed(rounds.length)}
+              style={{
+                flex: 1,
+                cursor: 'pointer',
+                border: 0,
+                fontFamily: 'var(--font-heading)',
+                fontSize: 13,
+                padding: '11px',
+                borderRadius: 999,
+                background: 'var(--color-neutral-200)',
+                color: 'var(--color-text)',
+              }}
+            >
+              Passer
+            </button>
+          )}
+          {finished && (
+            <button
+              className="pressable"
+              onClick={onClose}
+              style={{
+                flex: 1,
+                cursor: 'pointer',
+                border: 0,
+                fontFamily: 'var(--font-heading)',
+                fontSize: 14,
+                padding: '12px',
+                borderRadius: 999,
+                background: 'var(--color-accent)',
+                color: 'var(--color-bg)',
+              }}
+            >
+              Fermer
+            </button>
+          )}
         </div>
       </div>
     </div>
