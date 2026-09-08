@@ -177,6 +177,12 @@ export interface RoundEvent {
    *  pris en compte dans *Damage ci-dessus). */
   challengerBlocked: boolean;
   opponentBlocked: boolean;
+  /** Capacité active de catégorie déclenchée CE tour par cet attaquant
+   *  (`'heal'`, `'powerStrike'`...), ou `null` si aucune — voir
+   *  categoryAbilities.ts. Optionnel : absent sur un combat PvP terminé
+   *  avant l'ajout de ce champ, à traiter comme `null`. */
+  challengerActiveKind?: string | null;
+  opponentActiveKind?: string | null;
 }
 
 export interface BattleResult {

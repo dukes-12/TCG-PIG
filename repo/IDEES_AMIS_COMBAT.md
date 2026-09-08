@@ -677,6 +677,59 @@ avec comptes utilisateurs.
 > les deux overlays (bot et PvP). Vérifié : tsc/build/eslint propres,
 > suite Playwright existante toujours verte à 390×844/360×700.
 >
+> **Dix-neuvième passage** ("certains pouvoirs permettent de soigner des PV
+> au premier tour alors qu'il est impossible d'en perdre avant le 4e" +
+> "rééquilibre les points d'attaque et de défense et les PV totaux pour
+> rendre le jeu plus équitable") — deux corrections indépendantes :
+> - **Heal/fortify différés jusqu'à leur premier moment UTILE.** Avec 3
+>   cartes-écran, aucun coup n'atteint les PV avant le 4e tour — un `heal`
+>   qui se déclenche à la 1ère action rendait donc systématiquement 0 PV
+>   manquant (sauf `thorns` adverse, qui traverse l'écran et peut vraiment
+>   entamer les PV plus tôt — dans ce cas précis, soigner tôt reste
+>   légitime). Corrigé : `heal` ne se déclenche plus que si `hp < maxHp`,
+>   `fortify` que si au moins un écran allié est vivant-mais-abîmé
+>   (`isActiveUseful`, les deux moteurs) — sinon la carte attend sa
+>   prochaine action plutôt que de gâcher sa capacité pour rien. Vérifié
+>   par simulation sur 2000 combats : 0 déclenchement à vide (`hp` déjà en
+>   dessous du max à chaque fois qu'un heal se déclenche).
+>   **Conséquence sur l'affichage** : le flourish de tour (seizième
+>   passage) devait auparavant deviner "1ère apparition de cet attaquant"
+>   pour savoir si sa capacité venait de se déclencher — plus fiable une
+>   fois le déclenchement différé (une carte peut agir plusieurs fois avant
+>   que sa capacité ne serve enfin). `RoundEvent` gagne deux champs
+>   optionnels, `challengerActiveKind`/`opponentActiveKind` (le tour dit
+>   directement CE qui s'est déclenché, plus besoin de déduire) — un
+>   combat PvP déjà terminé avant ce champ n'a simplement rien à montrer
+>   ici (`undefined`, traité comme `null`).
+> - **Variance ATK/DÉFENSE resserrée de ±35% à ±10%.** Mesuré par
+>   simulation avant de toucher aux chiffres : à rareté ÉGALE, un roster
+>   composé des 5 cartes aux MEILLEURS tirages (ATK+DÉF, même rareté)
+>   battait un roster des 5 PIRES tirages **100% du temps** — une carte
+>   "rareté 3" pouvait donc être jusqu'à 2x plus faible qu'une autre
+>   "rareté 3" sans que rien à l'écran ne le laisse deviner. Resserré la
+>   bande `0.65 + hash×0.7` (0.65 à 1.35, facteur ~2 entre le pire et le
+>   meilleur tirage) à `0.9 + hash×0.2` (0.9 à 1.1, facteur ~1,2) : chaque
+>   carte garde un profil qui lui est propre (glass cannon ou increvable),
+>   mais l'écart ne suffit plus à garantir la victoire — retombé à 77%
+>   dans le pire cas testé (5 meilleurs tirages contre 5 pires, moteur réel
+>   avec pouvoirs de catégorie compris — 37-41% dans une version simplifiée
+>   du moteur sans les pouvoirs, l'écart restant s'explique par les
+>   pouvoirs eux-mêmes, pas par le tirage ATK/DÉF). L'écart ENTRE raretés
+>   (RARITY_POWER, doublement par palier) n'est volontairement PAS touché :
+>   mesuré à 0% de victoires pour le camp rareté 1 face au camp rareté 6
+>   quelle que soit la bande de variance essayée (attendu — c'est le
+>   levier de progression légitime, gagné par la collection, pas un tirage
+>   de stats caché comme l'était la variance). PV totaux (`BASE_PV`) non
+>   plus : rien dans les mesures ne les impliquait, et la longueur des
+>   combats reste ~14-16 tours à rareté égale après le resserrage, dans la
+>   fourchette déjà calibrée.
+> - Vérifié : tsc/build/eslint propres ; parité serveur/client toujours
+>   100% (300 combats à graine égale) ; suite Playwright existante
+>   toujours verte (390×844/360×700/375×620, PvP compris) — un des tests
+>   dédiés au flourish a dû être ajusté : il exigeait un flourish au tour 1
+>   précisément, plus vrai depuis le report de heal/fortify (un tour peut
+>   légitimement n'avoir rien à annoncer).
+>
 > Le reste de ce document (schéma Postgres/Supabase, phasage, questions
 > restées ouvertes) garde sa valeur de référence historique mais ne
 > correspond plus à l'implémentation réelle (Cloudflare D1, pas Supabase —

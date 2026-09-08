@@ -47,14 +47,16 @@ export function computeBoardInfo(rounds: RoundEvent[]) {
   // de partie (série en cours, MVP), calculées à chaque appel mais bon
   // marché (au plus une quarantaine de tours).
   //
-  // Capacité active : elle se déclenche à la TOUTE PREMIÈRE action de son
-  // attaquant — donc si le tour affiché est le premier où CET attaquant
-  // apparaît dans `rounds`, c'est exactement ce tour-là qui l'a fait agir.
+  // Capacité active : `challengerActiveKind`/`opponentActiveKind` disent
+  // directement si CE tour l'a fait se déclencher (voir RoundEvent) — ne
+  // plus déduire "1ère apparition de l'attaquant" comme avant : depuis que
+  // heal/fortify sont reportés jusqu'à leur premier moment UTILE (dix-
+  // neuvième passage), une carte peut agir plusieurs fois avant que sa
+  // capacité ne se déclenche enfin. `?? null` : un vieux combat PvP
+  // terminé avant ce champ n'a simplement rien à montrer ici.
   let flourish: string | null = null;
   if (last) {
-    const firstForChallenger = !rounds.slice(0, -1).some((r) => r.challengerAttackerId === last.challengerAttackerId);
-    const firstForOpponent = !rounds.slice(0, -1).some((r) => r.opponentAttackerId === last.opponentAttackerId);
-    const activeAttackerId = firstForChallenger ? last.challengerAttackerId : firstForOpponent ? last.opponentAttackerId : null;
+    const activeAttackerId = last.challengerActiveKind ? last.challengerAttackerId : last.opponentActiveKind ? last.opponentAttackerId : null;
     const activeCard = activeAttackerId !== null ? cardById(activeAttackerId) : null;
     if (activeCard) {
       const ability = categoryAbilityFor(activeCard.type);

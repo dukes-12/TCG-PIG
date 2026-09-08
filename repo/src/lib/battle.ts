@@ -1,5 +1,5 @@
 import { CARDS, SECRET_RARITY_ID, cardById } from '../data/catalog';
-import { categoryAbilityFor, type CategoryAbility } from './categoryAbilities';
+import { categoryAbilityFor, type ActiveAbility, type CategoryAbility } from './categoryAbilities';
 import type { TeamSlot, BattleResult, RoundEvent, Camp, Stance } from './api';
 
 /** Port client de functions/_lib/battle.ts, pour le mode "Défier un bot"
@@ -34,13 +34,31 @@ export interface CardStats {
   def: number;
 }
 
+/** ±10% autour de la puissance de rareté (0.9 à 1.1) — voir
+ *  IDEES_AMIS_COMBAT.md, dix-neuvième passage. Volontairement une bande
+ *  ÉTROITE : à ±35% (l'ancienne valeur), deux cartes de la MÊME rareté
+ *  pouvaient s'écarter d'un facteur ~2 l'une de l'autre, au point qu'un
+ *  côté qui piochait systématiquement les pires tirages perdait
+ *  quasi-systématiquement (100% de défaites, mesuré par simulation) face
+ *  au même roster avec les meilleurs tirages — une "inégalité invisible"
+ *  entre deux cartes affichant pourtant la même rareté. Resserré à ±10% :
+ *  chaque carte garde un profil ATTAQUE/DÉFENSE qui lui est propre (glass
+ *  cannon ou increvable, selon le hash), mais l'écart ne peut plus, à lui
+ *  seul, garantir une victoire — retombé à ~35-40% côté malchanceux dans
+ *  la même simulation. L'écart ENTRE raretés (RARITY_POWER, doublement
+ *  volontaire par palier) n'est pas concerné par ce passage : il reste le
+ *  levier de progression légitime, gagné par la collection plutôt que par
+ *  un tirage de stats caché. */
+const RARITY_VARIANCE_LO = 0.9;
+const RARITY_VARIANCE_SPAN = 0.2;
+
 export function cardStats(cardId: number, holo: boolean): CardStats | null {
   const card = cardById(cardId);
   if (!card || card.rarity === SECRET_RARITY_ID) return null;
   const base = RARITY_POWER[card.rarity] ?? 0;
   const P = holo ? base * 1.5 : base;
-  const atk = Math.max(1, Math.round(P * (0.65 + hash01(`${cardId}:atk`) * 0.7)));
-  const def = Math.max(1, Math.round(P * (0.65 + hash01(`${cardId}:def`) * 0.7)));
+  const atk = Math.max(1, Math.round(P * (RARITY_VARIANCE_LO + hash01(`${cardId}:atk`) * RARITY_VARIANCE_SPAN)));
+  const def = Math.max(1, Math.round(P * (RARITY_VARIANCE_LO + hash01(`${cardId}:def`) * RARITY_VARIANCE_SPAN)));
   return { atk, def };
 }
 
@@ -267,6 +285,29 @@ function fortifyWeakestDefender(defHp: number[], defMax: number[], pct: number):
   defHp[idx] = Math.min(defMax[idx], defHp[idx] + Math.round(defMax[idx] * pct));
 }
 
+/** Y a-t-il au moins un défenseur encore vivant mais pas à sa durabilité
+ *  max ? — c'est-à-dire un vrai destinataire pour `fortify` (qui ne
+ *  répare jamais une carte déjà détruite, voir `fortifyWeakestDefender`).
+ *  Toutes pleines ou toutes détruites = rien à réparer. */
+function anyDefenderDamaged(defHp: number[], defMax: number[]): boolean {
+  return defHp.some((hp, i) => hp > 0 && hp < defMax[i]);
+}
+
+/** Cette capacité active ferait-elle vraiment quelque chose SI elle se
+ *  déclenchait maintenant ? `powerStrike`/`guardBreak`/`trueStrike`
+ *  aident toujours (elles portent sur LE COUP en cours) — seules
+ *  `heal`/`fortify` peuvent tomber à vide : avec 3 cartes-écran, aucun
+ *  coup n'atteint les PV avant le 4e tour, donc un soin déclenché plus
+ *  tôt rendrait 0 PV manquant. Un déclenchement à vide serait à la fois
+ *  illogique (soigner alors que rien n'a encore été perdu) et un gâchis
+ *  pur pour le joueur — reporté au premier tour où ça compte plutôt que
+ *  brûlé pour rien à la première occasion. */
+function isActiveUseful(active: ActiveAbility, hp: number, maxHp: number, defHp: number[], defMax: number[]): boolean {
+  if (active.kind === 'heal') return hp < maxHp;
+  if (active.kind === 'fortify') return anyDefenderDamaged(defHp, defMax);
+  return true;
+}
+
 /** Index du défenseur adverse visé par un attaquant précis : son
  *  assignation explicite (voir `challengerTargets` sur `resolveBattle`) si
  *  elle existe ENCORE (la carte visée peut avoir été détruite entre
@@ -388,11 +429,18 @@ export function stepBattle(state: BattleState, challengerTargets?: Record<number
   const cHadMomentum = state.momC[ai];
   const oHadMomentum = state.momO[oi];
 
-  // Capacité active de catégorie : au plus une fois par carte, à sa toute
-  // première action du combat (voir usedActiveC/O dans BattleState).
-  const cActive = state.usedActiveC[ai] ? null : attC.ability.active;
+  // Capacité active de catégorie : au plus une fois par carte, à sa
+  // PREMIÈRE ACTION UTILE (voir usedActiveC/O dans BattleState) — pas
+  // forcément sa toute première action. `heal`/`fortify` soignent des PV
+  // ou réparent un écran qui n'ont peut-être encore RIEN encaissé : avec
+  // 3 cartes-écran, aucun coup n'atteint les PV avant le 4e tour, donc un
+  // soin déclenché au 1er tour serait un pur gâchis (0 PV manquant à
+  // rendre) — reporté jusqu'au premier tour où l'effet fait vraiment
+  // quelque chose. Les autres formes (powerStrike/guardBreak/trueStrike)
+  // aident toujours, quel que soit l'état du combat : rien à reporter.
+  const cActive = !state.usedActiveC[ai] && isActiveUseful(attC.ability.active, state.hpC, c.maxHp, state.defHpC, c.defMax) ? attC.ability.active : null;
   if (cActive) state.usedActiveC[ai] = true;
-  const oActive = state.usedActiveO[oi] ? null : attO.ability.active;
+  const oActive = !state.usedActiveO[oi] && isActiveUseful(attO.ability.active, state.hpO, o.maxHp, state.defHpO, o.defMax) ? attO.ability.active : null;
   if (oActive) state.usedActiveO[oi] = true;
 
   // ── Attaque du challenger, vise le camp adverse ──
@@ -509,6 +557,8 @@ export function stepBattle(state: BattleState, challengerTargets?: Record<number
     opponentCrit: oCrit,
     challengerBlocked: cBlocked,
     opponentBlocked: oBlocked,
+    challengerActiveKind: cActive?.kind ?? null,
+    opponentActiveKind: oActive?.kind ?? null,
   };
   state.rounds.push(event);
   state.round++;

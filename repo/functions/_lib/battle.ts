@@ -1,5 +1,5 @@
 import { CARD_META } from './cardMeta';
-import { categoryAbilityFor, type CategoryAbility } from './categoryAbilities';
+import { categoryAbilityFor, type ActiveAbility, type CategoryAbility } from './categoryAbilities';
 
 /** Système de combat — voir IDEES_AMIS_COMBAT.md pour la conception
  *  complète. Chaque carte a deux stats, ATTAQUE et DÉFENSE, dérivées
@@ -52,6 +52,13 @@ export interface CardStats {
   def: number;
 }
 
+/** ±10% autour de la puissance de rareté (0.9 à 1.1) — voir
+ *  src/lib/battle.ts pour l'explication complète (resserré depuis ±35%,
+ *  qui laissait deux cartes de la MÊME rareté s'écarter d'un facteur ~2
+ *  au point de garantir la victoire au meilleur tirage). */
+const RARITY_VARIANCE_LO = 0.9;
+const RARITY_VARIANCE_SPAN = 0.2;
+
 /** `null` si la carte n'existe pas ou est la carte secrète (exclue du
  *  combat — un seul exemplaire au monde, ça mettrait une pression écrasante
  *  sur qui l'a). */
@@ -60,8 +67,8 @@ export function cardStats(cardId: number, holo: boolean): CardStats | null {
   if (!meta || meta.rarity === SECRET_RARITY_ID) return null;
   const base = RARITY_POWER[meta.rarity] ?? 0;
   const P = holo ? base * 1.5 : base;
-  const atk = Math.max(1, Math.round(P * (0.65 + hash01(`${cardId}:atk`) * 0.7)));
-  const def = Math.max(1, Math.round(P * (0.65 + hash01(`${cardId}:def`) * 0.7)));
+  const atk = Math.max(1, Math.round(P * (RARITY_VARIANCE_LO + hash01(`${cardId}:atk`) * RARITY_VARIANCE_SPAN)));
+  const def = Math.max(1, Math.round(P * (RARITY_VARIANCE_LO + hash01(`${cardId}:def`) * RARITY_VARIANCE_SPAN)));
   return { atk, def };
 }
 
@@ -231,6 +238,11 @@ export interface RoundEvent {
    *  pris en compte dans *Damage ci-dessus). */
   challengerBlocked: boolean;
   opponentBlocked: boolean;
+  /** Capacité active de catégorie déclenchée CE tour par cet attaquant
+   *  (`'heal'`, `'powerStrike'`...), ou `null` si aucune — voir
+   *  categoryAbilities.ts. */
+  challengerActiveKind: string | null;
+  opponentActiveKind: string | null;
 }
 
 export interface BattleResult {
@@ -336,6 +348,27 @@ function fortifyWeakestDefender(defHp: number[], defMax: number[], pct: number):
   defHp[idx] = Math.min(defMax[idx], defHp[idx] + Math.round(defMax[idx] * pct));
 }
 
+/** Y a-t-il au moins un défenseur encore vivant mais pas à sa durabilité
+ *  max ? — c'est-à-dire un vrai destinataire pour `fortify` (qui ne
+ *  répare jamais une carte déjà détruite). Toutes pleines ou toutes
+ *  détruites = rien à réparer. Voir src/lib/battle.ts pour la même
+ *  fonction côté client. */
+function anyDefenderDamaged(defHp: number[], defMax: number[]): boolean {
+  return defHp.some((hp, i) => hp > 0 && hp < defMax[i]);
+}
+
+/** Cette capacité active ferait-elle vraiment quelque chose SI elle se
+ *  déclenchait maintenant ? `powerStrike`/`guardBreak`/`trueStrike`
+ *  aident toujours — seules `heal`/`fortify` peuvent tomber à vide : avec
+ *  3 cartes-écran, aucun coup n'atteint les PV avant le 4e tour, donc un
+ *  soin déclenché plus tôt rendrait 0 PV manquant. Voir src/lib/battle.ts
+ *  pour la même fonction côté client. */
+function isActiveUseful(active: ActiveAbility, hp: number, maxHp: number, defHp: number[], defMax: number[]): boolean {
+  if (active.kind === 'heal') return hp < maxHp;
+  if (active.kind === 'fortify') return anyDefenderDamaged(defHp, defMax);
+  return true;
+}
+
 /** Entièrement déterministe pour l'ATTAQUE elle-même (pas d'aléa caché
  *  dedans) ; coup critique et bouclier restent des tirages au sort, mais
  *  toujours VISIBLES dans le résultat (icônes dédiées côté client), jamais
@@ -380,10 +413,12 @@ export function resolveBattle(challengerTeam: TeamSlot[], opponentTeam: TeamSlot
     const oHadMomentum = momO[oi];
 
     // Capacité active de catégorie : au plus une fois par carte, à sa
-    // toute première action du combat.
-    const cActive = usedActiveC[ai] ? null : attC.ability.active;
+    // PREMIÈRE ACTION UTILE — voir isActiveUseful (src/lib/battle.ts pour
+    // l'explication complète : un soin/une réparation déclenché avant que
+    // quoi que ce soit soit endommagé serait un pur gâchis).
+    const cActive = !usedActiveC[ai] && isActiveUseful(attC.ability.active, hpC, c.maxHp, defHpC, c.defMax) ? attC.ability.active : null;
     if (cActive) usedActiveC[ai] = true;
-    const oActive = usedActiveO[oi] ? null : attO.ability.active;
+    const oActive = !usedActiveO[oi] && isActiveUseful(attO.ability.active, hpO, o.maxHp, defHpO, o.defMax) ? attO.ability.active : null;
     if (oActive) usedActiveO[oi] = true;
 
     // ── Attaque du challenger, vise le camp adverse ──
@@ -501,6 +536,8 @@ export function resolveBattle(challengerTeam: TeamSlot[], opponentTeam: TeamSlot
       opponentCrit: oCrit,
       challengerBlocked: cBlocked,
       opponentBlocked: oBlocked,
+      challengerActiveKind: cActive?.kind ?? null,
+      opponentActiveKind: oActive?.kind ?? null,
     });
     round++;
   }

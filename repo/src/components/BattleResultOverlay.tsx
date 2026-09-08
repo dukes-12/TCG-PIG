@@ -256,13 +256,18 @@ export default function BattleResultOverlay({ battle, myUsername, onClose }: { b
             // écrans brisés (grisés + 💥).
             durability={null}
             isDestroyed={(statsFor.side === 'challenger' ? info.challengerDestroyed : info.opponentDestroyed).has(statsFor.slot.cardId)}
-            // Sa capacité active se déclenche à sa TOUTE PREMIÈRE action —
-            // si elle apparaît comme attaquante dans un tour déjà révélé,
-            // c'est donc déjà arrivé (rien à recalculer, juste à chercher
-            // dans ce qui a déjà été montré).
-            activeUsed={rounds
-              .slice(0, revealed)
-              .some((r) => (statsFor.side === 'challenger' ? r.challengerAttackerId : r.opponentAttackerId) === statsFor.slot.cardId)}
+            // `challengerActiveKind`/`opponentActiveKind` disent directement
+            // sur QUEL tour la capacité s'est déclenchée (voir RoundEvent) —
+            // il suffit de chercher un tour déjà révélé où c'est cette carte
+            // qui a agi ET où le champ est renseigné. Ne plus se fier à "a
+            // déjà attaqué" tout court : depuis que heal/fortify sont
+            // reportés jusqu'à leur premier moment utile, une carte peut
+            // agir plusieurs fois avant que sa capacité ne se déclenche.
+            activeUsed={rounds.slice(0, revealed).some((r) =>
+              statsFor.side === 'challenger'
+                ? r.challengerAttackerId === statsFor.slot.cardId && !!r.challengerActiveKind
+                : r.opponentAttackerId === statsFor.slot.cardId && !!r.opponentActiveKind,
+            )}
             onClose={() => setStatsFor(null)}
           />
         )}
