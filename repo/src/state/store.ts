@@ -41,9 +41,13 @@ import type {
 // Le nombre de cartes est désormais lu sur chaque pack (`pack.cards`) —
 // jusqu'ici toujours 5 pour les trois, la rareté et le nombre de cartes
 // garanties variaient sans que la taille du sac suive. Voir cards.json.
-/** Ouverture groupée : jusqu'à MAX_OPEN_QTY sacs du même type d'un coup.
- *  Plafonné pour que la rangée de pastilles de progression pendant la
- *  révélation (une par carte, voir OpenScreen) reste lisible sur mobile. */
+/** Au-delà de MAX_OPEN_QTY sacs d'un coup, la révélation carte par carte
+ *  (une pastille de progression par carte, voir OpenScreen) cesse d'être
+ *  lisible sur mobile — `beginTear` bascule alors directement sur l'écran
+ *  butin ("summary"), qui affiche toutes les cartes en grille sans
+ *  animation. Ça ne plafonne PAS combien de sacs on peut ouvrir d'un coup :
+ *  la puce "Max" de QtyPicker ouvre tout le stock, même très au-delà de ce
+ *  seuil — seule la mise en scène change. */
 export const MAX_OPEN_QTY = 5;
 const TEAR_MS = 680;
 const FLIP_TRANSITION_MS = 620; // matches OpenScreen's flipInner CSS transition duration
@@ -352,7 +356,14 @@ function beginTear(get: () => Store, set: (partial: Partial<Store>) => void, pac
   playSfx('tear');
   clearTimeout(tearTimer);
   clearTimeout(advanceTimer);
-  tearTimer = setTimeout(() => set({ packState: 'reveal' }), TEAR_MS);
+  // Au-delà de MAX_OPEN_QTY sacs, la révélation carte par carte (pastilles
+  // de progression une par une, flip par flip) devient illisible et
+  // fastidieuse — voir MAX_OPEN_QTY. On saute alors directement sur l'écran
+  // butin (même écran que "Tout révéler"/revealAll), qui affiche tout en
+  // grille sans animation individuelle. Le tirage lui-même n'est pas
+  // limité : seule la mise en scène change.
+  const nextState: PackState = qty > MAX_OPEN_QTY ? 'summary' : 'reveal';
+  tearTimer = setTimeout(() => set({ packState: nextState }), TEAR_MS);
 }
 
 export const useStore = create<Store>()(
@@ -478,10 +489,15 @@ export const useStore = create<Store>()(
 
       selectPackForOpening: (key) => set({ activePack: key, packState: 'idle', openQty: 1 }),
 
+      // Plafonné uniquement par le stock, pas par MAX_OPEN_QTY : la puce
+      // "Max" (voir QtyPicker) doit pouvoir viser tout le stock, même très
+      // au-delà de MAX_OPEN_QTY — beginTear bascule alors sur l'écran butin
+      // sans passer par la révélation carte par carte. Les puces fixes
+      // ×1/×3/×5 restent naturellement sous ce seuil (constantes ≤5).
       setOpenQty: (n) => {
         const s = get();
         const inPocket = s.stock[s.activePack] || 0;
-        set({ openQty: Math.max(1, Math.min(n, MAX_OPEN_QTY, inPocket || 1)) });
+        set({ openQty: Math.max(1, Math.min(n, inPocket || 1)) });
       },
 
       startTear: () => {
@@ -492,7 +508,7 @@ export const useStore = create<Store>()(
           s.say(`Plus de ${p.name} — passe en boutique.`);
           return;
         }
-        const qty = Math.max(1, Math.min(s.openQty, MAX_OPEN_QTY, inPocket));
+        const qty = Math.max(1, Math.min(s.openQty, inPocket));
         set({ stock: { ...s.stock, [p.key]: inPocket - qty } });
         beginTear(get, set, p, 'stock', qty);
       },
