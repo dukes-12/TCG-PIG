@@ -28,6 +28,7 @@ export default function ShopScreen() {
   const stock = useStore((s) => s.stock);
   const activePack = useStore((s) => s.activePack);
   const buyPack = useStore((s) => s.buyPack);
+  const buyMaxPacks = useStore((s) => s.buyMaxPacks);
   const selectPackForOpening = useStore((s) => s.selectPackForOpening);
   const navigate = useNavigate();
 
@@ -101,6 +102,14 @@ export default function ShopScreen() {
               <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
                 <button className="pressable" onClick={() => buyPack(pk.key)} style={smallBtn('var(--color-accent)', 'var(--color-bg)')}>
                   Acheter
+                </button>
+                <button
+                  className="pressable"
+                  onClick={() => buyMaxPacks(pk.key)}
+                  title="Achète d'un coup le plus de sacs possible avec tes glands"
+                  style={{ cursor: 'pointer', border: 0, fontFamily: 'var(--font-heading)', fontSize: 12, padding: '8px 14px', borderRadius: 999, background: 'transparent', color: 'var(--color-accent-800)', boxShadow: 'inset 0 0 0 1px var(--color-accent-500)' }}
+                >
+                  Acheter le max
                 </button>
                 <button
                   className="pressable"

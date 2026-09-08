@@ -177,6 +177,9 @@ interface Actions {
   buyCardBack: (key: CardBackKey) => void;
 
   buyPack: (key: PackKey) => void;
+  /** Achète d'un coup le plus de sacs possible (limité par les glands en
+   *  poche) — voir ShopScreen, bouton "Acheter le max". */
+  buyMaxPacks: (key: PackKey) => void;
   selectPackForOpening: (key: PackKey) => void;
   setOpenQty: (n: number) => void;
   startTear: () => void;
@@ -199,6 +202,11 @@ interface Actions {
    *  supérieure (HOLO_RECYCLE_MULTIPLIER), et ne touche jamais aux
    *  exemplaires normaux au delà de ce qu'il faut retirer. */
   recycleHolo: (cardId: number) => void;
+  /** Recycle TOUS les doublons d'un coup, classiques et holo confondus —
+   *  voir DupesScreen, bouton "Recycler tout". Même règle carte par carte
+   *  que recycle/recycleHolo (un exemplaire toujours gardé, jamais la
+   *  carte secrète) ; un seul gain total annoncé plutôt qu'un par carte. */
+  recycleAllDupes: () => void;
   say: (msg: string) => void;
 
   openSlot: () => void;
@@ -453,6 +461,21 @@ export const useStore = create<Store>()(
         s.say(`${p.name} ajouté·e`);
       },
 
+      buyMaxPacks: (key) => {
+        const s = get();
+        const p = packByKey(key);
+        const n = Math.floor(s.glands / p.price);
+        if (n <= 0) {
+          s.say(`Pas assez de glands (${p.price} requis).`);
+          return;
+        }
+        const cost = n * p.price;
+        set({ glands: s.glands - cost, stock: { ...s.stock, [key]: (s.stock[key] || 0) + n }, activePack: key });
+        trackGlandsSpent(cost, 'pack', key);
+        playSfx('coin');
+        s.say(`${n} × ${p.name} ajouté·e${n > 1 ? 's' : ''}`);
+      },
+
       selectPackForOpening: (key) => set({ activePack: key, packState: 'idle', openQty: 1 }),
 
       setOpenQty: (n) => {
@@ -634,6 +657,40 @@ export const useStore = create<Store>()(
         trackGlandsEarned(gain, 'recycle_holo');
         playSfx('recycle');
         s.say(`+${gain} glands (holo)`);
+      },
+
+      // Même règle carte par carte que recycle/recycleHolo (un exemplaire
+      // toujours gardé, jamais la carte secrète), juste appliquée à TOUTE
+      // la collection d'un coup plutôt que carte par carte — voir
+      // DupesScreen, bouton "Recycler tout". Deux compteurs séparés
+      // (classique/holo) pour garder l'analytics de recycle/recycle_holo
+      // fidèle, plutôt qu'une 3e catégorie qui les dupliquerait.
+      recycleAllDupes: () => {
+        const s = get();
+        const nextOwned = { ...s.owned };
+        const nextOwnedHolo = { ...s.ownedHolo };
+        let gainClassic = 0;
+        let gainHolo = 0;
+        for (const card of CARDS) {
+          if (card.rarity === SECRET_RARITY_ID) continue;
+          const n = nextOwned[card.id] || 0;
+          if (n > 1) {
+            gainClassic += rarityById(card.rarity).recycleValue * (n - 1);
+            nextOwned[card.id] = 1;
+          }
+          const hn = nextOwnedHolo[card.id] || 0;
+          if (hn > 1) {
+            gainHolo += rarityById(card.rarity).recycleValue * HOLO_RECYCLE_MULTIPLIER * (hn - 1);
+            nextOwnedHolo[card.id] = 1;
+          }
+        }
+        const total = gainClassic + gainHolo;
+        if (total <= 0) return;
+        set({ owned: nextOwned, ownedHolo: nextOwnedHolo, glands: s.glands + total });
+        if (gainClassic > 0) trackGlandsEarned(gainClassic, 'recycle');
+        if (gainHolo > 0) trackGlandsEarned(gainHolo, 'recycle_holo');
+        playSfx('recycle');
+        s.say(`+${total} glands (tous les doublons recyclés)`);
       },
 
       say: (msg) => {

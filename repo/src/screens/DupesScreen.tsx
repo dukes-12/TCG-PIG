@@ -18,6 +18,7 @@ export default function DupesScreen() {
   const openDetail = useStore((s) => s.openDetail);
   const recycle = useStore((s) => s.recycle);
   const recycleHolo = useStore((s) => s.recycleHolo);
+  const recycleAllDupes = useStore((s) => s.recycleAllDupes);
   const holoAnim = useAnimations();
 
   // La carte secrète ne se recycle jamais, même en cas de double exemplaire
@@ -27,6 +28,12 @@ export default function DupesScreen() {
   const dupeList = CARDS.filter((c) => c.rarity !== SECRET_RARITY_ID && (owned[c.id] || 0) > 1).sort((a, b) => b.rarity - a.rarity);
 
   const holoDupeList = CARDS.filter((c) => c.rarity !== SECRET_RARITY_ID && (ownedHolo[c.id] || 0) > 1).sort((a, b) => b.rarity - a.rarity);
+
+  // Aperçu du gain total — même calcul que recycleAllDupes (state/store.ts),
+  // juste pour l'affichage du bouton, sans le déclencher.
+  const totalGain =
+    dupeList.reduce((sum, c) => sum + rarityById(c.rarity).recycleValue * ((owned[c.id] || 0) - 1), 0) +
+    holoDupeList.reduce((sum, c) => sum + rarityById(c.rarity).recycleValue * HOLO_RECYCLE_MULTIPLIER * ((ownedHolo[c.id] || 0) - 1), 0);
 
   return (
     <div className="screen">
@@ -39,6 +46,31 @@ export default function DupesScreen() {
           ? 'Recycle tes exemplaires en trop contre des glands. Tu gardes toujours un exemplaire.'
           : 'Recycle tes exemplaires en trop contre des glands.'}
       </p>
+
+      {/* Tout recycler d'un coup (classiques + holo) — même règle que les
+          boutons individuels (un exemplaire toujours gardé), juste évite de
+          les enchaîner un par un quand il y en a beaucoup. */}
+      {totalGain > 0 && (
+        <div className="screen-inner" style={{ paddingTop: 12 }}>
+          <button
+            className="pressable"
+            onClick={recycleAllDupes}
+            style={{
+              width: '100%',
+              cursor: 'pointer',
+              border: 0,
+              fontFamily: 'var(--font-heading)',
+              fontSize: 14,
+              padding: '13px',
+              borderRadius: 999,
+              background: 'var(--color-accent-2-600)',
+              color: 'var(--color-bg)',
+            }}
+          >
+            Recycler tous les doublons — +{totalGain}
+          </button>
+        </div>
+      )}
 
       {dupeList.length > 0 ? (
         <div className="screen-inner" style={{ paddingTop: 18, display: 'flex', flexDirection: 'column', gap: 10 }}>
